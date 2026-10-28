@@ -3,7 +3,14 @@
  * 專為解決多軌同步渲染卡頓而設計的「單軌聚焦工作台」
  * 每次只載入並渲染 1 個 Channel 的音符、拍子、樂器與時間標尺，徹底消除效能負擔與掉拍問題。
  * 力度 (Velocity) 採用滑動拉桿 + 數值精確輸入框雙向連動，提供極速流暢的微調體驗。
- * 完整支援：點擊新增音符、選取試聽、拖曳移位 (音高/時間)、拖曳把手調整時值、按鍵/右鍵/按鈕刪除、量化吸附。
+ * 完整支援：
+ *  - 矩形框選 (Marquee Selection)
+ *  - 按住 Shift 點擊多選 (Multi-select)
+ *  - 批次拖曳移位 (Pitch & Time 保持群組相對位置與邊界保護)
+ *  - 批次刪除 (Delete / Backspace 鍵、右鍵、工具列按鈕)
+ *  - 批次力度調整 (拉桿與數字輸入框同步連動)
+ *  - 全選 (Ctrl+A) 與取消選取 (Escape)
+ *  - 點擊空白處新增音符、時值伸縮、量化吸附。
  */
 
 import type { PlaybackNoteEvent, PartVoiceInfo } from './sty-playback-engine';
@@ -37,9 +44,9 @@ export class SingleTrackEditor {
   private rowHeight: number = 24;
   private rows: EditorRowInfo[] = [];
 
-  // 量化與編輯狀態
+  // 量化與多選編輯狀態
   private quantizeResolution: number = 16; // 1/16 拍 (480/4 = 120 ticks)
-  private selectedEventIndex: number | null = null;
+  private selectedEvents: Set<PlaybackNoteEvent> = new Set();
   private defaultVelocity: number = 100;
   private onEventsChanged: ((channel: number, events: PlaybackNoteEvent[]) => void) | null = null;
 
@@ -60,18 +67,21 @@ export class SingleTrackEditor {
       }
     });
 
-    // 鍵盤快捷鍵：Delete / Backspace 刪除選取音符，Escape 取消選取
+    // 鍵盤快捷鍵：Delete / Backspace 批次刪除選取音符，Ctrl+A 全選，Escape 取消選取
     window.addEventListener('keydown', (e: KeyboardEvent) => {
       const tag = (document.activeElement?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (this.selectedEventIndex !== null && this.events[this.selectedEventIndex]) {
+        if (this.selectedEvents.size > 0) {
           e.preventDefault();
-          this.deleteNote(this.selectedEventIndex);
+          this.deleteSelectedNotes();
         }
       } else if (e.key === 'Escape') {
-        this.selectNote(null);
+        this.clearSelection();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        this.selectAllNotes();
       }
     });
   }
@@ -127,7 +137,7 @@ export class SingleTrackEditor {
     this.division = division || 480;
     this.timeSignature = timeSignature || { numerator: 4, denominator: 4 };
     this.voiceInfo = voiceInfo;
-    this.selectedEventIndex = null;
+    this.selectedEvents.clear();
 
     this.calculateRows();
     this.render();
@@ -219,7 +229,7 @@ export class SingleTrackEditor {
       </div>
 
       <div class="editor-toolbar-right">
-        <!-- 🎛️ 力度 (Velocity) 調控模組：滑動拉桿 + 精確數字框 (無柱狀圖) -->
+        <!-- 🎛️ 力度 (Velocity) 調控模組：滑動拉桿 + 精確數字框 (支援單選與多選批次連動) -->
         <div class="editor-vel-box">
           <span class="editor-vel-label">力度 (Velocity):</span>
           <input type="range" id="ed-vel-slider" class="editor-vel-slider" min="1" max="127" value="${this.defaultVelocity}">
@@ -238,7 +248,7 @@ export class SingleTrackEditor {
           </select>
         </div>
 
-        <!-- 🗑️ 刪除按鈕 -->
+        <!-- 🗑️ 刪除按鈕 (支援批次刪除) -->
         <button id="ed-btn-delete" class="editor-action-btn btn-danger" title="刪除選取的音符 (或按 Delete / Backspace 鍵)">🗑️ 刪除音符</button>
 
         <div class="editor-zoom-btns">
@@ -255,7 +265,7 @@ export class SingleTrackEditor {
     // 操作提示條
     const hintBar = document.createElement('div');
     hintBar.className = 'editor-hint-bar';
-    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白處新增音符 ｜ 拖曳音符可自由移位 (音高/時間) ｜ 拖曳音符右緣白色把手可調整長度 ｜ 點擊選取音符 ｜ 按 <kbd style="background:rgba(255,255,255,0.1);padding:1px 4px;border-radius:3px;">Delete</kbd> 或點右鍵可刪除 ｜ 調整上方拉桿或數字框可即時微調力度</span>`;
+    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 滑鼠拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/數字框<b>【批次改力度】</b></span>`;
     this.container.appendChild(hintBar);
 
     // 2. 建立主編輯捲動工作區並先掛載至 DOM，以便取得真實精確的 viewport clientWidth
@@ -396,6 +406,10 @@ export class SingleTrackEditor {
       noteEl.style.height = `${heightPx}px`;
       noteEl.style.backgroundColor = this.partAccentColor;
 
+      if (this.selectedEvents.has(ev)) {
+        noteEl.classList.add('is-selected');
+      }
+
       // 力度透明度對比 (亮度/飽和度)
       const velRatio = Math.max(0.3, Math.min(1.0, ev.velocity / 127));
       noteEl.style.opacity = `${0.5 + 0.5 * velRatio}`;
@@ -406,86 +420,190 @@ export class SingleTrackEditor {
         <div class="note-resize-handle" title="拖曳調整音符長度"></div>
       `;
 
-      // 拖曳移位 (Pitch & Time)
+      // 拖曳移位 (Pitch & Time) - 支援單選與多選批次移動
       noteEl.addEventListener('mousedown', (e) => {
-        this.handleNoteMouseDown(e, idx);
+        this.handleNoteMouseDown(e, ev, idx);
       });
 
-      // 右鍵點擊直接刪除音符
+      // 右鍵點擊直接刪除音符 (若在多選群組中則批次刪除)
       noteEl.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.deleteNote(idx);
+        if (this.selectedEvents.has(ev) && this.selectedEvents.size > 1) {
+          this.deleteSelectedNotes();
+        } else {
+          this.deleteSingleEvent(ev);
+        }
       });
 
       // 拖曳把手調整時值
       const resizeHandle = noteEl.querySelector('.note-resize-handle') as HTMLElement;
       resizeHandle.addEventListener('mousedown', (e) => {
-        this.handleResizeMouseDown(e, idx);
+        this.handleResizeMouseDown(e, ev, idx);
       });
 
       gridContent.appendChild(noteEl);
     });
 
-    // 點擊空白處新增音符事件監聽
+    // 滑鼠於網格空白處：支援點擊新增音符，以及拖曳矩形框選 (Marquee Selection)
     let gridMouseDownX = 0;
     let gridMouseDownY = 0;
+    let isMarquee = false;
+    let marqueeEl: HTMLElement | null = null;
+    let initialSelected = new Set<PlaybackNoteEvent>();
 
     gridContent.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       if ((e.target as HTMLElement).closest('.editor-note-block')) return;
+
       gridMouseDownX = e.clientX;
       gridMouseDownY = e.clientY;
-    });
-
-    gridContent.addEventListener('mouseup', (e) => {
-      if (e.button !== 0) return;
-      if ((e.target as HTMLElement).closest('.editor-note-block')) return;
-      const dist = Math.hypot(e.clientX - gridMouseDownX, e.clientY - gridMouseDownY);
-      if (dist > 5) return; // 使用者是在滑動或選取，非單純點擊
+      isMarquee = false;
 
       const rect = gridContent.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
+      const startX = e.clientX - rect.left;
+      const startY = e.clientY - rect.top;
 
-      if (clickX >= 0 && clickX <= totalWidthPx && clickY >= 0 && clickY <= this.rows.length * this.rowHeight) {
-        const rowIndex = Math.floor(clickY / this.rowHeight);
-        if (rowIndex >= 0 && rowIndex < this.rows.length) {
-          const targetRow = this.rows[rowIndex];
-          const stepTicks = this.getStepTicks();
-          const rawTick = (clickX / totalWidthPx) * this.totalTicks;
-          const quantizedTick = Math.floor(rawTick / stepTicks) * stepTicks;
-          const clampedTick = Math.max(0, Math.min(this.totalTicks - stepTicks, quantizedTick));
-
-          // 檢查該位置是否已有相同音高音符，若有則直接選取
-          const existingIdx = this.events.findIndex(
-            ev => ev.noteNumber === targetRow.note && Math.abs(ev.relTick - clampedTick) < stepTicks / 2
-          );
-          if (existingIdx !== -1) {
-            this.selectNote(existingIdx);
-            return;
-          }
-
-          // 新增音符
-          const newNote: PlaybackNoteEvent = {
-            channel: this.channel,
-            sourceChannel: this.channel,
-            noteNumber: targetRow.note,
-            velocity: this.defaultVelocity,
-            relTick: clampedTick,
-            durationTicks: stepTicks,
-            durationMs: 0,
-          };
-
-          this.events.push(newNote);
-          this.events.sort((a, b) => a.relTick - b.relTick);
-          this.notifyEventsChanged();
-          const newIdx = this.events.indexOf(newNote);
-          this.render();
-          this.selectNote(newIdx);
-          styPlaybackEngine.previewNote(this.channel, targetRow.note, this.defaultVelocity, 200);
-        }
+      if (!e.shiftKey) {
+        this.selectedEvents.clear();
+        this.updateSelectionUI(false);
       }
+      initialSelected = new Set(this.selectedEvents);
+
+      marqueeEl = document.createElement('div');
+      marqueeEl.className = 'editor-marquee-box';
+      marqueeEl.style.display = 'none';
+      gridContent.appendChild(marqueeEl);
+
+      const onGridMouseMove = (moveEvent: MouseEvent) => {
+        const deltaX = moveEvent.clientX - gridMouseDownX;
+        const deltaY = moveEvent.clientY - gridMouseDownY;
+        const dist = Math.hypot(deltaX, deltaY);
+
+        if (!isMarquee && dist > 4) {
+          isMarquee = true;
+          if (marqueeEl) marqueeEl.style.display = 'block';
+        }
+        if (!isMarquee || !marqueeEl) return;
+
+        const currentX = moveEvent.clientX - rect.left;
+        const currentY = moveEvent.clientY - rect.top;
+
+        const minX = Math.max(0, Math.min(startX, currentX));
+        const maxX = Math.min(totalWidthPx, Math.max(startX, currentX));
+        const minY = Math.max(0, Math.min(startY, currentY));
+        const maxY = Math.min(this.rows.length * this.rowHeight, Math.max(startY, currentY));
+
+        marqueeEl.style.left = `${minX}px`;
+        marqueeEl.style.top = `${minY}px`;
+        marqueeEl.style.width = `${maxX - minX}px`;
+        marqueeEl.style.height = `${maxY - minY}px`;
+
+        // 碰撞偵測 (AABB 矩形交集)
+        const newlyIntersects = new Set<PlaybackNoteEvent>();
+        this.events.forEach(ev => {
+          const rowIndex = this.rows.findIndex(r => r.note === ev.noteNumber);
+          if (rowIndex === -1) return;
+          const noteLeft = (ev.relTick / this.totalTicks) * totalWidthPx;
+          const noteWidth = Math.max(12, (ev.durationTicks / this.totalTicks) * totalWidthPx);
+          const noteTop = rowIndex * this.rowHeight + 2;
+          const noteHeight = this.rowHeight - 4;
+
+          const collides = (
+            minX <= noteLeft + noteWidth &&
+            maxX >= noteLeft &&
+            minY <= noteTop + noteHeight &&
+            maxY >= noteTop
+          );
+
+          if (collides) {
+            newlyIntersects.add(ev);
+          }
+        });
+
+        if (e.shiftKey) {
+          this.selectedEvents = new Set([...initialSelected, ...newlyIntersects]);
+        } else {
+          this.selectedEvents = newlyIntersects;
+        }
+
+        this.updateSelectionUI(false);
+      };
+
+      const onGridMouseUp = (upEvent: MouseEvent) => {
+        window.removeEventListener('mousemove', onGridMouseMove);
+        window.removeEventListener('mouseup', onGridMouseUp);
+
+        if (marqueeEl) {
+          marqueeEl.remove();
+          marqueeEl = null;
+        }
+
+        if (isMarquee) {
+          // 框選結束，更新最終 UI 與選取狀態並試聽
+          this.updateSelectionUI(true);
+          return;
+        }
+
+        // 非框選 (純點擊空白處) -> 新增音符
+        const dist = Math.hypot(upEvent.clientX - gridMouseDownX, upEvent.clientY - gridMouseDownY);
+        if (dist > 4) return;
+
+        const clickX = upEvent.clientX - rect.left;
+        const clickY = upEvent.clientY - rect.top;
+
+        if (clickX >= 0 && clickX <= totalWidthPx && clickY >= 0 && clickY <= this.rows.length * this.rowHeight) {
+          const rowIndex = Math.floor(clickY / this.rowHeight);
+          if (rowIndex >= 0 && rowIndex < this.rows.length) {
+            const targetRow = this.rows[rowIndex];
+            const stepTicks = this.getStepTicks();
+            const rawTick = (clickX / totalWidthPx) * this.totalTicks;
+            const quantizedTick = Math.floor(rawTick / stepTicks) * stepTicks;
+            const clampedTick = Math.max(0, Math.min(this.totalTicks - stepTicks, quantizedTick));
+
+            // 檢查該位置是否已有相同音高音符，若有則直接選取
+            const existingEv = this.events.find(
+              ev => ev.noteNumber === targetRow.note && Math.abs(ev.relTick - clampedTick) < stepTicks / 2
+            );
+            if (existingEv) {
+              if (e.shiftKey) {
+                if (this.selectedEvents.has(existingEv)) {
+                  this.selectedEvents.delete(existingEv);
+                } else {
+                  this.selectedEvents.add(existingEv);
+                }
+              } else {
+                this.selectedEvents.clear();
+                this.selectedEvents.add(existingEv);
+              }
+              this.updateSelectionUI(true);
+              return;
+            }
+
+            // 新增音符
+            const newNote: PlaybackNoteEvent = {
+              channel: this.channel,
+              sourceChannel: this.channel,
+              noteNumber: targetRow.note,
+              velocity: this.defaultVelocity,
+              relTick: clampedTick,
+              durationTicks: stepTicks,
+              durationMs: 0,
+            };
+
+            this.events.push(newNote);
+            this.events.sort((a, b) => a.relTick - b.relTick);
+            this.notifyEventsChanged();
+            this.selectedEvents.clear();
+            this.selectedEvents.add(newNote);
+            this.render();
+            this.updateSelectionUI(true);
+          }
+        }
+      };
+
+      window.addEventListener('mousemove', onGridMouseMove);
+      window.addEventListener('mouseup', onGridMouseUp);
     });
 
     // 播放游標線 (GPU 加速 Translate3d)
@@ -504,95 +622,148 @@ export class SingleTrackEditor {
     // 3. 綁定力度控制項、量化、縮放與選取事件
     this.bindControls();
 
-    // 若先前有選取音符，恢復選取高亮
-    if (this.selectedEventIndex !== null && this.selectedEventIndex < this.events.length) {
-      const selectedEl = this.container.querySelector(`#ed-note-${this.selectedEventIndex}`);
-      selectedEl?.classList.add('is-selected');
-    }
+    // 恢復選取高亮與狀態
+    this.updateSelectionUI(false);
   }
 
   /**
-   * 處理音符拖曳移位 (Pitch & Time)
+   * 處理音符選取與拖曳移位 (Pitch & Time) - 支援單顆與多選批次移動
    */
-  private handleNoteMouseDown(e: MouseEvent, noteIdx: number) {
+  private handleNoteMouseDown(e: MouseEvent, targetEvent: PlaybackNoteEvent, _noteIdx?: number) {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).classList.contains('note-resize-handle')) return;
     e.stopPropagation();
     e.preventDefault();
 
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const targetEvent = this.events[noteIdx];
-    if (!targetEvent) return;
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
 
-    const startRelTick = targetEvent.relTick;
-    const startNoteNumber = targetEvent.noteNumber;
-    const startRowIndex = this.rows.findIndex(r => r.note === startNoteNumber);
-    const durationTicks = targetEvent.durationTicks;
+    const wasAlreadySelected = this.selectedEvents.has(targetEvent);
+
+    if (e.shiftKey) {
+      if (wasAlreadySelected) {
+        this.selectedEvents.delete(targetEvent);
+        this.updateSelectionUI(false);
+        return; // 取消選取後不執行拖曳
+      } else {
+        this.selectedEvents.add(targetEvent);
+        this.updateSelectionUI(true);
+      }
+    } else {
+      if (!wasAlreadySelected) {
+        this.selectedEvents.clear();
+        this.selectedEvents.add(targetEvent);
+        this.updateSelectionUI(true);
+      }
+    }
+
+    // 收集所有要一起拖曳的音符群組
+    const dragNotes = Array.from(this.selectedEvents).map(ev => {
+      const startRowIndex = this.rows.findIndex(r => r.note === ev.noteNumber);
+      const evIdx = this.events.indexOf(ev);
+      const el = this.container.querySelector(`#ed-note-${evIdx}`) as HTMLElement | null;
+      return {
+        event: ev,
+        startRelTick: ev.relTick,
+        startNoteNumber: ev.noteNumber,
+        startRowIndex,
+        durationTicks: ev.durationTicks,
+        el,
+      };
+    });
+
     const stepTicks = this.getStepTicks();
     const totalWidthPx = this.totalBars * this.pixelsPerBar;
-
     let hasMoved = false;
-    let currentTick = startRelTick;
-    let currentRowIndex = startRowIndex;
 
-    const noteEl = this.container.querySelector(`#ed-note-${noteIdx}`) as HTMLElement;
+    let appliedDeltaTicks = 0;
+    let appliedDeltaRow = 0;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
+      const deltaX = moveEvent.clientX - startClientX;
+      const deltaY = moveEvent.clientY - startClientY;
 
       if (!hasMoved && (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4)) {
         hasMoved = true;
-        if (noteEl) noteEl.classList.add('is-dragging');
+        dragNotes.forEach(n => n.el?.classList.add('is-dragging'));
       }
       if (!hasMoved) return;
 
+      // 計算時間差量 (量化吸附)
       const deltaTicks = (deltaX / totalWidthPx) * this.totalTicks;
-      const rawNewTick = startRelTick + deltaTicks;
-      const quantizedNewTick = Math.round(rawNewTick / stepTicks) * stepTicks;
-      currentTick = Math.max(0, Math.min(this.totalTicks - durationTicks, quantizedNewTick));
+      const quantizedDeltaTicks = Math.round(deltaTicks / stepTicks) * stepTicks;
 
+      // 縱向音高差量
       const deltaRow = Math.round(deltaY / this.rowHeight);
-      currentRowIndex = Math.max(0, Math.min(this.rows.length - 1, startRowIndex + deltaRow));
 
-      if (noteEl) {
-        const newLeftPx = (currentTick / this.totalTicks) * totalWidthPx;
-        const newTopPx = currentRowIndex * this.rowHeight + 2;
-        noteEl.style.left = `${newLeftPx}px`;
-        noteEl.style.top = `${newTopPx}px`;
-        const row = this.rows[currentRowIndex];
-        const textEl = noteEl.querySelector('.note-block-text');
+      // 極限邊界約束 (保證群組中沒有任何一顆音符超出 0~totalTicks 或音高上下界)
+      const minStartTick = Math.min(...dragNotes.map(n => n.startRelTick));
+      const maxEndTick = Math.max(...dragNotes.map(n => n.startRelTick + n.durationTicks));
+      const clampedDeltaTicks = (Math.max(
+        -minStartTick,
+        Math.min(this.totalTicks - maxEndTick, quantizedDeltaTicks)
+      ) || 0);
+
+      const validRows = dragNotes.filter(n => n.startRowIndex >= 0);
+      const minRow = validRows.length > 0 ? Math.min(...validRows.map(n => n.startRowIndex)) : 0;
+      const maxRow = validRows.length > 0 ? Math.max(...validRows.map(n => n.startRowIndex)) : 0;
+      const clampedDeltaRow = (Math.max(
+        -minRow,
+        Math.min(this.rows.length - 1 - maxRow, deltaRow)
+      ) || 0);
+
+      appliedDeltaTicks = clampedDeltaTicks;
+      appliedDeltaRow = clampedDeltaRow;
+
+      // 即時更新所有被拖曳音符的 DOM 位置
+      dragNotes.forEach(n => {
+        if (!n.el) return;
+        const curTick = n.startRelTick + clampedDeltaTicks;
+        const curRow = n.startRowIndex + clampedDeltaRow;
+        const newLeftPx = (curTick / this.totalTicks) * totalWidthPx;
+        const newTopPx = curRow * this.rowHeight + 2;
+        n.el.style.left = `${newLeftPx}px`;
+        n.el.style.top = `${newTopPx}px`;
+
+        const row = this.rows[curRow];
+        const textEl = n.el.querySelector('.note-block-text');
         if (textEl && row) {
-          textEl.textContent = `${row.label} (${targetEvent.velocity})`;
+          textEl.textContent = `${row.label} (${n.event.velocity})`;
         }
-      }
+      });
     };
 
     const onMouseUp = () => {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
 
-      if (noteEl) noteEl.classList.remove('is-dragging');
+      dragNotes.forEach(n => n.el?.classList.remove('is-dragging'));
 
       if (hasMoved) {
-        const newNoteNumber = this.rows[currentRowIndex]?.note ?? startNoteNumber;
-        const didChange = currentTick !== startRelTick || newNoteNumber !== startNoteNumber;
-
+        const didChange = appliedDeltaTicks !== 0 || appliedDeltaRow !== 0;
         if (didChange) {
-          targetEvent.relTick = currentTick;
-          targetEvent.noteNumber = newNoteNumber;
+          dragNotes.forEach(n => {
+            n.event.relTick = n.startRelTick + appliedDeltaTicks;
+            if (n.startRowIndex >= 0) {
+              const newRow = n.startRowIndex + appliedDeltaRow;
+              n.event.noteNumber = this.rows[newRow]?.note ?? n.startNoteNumber;
+            }
+          });
+
           this.events.sort((a, b) => a.relTick - b.relTick);
           this.notifyEventsChanged();
           this.render();
-          const newIdx = this.events.indexOf(targetEvent);
-          this.selectNote(newIdx >= 0 ? newIdx : null);
-          styPlaybackEngine.previewNote(this.channel, newNoteNumber, targetEvent.velocity, 220);
+          this.updateSelectionUI(true);
           return;
         }
       }
 
-      this.selectNote(noteIdx);
+      // 未發生實質拖曳：若是點擊原先多選群組中的一顆且未按 Shift，則將選取收縮至僅該音符
+      if (!e.shiftKey && wasAlreadySelected && this.selectedEvents.size > 1) {
+        this.selectedEvents.clear();
+        this.selectedEvents.add(targetEvent);
+        this.updateSelectionUI(true);
+      }
     };
 
     window.addEventListener('mousemove', onMouseMove);
@@ -602,15 +773,12 @@ export class SingleTrackEditor {
   /**
    * 處理音符時值拉長/縮短 (Resize Duration)
    */
-  private handleResizeMouseDown(e: MouseEvent, noteIdx: number) {
+  private handleResizeMouseDown(e: MouseEvent, targetEvent: PlaybackNoteEvent, noteIdx: number) {
     if (e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
 
     const startX = e.clientX;
-    const targetEvent = this.events[noteIdx];
-    if (!targetEvent) return;
-
     const startRelTick = targetEvent.relTick;
     const startDurationTicks = targetEvent.durationTicks;
     const stepTicks = this.getStepTicks();
@@ -652,11 +820,13 @@ export class SingleTrackEditor {
         targetEvent.durationTicks = currentDuration;
         this.notifyEventsChanged();
         this.render();
-        const newIdx = this.events.indexOf(targetEvent);
-        this.selectNote(newIdx >= 0 ? newIdx : null);
-        styPlaybackEngine.previewNote(this.channel, targetEvent.noteNumber, targetEvent.velocity, 220);
+        this.selectedEvents.clear();
+        this.selectedEvents.add(targetEvent);
+        this.updateSelectionUI(true);
       } else {
-        this.selectNote(noteIdx);
+        this.selectedEvents.clear();
+        this.selectedEvents.add(targetEvent);
+        this.updateSelectionUI(true);
       }
     };
 
@@ -665,18 +835,144 @@ export class SingleTrackEditor {
   }
 
   /**
-   * 刪除特定索引的音符
+   * 批次刪除所有選取的音符
    */
-  public deleteNote(index: number) {
-    if (index < 0 || index >= this.events.length) return;
-    const deleted = this.events[index];
-    this.events.splice(index, 1);
-    this.selectedEventIndex = null;
+  public deleteSelectedNotes() {
+    if (this.selectedEvents.size === 0) return;
+    const count = this.selectedEvents.size;
+    this.events = this.events.filter(e => !this.selectedEvents.has(e));
+    this.selectedEvents.clear();
     this.notifyEventsChanged();
     this.render();
     if (this.velStatus) {
-      const row = this.rows.find(r => r.note === deleted.noteNumber);
-      this.velStatus.textContent = `已刪除音符: ${row?.label || deleted.noteNumber}`;
+      this.velStatus.textContent = `已刪除 ${count} 個選取音符`;
+    }
+  }
+
+  /**
+   * 刪除特定單一音符
+   */
+  public deleteSingleEvent(ev: PlaybackNoteEvent) {
+    const idx = this.events.indexOf(ev);
+    if (idx === -1) return;
+    this.events.splice(idx, 1);
+    this.selectedEvents.delete(ev);
+    this.notifyEventsChanged();
+    this.render();
+    if (this.velStatus) {
+      const row = this.rows.find(r => r.note === ev.noteNumber);
+      this.velStatus.textContent = `已刪除音符: ${row?.label || ev.noteNumber}`;
+    }
+  }
+
+  /**
+   * 兼顧舊 API (刪除特定索引之音符)
+   */
+  public deleteNote(index: number) {
+    if (index < 0 || index >= this.events.length) return;
+    const ev = this.events[index];
+    if (this.selectedEvents.has(ev) && this.selectedEvents.size > 1) {
+      this.deleteSelectedNotes();
+    } else {
+      this.deleteSingleEvent(ev);
+    }
+  }
+
+  /**
+   * 全選當前軌道所有音符 (Ctrl+A)
+   */
+  public selectAllNotes() {
+    this.selectedEvents = new Set(this.events);
+    this.updateSelectionUI(false);
+  }
+
+  /**
+   * 清除所有選取 (Escape 或點擊空白處)
+   */
+  public clearSelection() {
+    this.selectedEvents.clear();
+    this.updateSelectionUI(false);
+  }
+
+  /**
+   * 取得當前所有被選取的音符清單
+   */
+  public getSelectedEvents(): PlaybackNoteEvent[] {
+    return Array.from(this.selectedEvents);
+  }
+
+  /**
+   * 選中特定音符 (相容單引數 API)
+   */
+  public selectNote(index: number | null) {
+    if (index === null || index < 0 || index >= this.events.length) {
+      this.clearSelection();
+    } else {
+      this.selectedEvents.clear();
+      this.selectedEvents.add(this.events[index]);
+      this.updateSelectionUI(true);
+    }
+  }
+
+  /**
+   * 更新選取相關的 UI 元件樣式、力度拉桿與狀態欄
+   */
+  public updateSelectionUI(previewSound: boolean = false) {
+    // 1. 同步所有音符方塊的 is-selected 樣式
+    this.events.forEach((ev, idx) => {
+      const el = this.container.querySelector(`#ed-note-${idx}`);
+      if (el) {
+        if (this.selectedEvents.has(ev)) {
+          el.classList.add('is-selected');
+        } else {
+          el.classList.remove('is-selected');
+        }
+      }
+    });
+
+    const btnDelete = this.container.querySelector('#ed-btn-delete') as HTMLElement | null;
+    const count = this.selectedEvents.size;
+
+    if (btnDelete) {
+      btnDelete.textContent = count > 1 ? `🗑️ 刪除 (${count})` : `🗑️ 刪除音符`;
+    }
+
+    if (count === 0) {
+      if (this.velStatus) {
+        this.velStatus.textContent = `預設寫入力度: ${this.defaultVelocity}`;
+      }
+      if (this.velSlider && this.velInput) {
+        this.velSlider.value = this.defaultVelocity.toString();
+        this.velInput.value = this.defaultVelocity.toString();
+      }
+    } else if (count === 1) {
+      const ev = Array.from(this.selectedEvents)[0];
+      const row = this.rows.find(r => r.note === ev.noteNumber);
+      if (this.velStatus) {
+        this.velStatus.textContent = `選取音符: ${row?.label || ev.noteNumber} (Tick: ${ev.relTick}) | 力度: ${ev.velocity}`;
+      }
+      if (this.velSlider && this.velInput) {
+        this.velSlider.value = ev.velocity.toString();
+        this.velInput.value = ev.velocity.toString();
+      }
+      if (previewSound) {
+        styPlaybackEngine.previewNote(this.channel, ev.noteNumber, ev.velocity, 220);
+      }
+    } else {
+      // 多選狀態
+      const selectedList = Array.from(this.selectedEvents);
+      const avgVel = Math.round(selectedList.reduce((acc, ev) => acc + ev.velocity, 0) / count);
+      if (this.velStatus) {
+        this.velStatus.textContent = `已選取 ${count} 個音符 (平均力度: ${avgVel})`;
+      }
+      if (this.velSlider && this.velInput) {
+        this.velSlider.value = avgVel.toString();
+        this.velInput.value = avgVel.toString();
+      }
+      if (previewSound) {
+        const highest = [...selectedList].sort((a, b) => b.noteNumber - a.noteNumber)[0];
+        styPlaybackEngine.previewNote(this.channel, highest.noteNumber, highest.velocity, 220);
+      }
     }
   }
 
@@ -719,11 +1015,11 @@ export class SingleTrackEditor {
     // 刪除按鈕
     const btnDelete = this.container.querySelector('#ed-btn-delete');
     btnDelete?.addEventListener('click', () => {
-      if (this.selectedEventIndex !== null && this.events[this.selectedEventIndex]) {
-        this.deleteNote(this.selectedEventIndex);
+      if (this.selectedEvents.size > 0) {
+        this.deleteSelectedNotes();
       } else {
         if (this.velStatus) {
-          this.velStatus.textContent = '請先點選欲刪除的音符';
+          this.velStatus.textContent = '請先點選或框選欲刪除的音符';
         }
       }
     });
@@ -762,78 +1058,44 @@ export class SingleTrackEditor {
   }
 
   /**
-   * 套用力度的變更
+   * 套用力度的變更 (支援單選與多選批次調整)
    */
   private applyVelocityChange(newVel: number) {
-    if (this.selectedEventIndex !== null && this.events[this.selectedEventIndex]) {
-      const ev = this.events[this.selectedEventIndex];
-      ev.velocity = newVel;
-
-      // 更新 DOM 音符方塊
-      const noteEl = this.container.querySelector(`#ed-note-${this.selectedEventIndex}`) as HTMLElement;
-      if (noteEl) {
-        const velRatio = Math.max(0.3, Math.min(1.0, newVel / 127));
-        noteEl.style.opacity = `${0.5 + 0.5 * velRatio}`;
-        const row = this.rows.find(r => r.note === ev.noteNumber);
-        const textEl = noteEl.querySelector('.note-block-text');
-        if (textEl && row) {
-          textEl.textContent = `${row.label} (${newVel})`;
+    if (this.selectedEvents.size > 0) {
+      this.selectedEvents.forEach(ev => {
+        ev.velocity = newVel;
+        const idx = this.events.indexOf(ev);
+        const noteEl = this.container.querySelector(`#ed-note-${idx}`) as HTMLElement;
+        if (noteEl) {
+          const velRatio = Math.max(0.3, Math.min(1.0, newVel / 127));
+          noteEl.style.opacity = `${0.5 + 0.5 * velRatio}`;
+          const row = this.rows.find(r => r.note === ev.noteNumber);
+          const textEl = noteEl.querySelector('.note-block-text');
+          if (textEl && row) {
+            textEl.textContent = `${row.label} (${newVel})`;
+          }
         }
-      }
+      });
 
       if (this.velStatus) {
-        const row = this.rows.find(r => r.note === ev.noteNumber);
-        this.velStatus.textContent = `已修改音符: ${row?.label || ''} | 力度: ${newVel}`;
+        if (this.selectedEvents.size === 1) {
+          const ev = Array.from(this.selectedEvents)[0];
+          const row = this.rows.find(r => r.note === ev.noteNumber);
+          this.velStatus.textContent = `已修改音符: ${row?.label || ''} | 力度: ${newVel}`;
+        } else {
+          this.velStatus.textContent = `已批次修改 ${this.selectedEvents.size} 個音符 | 力度: ${newVel}`;
+        }
       }
 
       this.notifyEventsChanged();
 
-      // 試聽一聲力度反饋
-      styPlaybackEngine.previewNote(this.channel, ev.noteNumber, newVel, 200);
+      // 試聽選取音符中的最高音作為反饋
+      const previewEv = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
+      styPlaybackEngine.previewNote(this.channel, previewEv.noteNumber, newVel, 200);
     } else {
       this.defaultVelocity = newVel;
       if (this.velStatus) {
         this.velStatus.textContent = `預設寫入力度: ${newVel}`;
-      }
-    }
-  }
-
-  /**
-   * 選中特定音符
-   */
-  public selectNote(index: number | null) {
-    this.selectedEventIndex = index;
-
-    // 清除所有音符的選中樣式
-    this.container.querySelectorAll('.editor-note-block').forEach(el => {
-      el.classList.remove('is-selected');
-    });
-
-    if (index !== null && this.events[index]) {
-      const ev = this.events[index];
-      const noteEl = this.container.querySelector(`#ed-note-${index}`);
-      noteEl?.classList.add('is-selected');
-
-      // 同步設定力度拉桿與數字框數值
-      if (this.velSlider && this.velInput) {
-        this.velSlider.value = ev.velocity.toString();
-        this.velInput.value = ev.velocity.toString();
-      }
-
-      const row = this.rows.find(r => r.note === ev.noteNumber);
-      if (this.velStatus) {
-        this.velStatus.textContent = `選取音符: ${row?.label || ''} (Tick: ${ev.relTick}) | 力度: ${ev.velocity}`;
-      }
-
-      // 點選音符試聽
-      styPlaybackEngine.previewNote(this.channel, ev.noteNumber, ev.velocity, 220);
-    } else {
-      if (this.velStatus) {
-        this.velStatus.textContent = `預設寫入力度: ${this.defaultVelocity}`;
-      }
-      if (this.velSlider && this.velInput) {
-        this.velSlider.value = this.defaultVelocity.toString();
-        this.velInput.value = this.defaultVelocity.toString();
       }
     }
   }
