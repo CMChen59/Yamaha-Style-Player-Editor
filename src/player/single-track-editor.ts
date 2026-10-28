@@ -8,7 +8,11 @@
  *  - 按住 Shift 點擊多選 (Multi-select)
  *  - 批次拖曳移位 (Pitch & Time 保持群組相對位置與邊界保護)
  *  - 批次刪除 (Delete / Backspace 鍵、右鍵、工具列按鈕)
- *  - 批次力度調整 (拉桿與數字輸入框同步連動)
+ *  - 批次力度調控：
+ *      • 📈 相對增減模式 (Relative Delta)：調整時嚴格保持多個音符間原有的強弱動態差
+ *      • 🎯 絕對統一模式 (Absolute Mode)：將所有選取音符設為相同數值
+ *      • ⚡ 快速階梯微調 ([-10], [-5], [+5], [+10])
+ *      • 🎲 人性化隨機律動微調 (Humanize ±8)
  *  - 全選 (Ctrl+A) 與取消選取 (Escape)
  *  - 點擊空白處新增音符、時值伸縮、量化吸附。
  */
@@ -48,6 +52,9 @@ export class SingleTrackEditor {
   private quantizeResolution: number = 16; // 1/16 拍 (480/4 = 120 ticks)
   private selectedEvents: Set<PlaybackNoteEvent> = new Set();
   private defaultVelocity: number = 100;
+  private velocityMode: 'relative' | 'absolute' = 'relative';
+  private initialVelocities: Map<PlaybackNoteEvent, number> = new Map();
+  private baselineAverageVelocity: number = 100;
   private onEventsChanged: ((channel: number, events: PlaybackNoteEvent[]) => void) | null = null;
 
   // DOM 參照
@@ -138,6 +145,7 @@ export class SingleTrackEditor {
     this.timeSignature = timeSignature || { numerator: 4, denominator: 4 };
     this.voiceInfo = voiceInfo;
     this.selectedEvents.clear();
+    this.initialVelocities.clear();
 
     this.calculateRows();
     this.render();
@@ -211,13 +219,30 @@ export class SingleTrackEditor {
   }
 
   /**
+   * 拍照快照當前選取音符的基礎力度 (作為相對增減 Delta 之基準)
+   */
+  private snapshotInitialVelocities() {
+    this.initialVelocities.clear();
+    if (this.selectedEvents.size === 0) {
+      this.baselineAverageVelocity = this.defaultVelocity;
+      return;
+    }
+    let sum = 0;
+    this.selectedEvents.forEach(ev => {
+      this.initialVelocities.set(ev, ev.velocity);
+      sum += ev.velocity;
+    });
+    this.baselineAverageVelocity = Math.round(sum / this.selectedEvents.size);
+  }
+
+  /**
    * 繪製完整編輯器 UI
    */
   private render() {
     this.container.innerHTML = '';
     this.container.style.setProperty('--part-accent', this.partAccentColor);
 
-    // 1. 建立頂部工具列 (含樂器、拍號、力度拉桿與數字輸入框、量化選擇器、刪除按鈕、縮放按鈕)
+    // 1. 建立頂部工具列 (含樂器、拍號、力度拉桿與數字輸入框、相對/絕對模式切換、快速微調按鈕、量化、刪除、縮放)
     const toolbar = document.createElement('div');
     toolbar.className = 'editor-toolbar';
     toolbar.innerHTML = `
@@ -229,11 +254,27 @@ export class SingleTrackEditor {
       </div>
 
       <div class="editor-toolbar-right">
-        <!-- 🎛️ 力度 (Velocity) 調控模組：滑動拉桿 + 精確數字框 (支援單選與多選批次連動) -->
+        <!-- 🎛️ 力度 (Velocity) 調控模組：滑動拉桿 + 精確數字框 + 模式切換 + ⚡ 微調階梯 -->
         <div class="editor-vel-box">
-          <span class="editor-vel-label">力度 (Velocity):</span>
+          <span class="editor-vel-label">力度:</span>
           <input type="range" id="ed-vel-slider" class="editor-vel-slider" min="1" max="127" value="${this.defaultVelocity}">
           <input type="number" id="ed-vel-input" class="editor-vel-input" min="1" max="127" value="${this.defaultVelocity}">
+          
+          <!-- 模式切換：📈 相對增減 vs 🎯 絕對統一 -->
+          <div id="ed-vel-mode-group" class="editor-vel-mode-group" title="多選力度調整模式">
+            <button id="ed-vel-mode-rel" class="vel-mode-btn ${this.velocityMode === 'relative' ? 'active' : ''}" title="相對增減：微調時嚴格保持選取音符間原有的強弱動態差">📈 相對</button>
+            <button id="ed-vel-mode-abs" class="vel-mode-btn ${this.velocityMode === 'absolute' ? 'active' : ''}" title="絕對統一：將所有選取音符統一設為此數值">🎯 統一</button>
+          </div>
+
+          <!-- ⚡ 快速階梯微調群組 -->
+          <div id="ed-vel-nudge-group" class="editor-vel-nudge-group">
+            <button id="ed-vel-nudge-m10" class="vel-nudge-btn" title="選取音符力度全部 -10">-10</button>
+            <button id="ed-vel-nudge-m5" class="vel-nudge-btn" title="選取音符力度全部 -5">-5</button>
+            <button id="ed-vel-nudge-p5" class="vel-nudge-btn" title="選取音符力度全部 +5">+5</button>
+            <button id="ed-vel-nudge-p10" class="vel-nudge-btn" title="選取音符力度全部 +10">+10</button>
+            <button id="ed-vel-humanize" class="vel-nudge-btn btn-humanize" title="🎲 人性化隨機微調：為選取音符加入 ±8 隨機動態，使律動演奏更自然">🎲 人性化</button>
+          </div>
+
           <span id="ed-vel-status" class="editor-vel-status">預設寫入力度: ${this.defaultVelocity}</span>
         </div>
 
@@ -265,7 +306,7 @@ export class SingleTrackEditor {
     // 操作提示條
     const hintBar = document.createElement('div');
     hintBar.className = 'editor-hint-bar';
-    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 滑鼠拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/數字框<b>【批次改力度】</b></span>`;
+    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b></span>`;
     this.container.appendChild(hintBar);
 
     // 2. 建立主編輯捲動工作區並先掛載至 DOM，以便取得真實精確的 viewport clientWidth
@@ -619,7 +660,7 @@ export class SingleTrackEditor {
     scrollWrap.appendChild(canvasWrap);
     this.container.appendChild(scrollWrap);
 
-    // 3. 綁定力度控制項、量化、縮放與選取事件
+    // 3. 綁定力度控制項、模式切換、快速微調按鈕、量化、縮放與選取事件
     this.bindControls();
 
     // 恢復選取高亮與狀態
@@ -842,6 +883,7 @@ export class SingleTrackEditor {
     const count = this.selectedEvents.size;
     this.events = this.events.filter(e => !this.selectedEvents.has(e));
     this.selectedEvents.clear();
+    this.initialVelocities.clear();
     this.notifyEventsChanged();
     this.render();
     if (this.velStatus) {
@@ -857,6 +899,7 @@ export class SingleTrackEditor {
     if (idx === -1) return;
     this.events.splice(idx, 1);
     this.selectedEvents.delete(ev);
+    this.initialVelocities.delete(ev);
     this.notifyEventsChanged();
     this.render();
     if (this.velStatus) {
@@ -891,6 +934,7 @@ export class SingleTrackEditor {
    */
   public clearSelection() {
     this.selectedEvents.clear();
+    this.initialVelocities.clear();
     this.updateSelectionUI(false);
   }
 
@@ -911,6 +955,123 @@ export class SingleTrackEditor {
       this.selectedEvents.clear();
       this.selectedEvents.add(this.events[index]);
       this.updateSelectionUI(true);
+    }
+  }
+
+  /**
+   * 設定多選力度調整模式 ('relative' 相對增減 | 'absolute' 絕對統一)
+   */
+  public setVelocityMode(mode: 'relative' | 'absolute') {
+    this.velocityMode = mode;
+    const btnRel = this.container.querySelector('#ed-vel-mode-rel');
+    const btnAbs = this.container.querySelector('#ed-vel-mode-abs');
+    if (mode === 'relative') {
+      btnRel?.classList.add('active');
+      btnAbs?.classList.remove('active');
+    } else {
+      btnAbs?.classList.add('active');
+      btnRel?.classList.remove('active');
+    }
+    this.snapshotInitialVelocities();
+    if (this.velStatus && this.selectedEvents.size > 1) {
+      this.velStatus.textContent = mode === 'relative' 
+        ? `模式: 相對增減 (保留 ${this.selectedEvents.size} 顆音符原強弱動態)` 
+        : `模式: 絕對統一 (將 ${this.selectedEvents.size} 顆音符設為相同值)`;
+    }
+  }
+
+  /**
+   * ⚡ 快速微調力度階梯 (例如 +10, +5, -5, -10)
+   */
+  public nudgeVelocity(delta: number) {
+    if (this.selectedEvents.size === 0) {
+      this.defaultVelocity = Math.max(1, Math.min(127, this.defaultVelocity + delta));
+      if (this.velSlider && this.velInput) {
+        this.velSlider.value = this.defaultVelocity.toString();
+        this.velInput.value = this.defaultVelocity.toString();
+      }
+      if (this.velStatus) {
+        this.velStatus.textContent = `預設寫入力度: ${this.defaultVelocity}`;
+      }
+      return;
+    }
+
+    this.selectedEvents.forEach(ev => {
+      ev.velocity = Math.max(1, Math.min(127, ev.velocity + delta));
+      this.updateNoteBlockVelocityUI(ev, ev.velocity);
+    });
+
+    this.notifyEventsChanged();
+    this.snapshotInitialVelocities();
+
+    if (this.velSlider && this.velInput) {
+      this.velSlider.value = this.baselineAverageVelocity.toString();
+      this.velInput.value = this.baselineAverageVelocity.toString();
+    }
+
+    if (this.velStatus) {
+      const sign = delta >= 0 ? `+${delta}` : `${delta}`;
+      this.velStatus.textContent = `已微調 ${this.selectedEvents.size} 個音符 (力度 ${sign} | 平均: ${this.baselineAverageVelocity})`;
+    }
+
+    // 試聽最高音
+    const highest = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
+    if (highest) {
+      styPlaybackEngine.previewNote(this.channel, highest.noteNumber, highest.velocity, 180);
+    }
+  }
+
+  /**
+   * 🎲 人性化隨機力度微調 (Humanize ±range)
+   */
+  public humanizeVelocity(range: number = 8) {
+    if (this.selectedEvents.size === 0) {
+      if (this.velStatus) {
+        this.velStatus.textContent = '請先框選欲加入人性化動態的音符群組';
+      }
+      return;
+    }
+
+    this.selectedEvents.forEach(ev => {
+      const jitter = Math.floor(Math.random() * (range * 2 + 1)) - range;
+      ev.velocity = Math.max(1, Math.min(127, ev.velocity + jitter));
+      this.updateNoteBlockVelocityUI(ev, ev.velocity);
+    });
+
+    this.notifyEventsChanged();
+    this.snapshotInitialVelocities();
+
+    if (this.velSlider && this.velInput) {
+      this.velSlider.value = this.baselineAverageVelocity.toString();
+      this.velInput.value = this.baselineAverageVelocity.toString();
+    }
+
+    if (this.velStatus) {
+      this.velStatus.textContent = `已為 ${this.selectedEvents.size} 個音符加入人性化隨機律動 (±${range})`;
+    }
+
+    // 試聽反饋
+    const highest = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
+    if (highest) {
+      styPlaybackEngine.previewNote(this.channel, highest.noteNumber, highest.velocity, 200);
+    }
+  }
+
+  /**
+   * 即時更新特定音符方塊在 DOM 上的力度數值與透明度
+   */
+  private updateNoteBlockVelocityUI(ev: PlaybackNoteEvent, vel: number) {
+    const idx = this.events.indexOf(ev);
+    if (idx === -1) return;
+    const noteEl = this.container.querySelector(`#ed-note-${idx}`) as HTMLElement;
+    if (noteEl) {
+      const velRatio = Math.max(0.3, Math.min(1.0, vel / 127));
+      noteEl.style.opacity = `${0.5 + 0.5 * velRatio}`;
+      const row = this.rows.find(r => r.note === ev.noteNumber);
+      const textEl = noteEl.querySelector('.note-block-text');
+      if (textEl && row) {
+        textEl.textContent = `${row.label} (${vel})`;
+      }
     }
   }
 
@@ -937,6 +1098,9 @@ export class SingleTrackEditor {
       btnDelete.textContent = count > 1 ? `🗑️ 刪除 (${count})` : `🗑️ 刪除音符`;
     }
 
+    // 拍下快照
+    this.snapshotInitialVelocities();
+
     if (count === 0) {
       if (this.velStatus) {
         this.velStatus.textContent = `預設寫入力度: ${this.defaultVelocity}`;
@@ -960,24 +1124,23 @@ export class SingleTrackEditor {
       }
     } else {
       // 多選狀態
-      const selectedList = Array.from(this.selectedEvents);
-      const avgVel = Math.round(selectedList.reduce((acc, ev) => acc + ev.velocity, 0) / count);
+      const modeLabel = this.velocityMode === 'relative' ? '相對' : '統一';
       if (this.velStatus) {
-        this.velStatus.textContent = `已選取 ${count} 個音符 (平均力度: ${avgVel})`;
+        this.velStatus.textContent = `已選取 ${count} 個音符 [${modeLabel}] (平均力度: ${this.baselineAverageVelocity})`;
       }
       if (this.velSlider && this.velInput) {
-        this.velSlider.value = avgVel.toString();
-        this.velInput.value = avgVel.toString();
+        this.velSlider.value = this.baselineAverageVelocity.toString();
+        this.velInput.value = this.baselineAverageVelocity.toString();
       }
       if (previewSound) {
-        const highest = [...selectedList].sort((a, b) => b.noteNumber - a.noteNumber)[0];
+        const highest = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
         styPlaybackEngine.previewNote(this.channel, highest.noteNumber, highest.velocity, 220);
       }
     }
   }
 
   /**
-   * 綁定控制項（拉桿 ↔ 數字框雙向連動、量化選單、刪除鈕、縮放按鈕）
+   * 綁定控制項（拉桿 ↔ 數字框雙向連動、量化選單、刪除鈕、縮放按鈕、模式切換鈕、微調鈕）
    */
   private bindControls() {
     this.velSlider = this.container.querySelector('#ed-vel-slider') as HTMLInputElement;
@@ -985,11 +1148,26 @@ export class SingleTrackEditor {
     this.velStatus = this.container.querySelector('#ed-vel-status');
 
     if (this.velSlider && this.velInput) {
+      // 拉桿按下去的一瞬間，先對基準數值拍照快照
+      this.velSlider.addEventListener('pointerdown', () => {
+        this.snapshotInitialVelocities();
+      });
+
       // 拉桿事件
       this.velSlider.addEventListener('input', () => {
         const val = parseInt(this.velSlider!.value, 10);
         this.velInput!.value = val.toString();
         this.applyVelocityChange(val);
+      });
+
+      // 拉桿放開後觸發一次試聽
+      this.velSlider.addEventListener('change', () => {
+        const val = parseInt(this.velSlider!.value, 10);
+        this.snapshotInitialVelocities();
+        if (this.selectedEvents.size > 0) {
+          const highest = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
+          styPlaybackEngine.previewNote(this.channel, highest.noteNumber, val, 200);
+        }
       });
 
       // 數字框事件
@@ -1000,8 +1178,22 @@ export class SingleTrackEditor {
         this.velInput!.value = val.toString();
         this.velSlider!.value = val.toString();
         this.applyVelocityChange(val);
+        this.snapshotInitialVelocities();
       });
     }
+
+    // 模式切換按鈕
+    const btnRel = this.container.querySelector('#ed-vel-mode-rel');
+    const btnAbs = this.container.querySelector('#ed-vel-mode-abs');
+    btnRel?.addEventListener('click', () => this.setVelocityMode('relative'));
+    btnAbs?.addEventListener('click', () => this.setVelocityMode('absolute'));
+
+    // ⚡ 快速微調階梯按鈕
+    this.container.querySelector('#ed-vel-nudge-m10')?.addEventListener('click', () => this.nudgeVelocity(-10));
+    this.container.querySelector('#ed-vel-nudge-m5')?.addEventListener('click', () => this.nudgeVelocity(-5));
+    this.container.querySelector('#ed-vel-nudge-p5')?.addEventListener('click', () => this.nudgeVelocity(5));
+    this.container.querySelector('#ed-vel-nudge-p10')?.addEventListener('click', () => this.nudgeVelocity(10));
+    this.container.querySelector('#ed-vel-humanize')?.addEventListener('click', () => this.humanizeVelocity(8));
 
     // 量化解析度下拉選單
     const quantizeSelect = this.container.querySelector('#ed-quantize-select') as HTMLSelectElement;
@@ -1058,46 +1250,63 @@ export class SingleTrackEditor {
   }
 
   /**
-   * 套用力度的變更 (支援單選與多選批次調整)
+   * 套用力度的變更 (支援單選、📈 相對增減與 🎯 絕對統一)
    */
-  private applyVelocityChange(newVel: number) {
-    if (this.selectedEvents.size > 0) {
-      this.selectedEvents.forEach(ev => {
-        ev.velocity = newVel;
-        const idx = this.events.indexOf(ev);
-        const noteEl = this.container.querySelector(`#ed-note-${idx}`) as HTMLElement;
-        if (noteEl) {
-          const velRatio = Math.max(0.3, Math.min(1.0, newVel / 127));
-          noteEl.style.opacity = `${0.5 + 0.5 * velRatio}`;
-          const row = this.rows.find(r => r.note === ev.noteNumber);
-          const textEl = noteEl.querySelector('.note-block-text');
-          if (textEl && row) {
-            textEl.textContent = `${row.label} (${newVel})`;
-          }
-        }
-      });
+  private applyVelocityChange(newVal: number) {
+    if (this.selectedEvents.size === 0) {
+      this.defaultVelocity = newVal;
+      if (this.velStatus) {
+        this.velStatus.textContent = `預設寫入力度: ${newVal}`;
+      }
+      return;
+    }
+
+    if (this.selectedEvents.size === 1) {
+      const ev = Array.from(this.selectedEvents)[0];
+      ev.velocity = newVal;
+      this.updateNoteBlockVelocityUI(ev, newVal);
 
       if (this.velStatus) {
-        if (this.selectedEvents.size === 1) {
-          const ev = Array.from(this.selectedEvents)[0];
-          const row = this.rows.find(r => r.note === ev.noteNumber);
-          this.velStatus.textContent = `已修改音符: ${row?.label || ''} | 力度: ${newVel}`;
-        } else {
-          this.velStatus.textContent = `已批次修改 ${this.selectedEvents.size} 個音符 | 力度: ${newVel}`;
-        }
+        const row = this.rows.find(r => r.note === ev.noteNumber);
+        this.velStatus.textContent = `已修改音符: ${row?.label || ''} | 力度: ${newVal}`;
       }
 
       this.notifyEventsChanged();
+      styPlaybackEngine.previewNote(this.channel, ev.noteNumber, newVal, 180);
+      return;
+    }
 
-      // 試聽選取音符中的最高音作為反饋
-      const previewEv = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
-      styPlaybackEngine.previewNote(this.channel, previewEv.noteNumber, newVel, 200);
-    } else {
-      this.defaultVelocity = newVel;
+    // 多選狀態
+    if (this.velocityMode === 'relative') {
+      // 📈 相對增減模式：保持各音符原有的強弱差 (Groove Ratio)
+      const delta = newVal - this.baselineAverageVelocity;
+      this.selectedEvents.forEach(ev => {
+        const baseVel = this.initialVelocities.get(ev) ?? ev.velocity;
+        ev.velocity = Math.max(1, Math.min(127, baseVel + delta));
+        this.updateNoteBlockVelocityUI(ev, ev.velocity);
+      });
+
+      const currentAvg = Math.round(
+        Array.from(this.selectedEvents).reduce((s, e) => s + e.velocity, 0) / this.selectedEvents.size
+      );
+      const sign = delta >= 0 ? `+${delta}` : `${delta}`;
+
       if (this.velStatus) {
-        this.velStatus.textContent = `預設寫入力度: ${newVel}`;
+        this.velStatus.textContent = `已相對微調 ${this.selectedEvents.size} 個音符 (Δ: ${sign} | 平均: ${currentAvg})`;
+      }
+    } else {
+      // 🎯 絕對統一模式：所有音符強制設為相同數值
+      this.selectedEvents.forEach(ev => {
+        ev.velocity = newVal;
+        this.updateNoteBlockVelocityUI(ev, newVal);
+      });
+
+      if (this.velStatus) {
+        this.velStatus.textContent = `已統一設定 ${this.selectedEvents.size} 個音符 | 力度: ${newVal}`;
       }
     }
+
+    this.notifyEventsChanged();
   }
 
   /**

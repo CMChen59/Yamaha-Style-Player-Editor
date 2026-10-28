@@ -130,7 +130,7 @@ describe('Tier 1-1: 單軌聚焦工作台多選與框選功能驗證 (Multi-Sele
     expect(events[1].relTick).toBe(1920);
   });
 
-  it('4. 批次力度修改 (Batch Velocity Update) 能同步更新群組內所有音符', () => {
+  it('4. 批次力度修改 (Batch Velocity Update) 絕對統一模式', () => {
     const events = createSampleEvents();
     const selectedSet = new Set([events[0], events[2], events[4]]);
 
@@ -147,5 +147,70 @@ describe('Tier 1-1: 單軌聚焦工作台多選與框選功能驗證 (Multi-Sele
     // 未選取的音符維持原本力度
     expect(events[1].velocity).toBe(90);
     expect(events[3].velocity).toBe(110);
+  });
+
+  it('5. 批次力度微調：相對增減模式 (Relative Delta Mode) 能嚴格保留各音符原有的強弱動態差', () => {
+    const events = createSampleEvents();
+    // 選取 Note 0 (vel: 100), Note 1 (vel: 90), Note 2 (vel: 95)
+    const selected = [events[0], events[1], events[2]];
+    const baseVelocities = new Map(selected.map(e => [e, e.velocity]));
+    const baselineAverage = Math.round((100 + 90 + 95) / 3); // 95
+
+    // 模擬使用者將滑桿由平均值 95 拖動至 110 (delta = +15)
+    const newVal = 110;
+    const delta = newVal - baselineAverage; // +15
+
+    selected.forEach(ev => {
+      const base = baseVelocities.get(ev)!;
+      ev.velocity = Math.max(1, Math.min(127, base + delta));
+    });
+
+    // 各自增加 15
+    expect(events[0].velocity).toBe(115); // 100 + 15
+    expect(events[1].velocity).toBe(105); // 90 + 15
+    expect(events[2].velocity).toBe(110); // 95 + 15
+
+    // 驗證原有的動態差 (100 - 90 = 10, 100 - 95 = 5) 嚴格保持完全一致！
+    expect(events[0].velocity - events[1].velocity).toBe(10);
+    expect(events[0].velocity - events[2].velocity).toBe(5);
+  });
+
+  it('6. 批次力度快速階梯微調 (Quick Step Nudge) 具備安全邊界 (1~127)', () => {
+    const events = createSampleEvents();
+    const selected = [events[0], events[4]]; // Note 0 (100), Note 4 (80)
+
+    // 模擬點擊 [+10] 按鈕
+    const nudgeDelta = 10;
+    selected.forEach(ev => {
+      ev.velocity = Math.max(1, Math.min(127, ev.velocity + nudgeDelta));
+    });
+    expect(events[0].velocity).toBe(110);
+    expect(events[4].velocity).toBe(90);
+
+    // 模擬連續點擊 [+10] 直到達到琴端極限 127
+    selected.forEach(ev => {
+      ev.velocity = Math.max(1, Math.min(127, ev.velocity + 50));
+    });
+    expect(events[0].velocity).toBe(127); // 上限鎖定 127
+    expect(events[4].velocity).toBe(127); // 90+50 = 140 -> 127
+  });
+
+  it('7. 人性化隨機律動微調 (Humanize) 能在 ±8 範圍內加入自然演奏動態且不溢位', () => {
+    const events = createSampleEvents();
+    const selected = [...events];
+    const initialVelocities = selected.map(e => e.velocity);
+
+    const range = 8;
+    selected.forEach(ev => {
+      const jitter = Math.floor(Math.random() * (range * 2 + 1)) - range;
+      ev.velocity = Math.max(1, Math.min(127, ev.velocity + jitter));
+    });
+
+    selected.forEach((ev, idx) => {
+      const diff = Math.abs(ev.velocity - initialVelocities[idx]);
+      expect(diff).toBeLessThanOrEqual(range);
+      expect(ev.velocity).toBeGreaterThanOrEqual(1);
+      expect(ev.velocity).toBeLessThanOrEqual(127);
+    });
   });
 });
