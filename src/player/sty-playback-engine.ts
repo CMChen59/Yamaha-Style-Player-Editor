@@ -6,6 +6,20 @@ import { ChordSynth } from '../creator/chord-synth';
 import { midiManager } from '../core/audio/midi-manager';
 import { findYamahaVoice } from '../core/data/yamaha-voices';
 
+export function formatYamahaPan(pan: number): string {
+  if (pan === 64) return 'C';
+  if (pan < 64) return `L${64 - pan}`;
+  return `R${pan - 64}`;
+}
+
+export interface PlaybackCCEvent {
+  relTick: number;          // 相對於段落起始的 Tick
+  channel: number;          // 目的 MIDI Channel (8~15)
+  sourceChannel: number;    // 原始 MIDI 來源 Channel (0~15)
+  controller: number;       // 控制器編號 (e.g. 11: Expression, 1: Mod, 64: Sustain, etc.)
+  value: number;            // 控制器數值 (0~127)
+}
+
 export interface PlaybackNoteEvent {
   relTick: number;          // 相對於段落起始的 Tick
   channel: number;          // 目的 MIDI Channel (標準 8~15，對應 Yamaha 8 大伴奏聲部)
@@ -44,6 +58,7 @@ export class StyPlaybackEngine {
   private parsed: YamahaFileParsed | null = null;
   private currentSection: YamahaSection | null = null;
   private sectionEvents: PlaybackNoteEvent[] = [];
+  private sectionCCEvents: PlaybackCCEvent[] = [];
   private totalSectionTicks: number = 0;
   private totalBars: number = 1;
 
@@ -66,6 +81,10 @@ export class StyPlaybackEngine {
   private mutedChannels: Set<number> = new Set();
   private soloChannel: number | null = null;
   private channelVolumes: Map<number, number> = new Map(); // 0~127
+  private channelPans: Map<number, number> = new Map(); // 0~127, 預設 64 (Center)
+  private channelReverbs: Map<number, number> = new Map(); // 0~127
+  private channelChoruses: Map<number, number> = new Map(); // 0~127
+  private masterVolumePercent: number = 100; // 全域總音量 0% ~ 150% (預設 100%)
 
   // 回呼
   private onTickCallback: TickCallback | null = null;
@@ -76,10 +95,26 @@ export class StyPlaybackEngine {
     // 預設全聲部音量為 100，並為每個和弦/樂句聲部建立專屬合成器
     for (let c = 8; c <= 15; c++) {
       this.channelVolumes.set(c, 100);
+      this.channelPans.set(c, 64);
+      this.channelReverbs.set(c, 40);
+      this.channelChoruses.set(c, 0);
       if (c >= 11) {
         this.chordSynths.set(c, new ChordSynth());
       }
     }
+  }
+
+  public getPartInfo(c: number): any {
+    if (!this.parsed) return undefined;
+    let part = this.parsed.parts.find(p => p.channel === c);
+    if (!part) {
+      const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 0, 9: 9 };
+      const fb = sff1FallbackMap[c];
+      if (fb !== undefined) {
+        part = this.parsed.parts.find(p => p.channel === fb);
+      }
+    }
+    return part;
   }
 
   public loadParsed(parsed: YamahaFileParsed) {
@@ -88,7 +123,19 @@ export class StyPlaybackEngine {
     this.bpm = parsed.bpm || 120;
     this.currentSection = null;
     this.sectionEvents = [];
+    this.sectionCCEvents = [];
     this.partVoices.clear();
+
+    // 載入原廠伴奏各聲部混音音量 (CC 7) 與效果器預設值
+    for (let c = 8; c <= 15; c++) {
+      const part = this.getPartInfo(c);
+      const vol = part?.volume !== undefined ? part.volume : 100;
+      this.channelVolumes.set(c, vol);
+      const synth = this.chordSynths.get(c);
+      if (synth) synth.setVolume(vol);
+      if (c === 10) bassSynth.setVolume(vol);
+      if (c === 8 || c === 9) drumSynth.setVolume(vol);
+    }
   }
 
   public getSections(): YamahaSection[] {
@@ -138,11 +185,16 @@ export class StyPlaybackEngine {
     if (mode === 'webaudio' && this.isPlaying) {
       midiManager.panicAllChannels();
     } else if (mode === 'midi' && this.isPlaying) {
-      // 立即初始化琴端音色
+      // 立即初始化琴端音色、音量、表情與控制器
       for (const [ch, voice] of this.partVoices.entries()) {
         midiManager.sendVoiceChange(ch, { msb: voice.msb, lsb: voice.lsb, pc: voice.pc });
-        const vol = this.getChannelVolume(ch);
+        const vol = this.getEffectiveChannelVolume(ch);
         midiManager.sendControlChange(ch, 7, vol);
+        midiManager.sendControlChange(ch, 11, this.getInitialExpression(ch));
+        const part = this.getPartInfo(ch);
+        if (part?.pan !== undefined) midiManager.sendControlChange(ch, 10, part.pan);
+        if (part?.reverb !== undefined) midiManager.sendControlChange(ch, 91, part.reverb);
+        if (part?.chorus !== undefined) midiManager.sendControlChange(ch, 93, part.chorus);
       }
     }
   }
@@ -167,7 +219,7 @@ export class StyPlaybackEngine {
     }
 
     if (this.outputMode === 'midi') {
-      midiManager.sendControlChange(channel, 7, mute ? 0 : this.getChannelVolume(channel));
+      midiManager.sendControlChange(channel, 7, mute ? 0 : this.getEffectiveChannelVolume(channel));
     }
   }
 
@@ -183,7 +235,7 @@ export class StyPlaybackEngine {
     if (this.outputMode === 'midi') {
       for (let ch = 8; ch <= 15; ch++) {
         const effectiveMute = this.isChannelMuted(ch);
-        midiManager.sendControlChange(ch, 7, effectiveMute ? 0 : this.getChannelVolume(ch));
+        midiManager.sendControlChange(ch, 7, effectiveMute ? 0 : this.getEffectiveChannelVolume(ch));
       }
     }
   }
@@ -192,23 +244,90 @@ export class StyPlaybackEngine {
     return this.soloChannel;
   }
 
+  public getMasterVolume(): number {
+    return this.masterVolumePercent;
+  }
+
+  public setMasterVolume(percent: number) {
+    this.masterVolumePercent = Math.max(0, Math.min(150, Math.round(percent)));
+    if (this.outputMode === 'midi') {
+      for (let ch = 8; ch <= 15; ch++) {
+        const isMuted = this.isChannelMuted(ch);
+        midiManager.sendControlChange(ch, 7, isMuted ? 0 : this.getEffectiveChannelVolume(ch));
+      }
+    } else {
+      for (let ch = 8; ch <= 15; ch++) {
+        const effVol = this.getEffectiveChannelVolume(ch);
+        const synth = this.chordSynths.get(ch);
+        if (synth) synth.setVolume(effVol);
+        if (ch === 10) bassSynth.setVolume(effVol);
+        if (ch === 8 || ch === 9) drumSynth.setVolume(effVol);
+      }
+    }
+  }
+
+  public getEffectiveChannelVolume(channel: number): number {
+    const baseVol = this.channelVolumes.get(channel) ?? 100;
+    return Math.max(0, Math.min(127, Math.round(baseVol * (this.masterVolumePercent / 100))));
+  }
+
   public setChannelVolume(channel: number, vol: number) {
     const clamped = Math.max(0, Math.min(127, Math.round(vol)));
     this.channelVolumes.set(channel, clamped);
+    const effVol = this.getEffectiveChannelVolume(channel);
     const synth = this.chordSynths.get(channel);
-    if (synth) synth.setVolume(clamped);
-    if (channel === 10) bassSynth.setVolume(clamped);
-    if (channel === 8 || channel === 9) drumSynth.setVolume(clamped);
+    if (synth) synth.setVolume(effVol);
+    if (channel === 10) bassSynth.setVolume(effVol);
+    if (channel === 8 || channel === 9) drumSynth.setVolume(effVol);
 
     if (this.outputMode === 'midi') {
       if (!this.isChannelMuted(channel)) {
-        midiManager.sendControlChange(channel, 7, clamped);
+        midiManager.sendControlChange(channel, 7, effVol);
       }
     }
   }
 
   public getChannelVolume(channel: number): number {
     return this.channelVolumes.get(channel) ?? 100;
+  }
+
+  public getChannelPan(channel: number): number {
+    return this.channelPans.get(channel) ?? 64;
+  }
+
+  public setChannelPan(channel: number, pan: number) {
+    const clamped = Math.max(0, Math.min(127, Math.round(pan)));
+    this.channelPans.set(channel, clamped);
+    const synth = this.chordSynths.get(channel);
+    if (synth) synth.setPan(clamped);
+
+    if (this.outputMode === 'midi') {
+      midiManager.sendControlChange(channel, 10, clamped);
+    }
+  }
+
+  public getChannelReverb(channel: number): number {
+    return this.channelReverbs.get(channel) ?? 40;
+  }
+
+  public setChannelReverb(channel: number, rev: number) {
+    const clamped = Math.max(0, Math.min(127, Math.round(rev)));
+    this.channelReverbs.set(channel, clamped);
+    if (this.outputMode === 'midi') {
+      midiManager.sendControlChange(channel, 91, clamped);
+    }
+  }
+
+  public getChannelChorus(channel: number): number {
+    return this.channelChoruses.get(channel) ?? 0;
+  }
+
+  public setChannelChorus(channel: number, cho: number) {
+    const clamped = Math.max(0, Math.min(127, Math.round(cho)));
+    this.channelChoruses.set(channel, clamped);
+    if (this.outputMode === 'midi') {
+      midiManager.sendControlChange(channel, 93, clamped);
+    }
   }
 
   public getPartVoices(): Map<number, PartVoiceInfo> {
@@ -393,35 +512,197 @@ export class StyPlaybackEngine {
     rawNoteEvents.sort((a, b) => a.relTick - b.relTick);
     this.sectionEvents = rawNoteEvents;
 
-    // 6. 為每個目標聲部 (8~15) 建立音色資訊並設定各 ChannelSynth 音色類別
+    // 組合 CC 控制器事件流 (含 CC 11 表情、CC 1 顫音、CC 64 延音踏板、CC 10 相位、CC 91 殘響、CC 93 合唱)
+    const rawCCEvents: PlaybackCCEvent[] = [];
+    for (const item of flatEvents) {
+      if (item.absTick >= startTick && item.absTick < endTick) {
+        const ev = item.ev;
+        if (ev.type === 'controlChange' && ev.controller !== undefined && ev.value !== undefined) {
+          const srcCh = ev.channel ?? 0;
+          const destCh = resolveDestChannel(srcCh);
+
+          if (destCh < 8 || destCh > 15) continue;
+          if (srcCh < 8 && destPartsWithSff2.has(destCh)) continue;
+          if (ev.controller === 0 || ev.controller === 32) continue; // 音色庫切換由 setupPartVoices 處理
+
+          rawCCEvents.push({
+            relTick: item.absTick - startTick,
+            channel: destCh,
+            sourceChannel: srcCh,
+            controller: ev.controller,
+            value: ev.value,
+          });
+        }
+      }
+    }
+    rawCCEvents.sort((a, b) => a.relTick - b.relTick);
+    this.sectionCCEvents = rawCCEvents;
+
+    // 6. 依段落 CASM 路由更新聲部音量與音色
+    this.setupSectionMixing(casmSecMap);
     this.setupPartVoices(rawVoices, casmSecMap);
 
     if (wasPlaying) this.play();
     return true;
   }
 
-  private setupPartVoices(rawVoices: Record<number, { msb: number; lsb: number; pc: number }>, casmSecMap?: Record<number, number>) {
+  public getSectionCCEvents(): PlaybackCCEvent[] {
+    return this.sectionCCEvents;
+  }
+
+  public getInitialExpression(channel: number): number {
+    const firstInSec = this.sectionCCEvents.find(e => e.channel === channel && e.controller === 11);
+    if (firstInSec && firstInSec.relTick === 0) {
+      return firstInSec.value;
+    }
+    if (firstInSec) {
+      return firstInSec.value;
+    }
+    if (this.parsed && this.currentSection) {
+      const startTick = this.currentSection.startTick;
+      let lastVal: number | undefined;
+      for (const trk of this.parsed.tracks) {
+        let t = 0;
+        for (const ev of trk.events) {
+          t += ev.delta;
+          if (t <= startTick && ev.type === 'controlChange' && ev.controller === 11) {
+            const srcCh = ev.channel ?? 0;
+            const casmSecMap = this.parsed.casmMappings?.[this.currentSection.name.toLowerCase()];
+            const destCh = (casmSecMap && casmSecMap[srcCh] !== undefined)
+              ? casmSecMap[srcCh]
+              : (srcCh >= 8 && srcCh <= 15 ? srcCh : this.resolveSff1Fallback(srcCh));
+            if (destCh === channel) {
+              lastVal = ev.value;
+            }
+          }
+        }
+      }
+      if (lastVal !== undefined) return lastVal;
+    }
+    return 127;
+  }
+
+  private resolveSff1Fallback(srcCh: number): number {
+    switch (srcCh) {
+      case 0: return 8;
+      case 1: return 10;
+      case 2: return 11;
+      case 3: return 12;
+      case 4: return 13;
+      case 5: return 14;
+      case 6: return 15;
+      case 7: return 8;
+      default: return srcCh;
+    }
+  }
+
+  private setupSectionMixing(casmSecMap?: Record<number, number>) {
+    const sourceVolumes: Record<number, number> = {};
+    const sourcePans: Record<number, number> = {};
+    const sourceReverbs: Record<number, number> = {};
+    const sourceChoruses: Record<number, number> = {};
+
+    if (this.parsed) {
+      for (const p of this.parsed.parts) {
+        if (p.volume !== undefined) sourceVolumes[p.channel] = p.volume;
+        if (p.pan !== undefined) sourcePans[p.channel] = p.pan;
+        if (p.reverb !== undefined) sourceReverbs[p.channel] = p.reverb;
+        if (p.chorus !== undefined) sourceChoruses[p.channel] = p.chorus;
+      }
+    }
+
+    for (let destCh = 8; destCh <= 15; destCh++) {
+      let matchedSrc: number | undefined;
+
+      // 1. CASM 優先：尋找當前段落 CASM 指向此聲部的來源音軌
+      if (casmSecMap) {
+        for (const [srcStr, dst] of Object.entries(casmSecMap)) {
+          if (dst === destCh && (sourceVolumes[parseInt(srcStr, 10)] !== undefined || sourcePans[parseInt(srcStr, 10)] !== undefined)) {
+            matchedSrc = parseInt(srcStr, 10);
+            break;
+          }
+        }
+      }
+
+      // 2. 若 CASM 未特別指定此聲部，則嘗試同名通道原生 SFF2 (8~15)
+      if (matchedSrc === undefined && (sourceVolumes[destCh] !== undefined || sourcePans[destCh] !== undefined)) {
+        matchedSrc = destCh;
+      }
+
+      // 3. 若仍無，嘗試 SFF1 傳統通道反推
+      if (matchedSrc === undefined) {
+        const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 0, 9: 9 };
+        const fb = sff1FallbackMap[destCh];
+        if (fb !== undefined) matchedSrc = fb;
+      }
+
+      // 解析音量 (Volume / CC 7)
+      const vol = (matchedSrc !== undefined && sourceVolumes[matchedSrc] !== undefined)
+        ? sourceVolumes[matchedSrc]
+        : (sourceVolumes[destCh] ?? 100);
+      this.channelVolumes.set(destCh, vol);
+
+      // 解析相位 (Pan / CC 10)
+      const pan = (matchedSrc !== undefined && sourcePans[matchedSrc] !== undefined)
+        ? sourcePans[matchedSrc]
+        : (sourcePans[destCh] ?? 64);
+      this.channelPans.set(destCh, pan);
+
+      // 解析殘響 (Reverb / CC 91)
+      const rev = (matchedSrc !== undefined && sourceReverbs[matchedSrc] !== undefined)
+        ? sourceReverbs[matchedSrc]
+        : (sourceReverbs[destCh] ?? 40);
+      this.channelReverbs.set(destCh, rev);
+
+      // 解析合唱 (Chorus / CC 93)
+      const cho = (matchedSrc !== undefined && sourceChoruses[matchedSrc] !== undefined)
+        ? sourceChoruses[matchedSrc]
+        : (sourceChoruses[destCh] ?? 0);
+      this.channelChoruses.set(destCh, cho);
+
+      // 同步軟體合成器實例
+      const synth = this.chordSynths.get(destCh);
+      if (synth) {
+        synth.setVolume(this.getEffectiveChannelVolume(destCh));
+        synth.setPan(pan);
+        synth.setReverb(rev);
+        synth.setChorus(cho);
+      }
+      if (destCh === 10) bassSynth.setVolume(this.getEffectiveChannelVolume(10));
+      if (destCh === 8 || destCh === 9) drumSynth.setVolume(this.getEffectiveChannelVolume(destCh));
+    }
+  }
+
+      private setupPartVoices(rawVoices: Record<number, { msb: number; lsb: number; pc: number }>, casmSecMap?: Record<number, number>) {
     this.partVoices.clear();
 
-    // 映射各聲部音色
+    // 映射各聲部音色 (以 Yamaha CASM 路由為最高優先準則)
     for (let destCh = 8; destCh <= 15; destCh++) {
-      // 找出指向此 destCh 的 sourceChannel
-      let matchedSrc = destCh;
-      if (!rawVoices[destCh]) {
-        // 從 CASM 或預設 SFF1 尋找
-        for (const [srcStr, dst] of Object.entries(casmSecMap || {})) {
+      let matchedSrc: number | undefined;
+
+      // 1. 優先查核當前段落 CASM 映射表 (將 Source Channel 映射至 Destination Channel)
+      if (casmSecMap) {
+        for (const [srcStr, dst] of Object.entries(casmSecMap)) {
           if (dst === destCh && rawVoices[parseInt(srcStr, 10)]) {
             matchedSrc = parseInt(srcStr, 10);
             break;
           }
         }
-        if (!rawVoices[matchedSrc]) {
-          // 嘗試 SFF1 預設映射反推
-          const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 0, 9: 9 };
-          const fb = sff1FallbackMap[destCh];
-          if (fb !== undefined && rawVoices[fb]) matchedSrc = fb;
-        }
       }
+
+      // 2. 若 CASM 未特別指定此聲部，則嘗試同名通道原生 SFF2 (8~15)
+      if (matchedSrc === undefined && rawVoices[destCh]) {
+        matchedSrc = destCh;
+      }
+
+      // 3. 若仍無，嘗試 SFF1 傳統通道反推 (10->1, 11->2, 12->3, 13->4, 14->5, 15->6, 8->0, 9->9)
+      if (matchedSrc === undefined) {
+        const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 0, 9: 9 };
+        const fb = sff1FallbackMap[destCh];
+        if (fb !== undefined && rawVoices[fb]) matchedSrc = fb;
+      }
+
+      if (matchedSrc === undefined) matchedSrc = destCh;
 
       const v = rawVoices[matchedSrc] || rawVoices[destCh] || { msb: 0, lsb: 0, pc: 0 };
       const found = findYamahaVoice(v.msb, v.lsb, v.pc);
@@ -541,7 +822,22 @@ export class StyPlaybackEngine {
       for (const [ch, voice] of this.partVoices.entries()) {
         midiManager.sendVoiceChange(ch, { msb: voice.msb, lsb: voice.lsb, pc: voice.pc });
         const isMuted = this.isChannelMuted(ch);
-        midiManager.sendControlChange(ch, 7, isMuted ? 0 : this.getChannelVolume(ch));
+        midiManager.sendControlChange(ch, 7, isMuted ? 0 : this.getEffectiveChannelVolume(ch));
+
+        // 發送起始 Expression (CC 11)
+        const initExpr = this.getInitialExpression(ch);
+        midiManager.sendControlChange(ch, 11, initExpr);
+
+        // 發送 Pan (CC 10), Reverb (CC 91), Chorus (CC 93) (依 CASM 路由即時數值)
+        midiManager.sendControlChange(ch, 10, this.getChannelPan(ch));
+        midiManager.sendControlChange(ch, 91, this.getChannelReverb(ch));
+        midiManager.sendControlChange(ch, 93, this.getChannelChorus(ch));
+      }
+    } else {
+      for (let ch = 8; ch <= 15; ch++) {
+        const initExpr = this.getInitialExpression(ch);
+        const synth = this.chordSynths.get(ch);
+        if (synth) synth.setExpression(initExpr);
       }
     }
 
@@ -581,7 +877,27 @@ export class StyPlaybackEngine {
       const loopCurrentTick = (currentAbsoluteTick % this.totalSectionTicks);
       const windowEndTick = loopCurrentTick + (lookaheadWindowSec * ticksPerSec);
 
-      // 排程 [lastScheduledTick + 1, windowEndTick] 範圍內的音符
+      // 1. 排程 CC 控制器事件 (如 CC 11 Expression 漸強漸弱曲線、CC 1 顫音、CC 64 延音等)
+      for (const ccEvent of this.sectionCCEvents) {
+        const evTick = ccEvent.relTick;
+        if (evTick > this.lastScheduledTick && evTick <= windowEndTick) {
+          const eventAudioTime = this.playbackStartAudioTime + (evTick / ticksPerSec);
+          if (this.outputMode === 'midi') {
+            const deltaMs = Math.max(0, (eventAudioTime - nowAudioTime) * 1000);
+            const midiTimestamp = performance.now() + deltaMs;
+            midiManager.sendControlChange(ccEvent.channel, ccEvent.controller, ccEvent.value, midiTimestamp);
+          } else {
+            if (ccEvent.controller === 11) {
+              const synth = this.chordSynths.get(ccEvent.channel);
+              if (synth) {
+                synth.setExpression(ccEvent.value, eventAudioTime);
+              }
+            }
+          }
+        }
+      }
+
+      // 2. 排程 [lastScheduledTick + 1, windowEndTick] 範圍內的音符
       this.activeChannelsInWindow.clear();
 
       for (const event of this.sectionEvents) {
@@ -596,17 +912,17 @@ export class StyPlaybackEngine {
           const durSec = (event.durationTicks / division) * (60 / this.bpm);
           const durMs = durSec * 1000;
 
-          // 考量音量滑桿比例
-          const chVol = this.getChannelVolume(event.channel);
-          const scaledVel = Math.round(event.velocity * (chVol / 127));
-          if (scaledVel <= 0) continue;
-
           this.activeChannelsInWindow.add(event.channel);
 
           if (this.outputMode === 'webaudio') {
+            const effVol = this.getEffectiveChannelVolume(event.channel);
+            const scaledVel = Math.round(event.velocity * (effVol / 127));
+            if (scaledVel <= 0) continue;
             this.playWebAudioNote(event.channel, event.noteNumber, scaledVel, durMs, eventAudioTime);
           } else {
-            this.playMidiNote(event.channel, event.noteNumber, scaledVel, durMs, eventAudioTime, nowAudioTime);
+            // 在 MIDI 模式下，實體琴已由 CC 7 (Effective Channel Volume) 調控音軌總量，
+            // NoteOn 保持 STY 原始真實敲擊力度，不進行二次雙重衰減！
+            this.playMidiNote(event.channel, event.noteNumber, event.velocity, durMs, eventAudioTime, nowAudioTime);
           }
         }
       }
@@ -662,6 +978,10 @@ export class StyPlaybackEngine {
     }
     if (this.outputMode === 'midi') {
       midiManager.panicAllChannels();
+      // 恢復所有伴奏通道 CC 11 表情為 127，避免實體琴手動彈奏時發音偏小
+      for (let ch = 8; ch <= 15; ch++) {
+        midiManager.sendControlChange(ch, 11, 127);
+      }
     }
   }
 

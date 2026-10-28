@@ -1,5 +1,5 @@
 import { YamahaParser } from '../core/parser/yamaha-parser';
-import { styPlaybackEngine } from './sty-playback-engine';
+import { styPlaybackEngine, formatYamahaPan } from './sty-playback-engine';
 import { midiManager } from '../core/audio/midi-manager';
 import type { YamahaFileParsed } from '../core/models/types';
 import { getSharedAudioContext } from '../creator/shared-audio-context';
@@ -44,6 +44,9 @@ export class PlayerApp {
   private btnLoop!: HTMLButtonElement;
   private sliderBpm!: HTMLInputElement;
   private labelBpmValue!: HTMLElement;
+  private sliderMasterVol!: HTMLInputElement;
+  private labelMasterVolValue!: HTMLElement;
+  private btnMasterVolReset!: HTMLButtonElement;
   private labelPosition!: HTMLElement;
   private labelStyleTitle!: HTMLElement;
   private labelStyleInfo!: HTMLElement;
@@ -87,6 +90,9 @@ export class PlayerApp {
       this.updateFocusedBanner();
       this.syncEditorEventsToParsed(channel, events);
     });
+    this.trackEditor.setOnRequestSwitchChannel((channel) => {
+      this.setFocusedChannel(channel);
+    });
 
     this.setFocusedChannel(8); // 預設聚焦 CH 9 Rhythm 1
     this.initMidi();
@@ -105,6 +111,9 @@ export class PlayerApp {
     this.btnLoop = document.getElementById('btn-loop') as HTMLButtonElement;
     this.sliderBpm = document.getElementById('slider-bpm') as HTMLInputElement;
     this.labelBpmValue = document.getElementById('bpm-value')!;
+    this.sliderMasterVol = document.getElementById('slider-master-vol') as HTMLInputElement;
+    this.labelMasterVolValue = document.getElementById('master-vol-val')!;
+    this.btnMasterVolReset = document.getElementById('btn-master-vol-reset') as HTMLButtonElement;
     this.labelPosition = document.getElementById('label-position')!;
     this.labelStyleTitle = document.getElementById('style-title')!;
     this.labelStyleInfo = document.getElementById('style-info')!;
@@ -231,6 +240,19 @@ export class PlayerApp {
       styPlaybackEngine.setLoop(!current);
       this.btnLoop.classList.toggle('active', !current);
       this.btnLoop.textContent = !current ? '🔁 循環: 開啟' : '➡️ 循環: 單次';
+    });
+
+    // 全域總音量調整
+    this.sliderMasterVol.addEventListener('input', () => {
+      const val = parseInt(this.sliderMasterVol.value, 10);
+      this.labelMasterVolValue.textContent = `${val}%`;
+      styPlaybackEngine.setMasterVolume(val);
+    });
+
+    this.btnMasterVolReset.addEventListener('click', () => {
+      this.sliderMasterVol.value = '100';
+      this.labelMasterVolValue.textContent = '100%';
+      styPlaybackEngine.setMasterVolume(100);
     });
 
     // 速度調整
@@ -391,6 +413,8 @@ export class PlayerApp {
       this.baseBpm = parsed.bpm || 120;
 
       styPlaybackEngine.loadParsed(parsed);
+      this.syncMixerVolumes();
+      this.trackEditor?.clearHistory();
 
       // 更新速度
       this.sliderBpm.value = this.baseBpm.toString();
@@ -471,6 +495,9 @@ export class PlayerApp {
   }
 
   private selectSection(name: string) {
+    if (this.activeSectionName !== name) {
+      this.trackEditor?.clearHistory();
+    }
     this.activeSectionName = name;
     styPlaybackEngine.selectSection(name);
 
@@ -492,6 +519,9 @@ export class PlayerApp {
 
     const totalBars = styPlaybackEngine.getTotalBars();
     this.labelPosition.textContent = `小節 01 / ${totalBars.toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
+
+    // 依段落同步混音台音量滑桿與數值
+    this.syncMixerVolumes();
 
     // 更新當前聚焦聲部的音符統計與資訊
     this.updateFocusedBanner();
@@ -596,8 +626,14 @@ export class PlayerApp {
           <button id="btn-solo-${part.channel}" class="mixer-btn btn-solo">Solo</button>
         </div>
         <div class="part-vol-wrap">
-          <input type="range" id="vol-${part.channel}" class="part-vol-slider" min="0" max="127" value="100">
-          <span id="vol-txt-${part.channel}" class="vol-badge">100</span>
+          <span class="ctrl-sub-label">VOL</span>
+          <input type="range" id="vol-${part.channel}" class="part-vol-slider" min="0" max="127" value="${styPlaybackEngine.getChannelVolume(part.channel)}">
+          <span id="vol-txt-${part.channel}" class="vol-badge">${styPlaybackEngine.getChannelVolume(part.channel)}</span>
+        </div>
+        <div class="part-pan-wrap">
+          <span class="ctrl-sub-label">PAN</span>
+          <input type="range" id="pan-${part.channel}" class="part-pan-slider" min="0" max="127" value="${styPlaybackEngine.getChannelPan(part.channel)}">
+          <span id="pan-txt-${part.channel}" class="pan-badge" title="雙擊滑桿或數值置中 (C)">${formatYamahaPan(styPlaybackEngine.getChannelPan(part.channel))}</span>
         </div>
       `;
 
@@ -641,6 +677,43 @@ export class PlayerApp {
         const txt = card.querySelector(`#vol-txt-${part.channel}`);
         if (txt) txt.textContent = vol.toString();
       });
+
+      const sliderPan = card.querySelector(`#pan-${part.channel}`) as HTMLInputElement;
+      const txtPan = card.querySelector(`#pan-txt-${part.channel}`);
+
+      sliderPan.addEventListener('click', (e) => e.stopPropagation());
+      sliderPan.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const pan = parseInt(sliderPan.value, 10);
+        styPlaybackEngine.setChannelPan(part.channel, pan);
+        if (txtPan) txtPan.textContent = formatYamahaPan(pan);
+      });
+
+      // 雙擊滑桿或數值徽章一鍵置中 (Center: 64)
+      const resetCenter = (e: Event) => {
+        e.stopPropagation();
+        sliderPan.value = '64';
+        styPlaybackEngine.setChannelPan(part.channel, 64);
+        if (txtPan) txtPan.textContent = 'C';
+      };
+      sliderPan.addEventListener('dblclick', resetCenter);
+      txtPan?.addEventListener('dblclick', resetCenter);
+    });
+  }
+
+  private syncMixerVolumes() {
+    YAMAHA_PARTS.forEach((part) => {
+      const vol = styPlaybackEngine.getChannelVolume(part.channel);
+      const slider = this.mixerContainer.querySelector(`#vol-${part.channel}`) as HTMLInputElement | null;
+      const txt = this.mixerContainer.querySelector(`#vol-txt-${part.channel}`);
+      if (slider) slider.value = vol.toString();
+      if (txt) txt.textContent = vol.toString();
+
+      const pan = styPlaybackEngine.getChannelPan(part.channel);
+      const sliderPan = this.mixerContainer.querySelector(`#pan-${part.channel}`) as HTMLInputElement | null;
+      const txtPan = this.mixerContainer.querySelector(`#pan-txt-${part.channel}`);
+      if (sliderPan) sliderPan.value = pan.toString();
+      if (txtPan) txtPan.textContent = formatYamahaPan(pan);
     });
   }
 

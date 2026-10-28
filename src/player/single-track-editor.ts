@@ -21,6 +21,13 @@ import type { PlaybackNoteEvent, PartVoiceInfo } from './sty-playback-engine';
 import { styPlaybackEngine } from './sty-playback-engine';
 import { YAMAHA_DRUM_VOICES } from '../creator/drum-step-grid';
 
+export interface HistoryRecord {
+  channel: number;
+  description: string;
+  beforeEvents: PlaybackNoteEvent[];
+  afterEvents: PlaybackNoteEvent[];
+}
+
 export interface EditorRowInfo {
   note: number;
   label: string;
@@ -57,6 +64,13 @@ export class SingleTrackEditor {
   private baselineAverageVelocity: number = 100;
   private onEventsChanged: ((channel: number, events: PlaybackNoteEvent[]) => void) | null = null;
 
+  // 歷史記錄堆疊 (Undo / Redo)
+  private undoStack: HistoryRecord[] = [];
+  private redoStack: HistoryRecord[] = [];
+  private maxHistorySteps: number = 50;
+  private onRequestSwitchChannel: ((channel: number) => void) | null = null;
+  private velocityDragBeforeSnapshot: PlaybackNoteEvent[] | null = null;
+
   // DOM 參照
   private playheadEl: HTMLElement | null = null;
   private velSlider: HTMLInputElement | null = null;
@@ -89,6 +103,16 @@ export class SingleTrackEditor {
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
         this.selectAllNotes();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.redo();
+        } else {
+          this.undo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        this.redo();
       }
     });
   }
@@ -98,6 +122,136 @@ export class SingleTrackEditor {
    */
   public setOnEventsChanged(cb: (channel: number, events: PlaybackNoteEvent[]) => void) {
     this.onEventsChanged = cb;
+  }
+
+  /**
+   * 設定跨軌道切換請求回呼 (當 Undo/Redo 涉及其他聲部時自動跳轉並高亮焦點)
+   */
+  public setOnRequestSwitchChannel(cb: (channel: number) => void) {
+    this.onRequestSwitchChannel = cb;
+  }
+
+  /**
+   * 清空歷史記錄 (在載入新 STY 伴奏檔或切換不同 Section 段落時調用)
+   */
+  public clearHistory() {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.updateHistoryButtons();
+  }
+
+  public canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  public canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
+
+  public getUndoHistory(): { description: string; channel: number }[] {
+    return this.undoStack.map(h => ({ description: h.description, channel: h.channel }));
+  }
+
+  public getRedoHistory(): { description: string; channel: number }[] {
+    return this.redoStack.map(h => ({ description: h.description, channel: h.channel }));
+  }
+
+  /**
+   * 推入歷史記錄
+   */
+  public pushHistory(
+    description: string,
+    beforeEvents: PlaybackNoteEvent[],
+    afterEvents: PlaybackNoteEvent[]
+  ) {
+    this.undoStack.push({
+      channel: this.channel,
+      description,
+      beforeEvents: beforeEvents.map(e => ({ ...e })),
+      afterEvents: afterEvents.map(e => ({ ...e })),
+    });
+    if (this.undoStack.length > this.maxHistorySteps) {
+      this.undoStack.shift();
+    }
+    this.redoStack = []; // 清空重做堆疊
+    this.updateHistoryButtons();
+  }
+
+  /**
+   * 復原上一步操作 (Ctrl+Z)
+   */
+  public undo(): boolean {
+    const record = this.undoStack.pop();
+    if (!record) return false;
+
+    this.redoStack.push(record);
+
+    if (record.channel !== this.channel && this.onRequestSwitchChannel) {
+      this.onRequestSwitchChannel(record.channel);
+    }
+
+    this.channel = record.channel;
+    this.events = record.beforeEvents.map(e => ({ ...e }));
+    this.events.sort((a, b) => a.relTick - b.relTick);
+    this.selectedEvents.clear();
+    this.initialVelocities.clear();
+
+    this.notifyEventsChanged();
+    this.render();
+    this.updateHistoryButtons();
+
+    if (this.velStatus) {
+      this.velStatus.textContent = `↩️ 已復原：${record.description}`;
+    }
+    return true;
+  }
+
+  /**
+   * 重做上一步操作 (Ctrl+Y 或 Ctrl+Shift+Z)
+   */
+  public redo(): boolean {
+    const record = this.redoStack.pop();
+    if (!record) return false;
+
+    this.undoStack.push(record);
+
+    if (record.channel !== this.channel && this.onRequestSwitchChannel) {
+      this.onRequestSwitchChannel(record.channel);
+    }
+
+    this.channel = record.channel;
+    this.events = record.afterEvents.map(e => ({ ...e }));
+    this.events.sort((a, b) => a.relTick - b.relTick);
+    this.selectedEvents.clear();
+    this.initialVelocities.clear();
+
+    this.notifyEventsChanged();
+    this.render();
+    this.updateHistoryButtons();
+
+    if (this.velStatus) {
+      this.velStatus.textContent = `↪️ 已重做：${record.description}`;
+    }
+    return true;
+  }
+
+  /**
+   * 更新復原 / 重做按鈕的啟用狀態與提示文字
+   */
+  public updateHistoryButtons() {
+    const btnUndo = this.container.querySelector('#ed-btn-undo') as HTMLButtonElement | null;
+    const btnRedo = this.container.querySelector('#ed-btn-redo') as HTMLButtonElement | null;
+
+    if (btnUndo) {
+      btnUndo.disabled = this.undoStack.length === 0;
+      const last = this.undoStack[this.undoStack.length - 1];
+      btnUndo.title = last ? `復原：${last.description} (Ctrl+Z)` : '復原 (Ctrl+Z)';
+    }
+    if (btnRedo) {
+      btnRedo.disabled = this.redoStack.length === 0;
+      const next = this.redoStack[this.redoStack.length - 1];
+      btnRedo.title = next ? `重做：${next.description} (Ctrl+Y 或 Ctrl+Shift+Z)` : '重做 (Ctrl+Y 或 Ctrl+Shift+Z)';
+    }
   }
 
   /**
@@ -289,6 +443,12 @@ export class SingleTrackEditor {
           </select>
         </div>
 
+        <!-- ↩️ 復原 / ↪️ 重做 -->
+        <div class="editor-history-btns">
+          <button id="ed-btn-undo" class="editor-action-btn" title="復原上一步操作 (Ctrl+Z)" disabled>↩️ 復原</button>
+          <button id="ed-btn-redo" class="editor-action-btn" title="重做上一步操作 (Ctrl+Y 或 Ctrl+Shift+Z)" disabled>↪️ 重做</button>
+        </div>
+
         <!-- 🗑️ 刪除按鈕 (支援批次刪除) -->
         <button id="ed-btn-delete" class="editor-action-btn btn-danger" title="刪除選取的音符 (或按 Delete / Backspace 鍵)">🗑️ 刪除音符</button>
 
@@ -306,7 +466,7 @@ export class SingleTrackEditor {
     // 操作提示條
     const hintBar = document.createElement('div');
     hintBar.className = 'editor-hint-bar';
-    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b></span>`;
+    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b></span>`;
     this.container.appendChild(hintBar);
 
     // 2. 建立主編輯捲動工作區並先掛載至 DOM，以便取得真實精確的 viewport clientWidth
@@ -622,6 +782,7 @@ export class SingleTrackEditor {
             }
 
             // 新增音符
+            const beforeSnapshot = this.events.map(e => ({ ...e }));
             const newNote: PlaybackNoteEvent = {
               channel: this.channel,
               sourceChannel: this.channel,
@@ -635,6 +796,7 @@ export class SingleTrackEditor {
             this.events.push(newNote);
             this.events.sort((a, b) => a.relTick - b.relTick);
             this.notifyEventsChanged();
+            this.pushHistory('新增音符', beforeSnapshot, this.events);
             this.selectedEvents.clear();
             this.selectedEvents.add(newNote);
             this.render();
@@ -698,6 +860,7 @@ export class SingleTrackEditor {
       }
     }
 
+    const beforeDragSnapshot = this.events.map(e => ({ ...e }));
     // 收集所有要一起拖曳的音符群組
     const dragNotes = Array.from(this.selectedEvents).map(ev => {
       const startRowIndex = this.rows.findIndex(r => r.note === ev.noteNumber);
@@ -793,6 +956,7 @@ export class SingleTrackEditor {
 
           this.events.sort((a, b) => a.relTick - b.relTick);
           this.notifyEventsChanged();
+          this.pushHistory(`移動 ${dragNotes.length} 個音符`, beforeDragSnapshot, this.events);
           this.render();
           this.updateSelectionUI(true);
           return;
@@ -828,6 +992,7 @@ export class SingleTrackEditor {
 
     let hasResized = false;
     let currentDuration = startDurationTicks;
+    const beforeResizeSnapshot = this.events.map(e => ({ ...e }));
 
     const noteEl = this.container.querySelector(`#ed-note-${noteIdx}`) as HTMLElement;
 
@@ -860,6 +1025,7 @@ export class SingleTrackEditor {
       if (hasResized && currentDuration !== startDurationTicks) {
         targetEvent.durationTicks = currentDuration;
         this.notifyEventsChanged();
+        this.pushHistory('調整音符時值', beforeResizeSnapshot, this.events);
         this.render();
         this.selectedEvents.clear();
         this.selectedEvents.add(targetEvent);
@@ -881,10 +1047,12 @@ export class SingleTrackEditor {
   public deleteSelectedNotes() {
     if (this.selectedEvents.size === 0) return;
     const count = this.selectedEvents.size;
+    const beforeSnapshot = this.events.map(e => ({ ...e }));
     this.events = this.events.filter(e => !this.selectedEvents.has(e));
     this.selectedEvents.clear();
     this.initialVelocities.clear();
     this.notifyEventsChanged();
+    this.pushHistory(`刪除 ${count} 個音符`, beforeSnapshot, this.events);
     this.render();
     if (this.velStatus) {
       this.velStatus.textContent = `已刪除 ${count} 個選取音符`;
@@ -897,10 +1065,12 @@ export class SingleTrackEditor {
   public deleteSingleEvent(ev: PlaybackNoteEvent) {
     const idx = this.events.indexOf(ev);
     if (idx === -1) return;
+    const beforeSnapshot = this.events.map(e => ({ ...e }));
     this.events.splice(idx, 1);
     this.selectedEvents.delete(ev);
     this.initialVelocities.delete(ev);
     this.notifyEventsChanged();
+    this.pushHistory('刪除音符', beforeSnapshot, this.events);
     this.render();
     if (this.velStatus) {
       const row = this.rows.find(r => r.note === ev.noteNumber);
@@ -996,6 +1166,7 @@ export class SingleTrackEditor {
       return;
     }
 
+    const beforeNudgeSnapshot = this.events.map(e => ({ ...e }));
     this.selectedEvents.forEach(ev => {
       ev.velocity = Math.max(1, Math.min(127, ev.velocity + delta));
       this.updateNoteBlockVelocityUI(ev, ev.velocity);
@@ -1003,6 +1174,8 @@ export class SingleTrackEditor {
 
     this.notifyEventsChanged();
     this.snapshotInitialVelocities();
+    const sign = delta >= 0 ? `+${delta}` : `${delta}`;
+    this.pushHistory(`微調力度 (${sign})`, beforeNudgeSnapshot, this.events);
 
     if (this.velSlider && this.velInput) {
       this.velSlider.value = this.baselineAverageVelocity.toString();
@@ -1032,6 +1205,7 @@ export class SingleTrackEditor {
       return;
     }
 
+    const beforeHumanizeSnapshot = this.events.map(e => ({ ...e }));
     this.selectedEvents.forEach(ev => {
       const jitter = Math.floor(Math.random() * (range * 2 + 1)) - range;
       ev.velocity = Math.max(1, Math.min(127, ev.velocity + jitter));
@@ -1040,6 +1214,7 @@ export class SingleTrackEditor {
 
     this.notifyEventsChanged();
     this.snapshotInitialVelocities();
+    this.pushHistory('人性化隨機力度', beforeHumanizeSnapshot, this.events);
 
     if (this.velSlider && this.velInput) {
       this.velSlider.value = this.baselineAverageVelocity.toString();
@@ -1148,9 +1323,10 @@ export class SingleTrackEditor {
     this.velStatus = this.container.querySelector('#ed-vel-status');
 
     if (this.velSlider && this.velInput) {
-      // 拉桿按下去的一瞬間，先對基準數值拍照快照
+      // 拉桿按下去的一瞬間，先對基準數值與音符拍照快照
       this.velSlider.addEventListener('pointerdown', () => {
         this.snapshotInitialVelocities();
+        this.velocityDragBeforeSnapshot = this.events.map(e => ({ ...e }));
       });
 
       // 拉桿事件
@@ -1160,10 +1336,17 @@ export class SingleTrackEditor {
         this.applyVelocityChange(val);
       });
 
-      // 拉桿放開後觸發一次試聽
+      // 拉桿放開後觸發一次試聽並推入歷史紀錄
       this.velSlider.addEventListener('change', () => {
         const val = parseInt(this.velSlider!.value, 10);
         this.snapshotInitialVelocities();
+        if (this.velocityDragBeforeSnapshot) {
+          const changed = this.velocityDragBeforeSnapshot.some((orig, i) => orig.velocity !== this.events[i]?.velocity);
+          if (changed) {
+            this.pushHistory('調整力度', this.velocityDragBeforeSnapshot, this.events);
+          }
+          this.velocityDragBeforeSnapshot = null;
+        }
         if (this.selectedEvents.size > 0) {
           const highest = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
           styPlaybackEngine.previewNote(this.channel, highest.noteNumber, val, 200);
@@ -1171,14 +1354,23 @@ export class SingleTrackEditor {
       });
 
       // 數字框事件
+      this.velInput.addEventListener('focus', () => {
+        this.velocityDragBeforeSnapshot = this.events.map(e => ({ ...e }));
+      });
       this.velInput.addEventListener('change', () => {
         let val = parseInt(this.velInput!.value, 10);
         if (isNaN(val)) val = 100;
         val = Math.max(1, Math.min(127, val));
         this.velInput!.value = val.toString();
         this.velSlider!.value = val.toString();
+        const before = this.velocityDragBeforeSnapshot || this.events.map(e => ({ ...e }));
         this.applyVelocityChange(val);
         this.snapshotInitialVelocities();
+        const changed = before.some((orig, i) => orig.velocity !== this.events[i]?.velocity);
+        if (changed) {
+          this.pushHistory('設定力度', before, this.events);
+        }
+        this.velocityDragBeforeSnapshot = null;
       });
     }
 
@@ -1203,6 +1395,13 @@ export class SingleTrackEditor {
         this.velStatus.textContent = `量化解析度已設為 1/${this.quantizeResolution} 拍`;
       }
     });
+
+    // ↩️ 復原 / ↪️ 重做按鈕
+    const btnUndo = this.container.querySelector('#ed-btn-undo');
+    const btnRedo = this.container.querySelector('#ed-btn-redo');
+    btnUndo?.addEventListener('click', () => this.undo());
+    btnRedo?.addEventListener('click', () => this.redo());
+    this.updateHistoryButtons();
 
     // 刪除按鈕
     const btnDelete = this.container.querySelector('#ed-btn-delete');

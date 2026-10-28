@@ -17,6 +17,7 @@ export class ChordSynth {
   private masterGain: GainNode | null = null;
   private pannerNode: StereoPannerNode | null = null;
   private volume: number = 90; // 0 ~ 127 (Yamaha PSR-SX920 Chord 1 預設 90)
+  private expression: number = 127; // 0 ~ 127 (CC 11 Expression 表情控制器)
   private pan: number = 52;    // 0 ~ 127 (Yamaha PSR-SX920 Chord 1 預設 52 = L12)
   private reverb: number = 65; // 0 ~ 127 (CC 91 殘響，Yamaha 鋼琴/和弦預設 65)
   private chorus: number = 20; // 0 ~ 127 (CC 93 合唱，Yamaha 鋼琴/和弦預設 20)
@@ -109,7 +110,7 @@ export class ChordSynth {
     this.volume = Math.max(0, Math.min(127, Math.round(vol)));
     if (this.masterGain && this.ctx) {
       const now = this.ctx.currentTime;
-      const targetGain = this.isInstanceMuted ? 0 : (this.volume / 127) * 0.75;
+      const targetGain = this.isInstanceMuted ? 0 : ((this.volume / 127) * (this.expression / 127)) * 0.75;
       this.masterGain.gain.cancelScheduledValues(now);
       this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
       this.masterGain.gain.linearRampToValueAtTime(targetGain, now + 0.02);
@@ -118,6 +119,19 @@ export class ChordSynth {
 
   public getVolume(): number {
     return this.volume;
+  }
+
+  public setExpression(expr: number, when?: number) {
+    this.expression = Math.max(0, Math.min(127, Math.round(expr)));
+    if (this.masterGain && this.ctx) {
+      const now = when !== undefined ? Math.max(this.ctx.currentTime, when) : this.ctx.currentTime;
+      const targetGain = this.isInstanceMuted ? 0 : ((this.volume / 127) * (this.expression / 127)) * 0.75;
+      this.masterGain.gain.setValueAtTime(targetGain, now);
+    }
+  }
+
+  public getExpression(): number {
+    return this.expression;
   }
 
   public setPan(pan: number) {
