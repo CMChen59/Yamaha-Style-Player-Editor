@@ -1,0 +1,23 @@
+{
+  "name": "yamaha-style-player-editor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Yamaha Arranger STY Style Single-Track Focused Editor & Zero-Latency Player with PSR-SX920 Integration",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:voices": "node scripts/build-yamaha-voices.cjs"
+  },
+  "dependencies": {
+    "lucide": "^0.475.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}

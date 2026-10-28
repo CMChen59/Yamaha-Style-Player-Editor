@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yamaha STY 單軌聚焦編輯與播放器 (Yamaha Style Player & Editor)</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --bg-panel: #131b2e;
+      --bg-card: #1c2744;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --accent-gold: #f59e0b;
+      --accent-green: #10b981;
+      --accent-rose: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 40px;
+    }
+
+    /* 頂部導航 */
+    header {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      font-size: 26px;
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-nav {
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-nav:hover {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: var(--accent);
+    }
+
+    .status-pill {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+    }
+
+    .status-pill.connected {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    /* 主要容器 */
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* 檔案載入區 */
+    .drop-zone {
+      border: 2px dashed rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      background: rgba(30, 41, 59, 0.4);
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .drop-zone-icon {
+      font-size: 32px;
+    }
+
+    .drop-zone-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .drop-zone-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .sample-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .sample-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sample-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+    }
+
+    /* 伴奏資訊卡片 */
+    .style-banner {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .style-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .style-info {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .btn-export {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(5, 150, 105, 0.35));
+      border: 1px solid rgba(16, 185, 129, 0.6);
+      color: #34d399;
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+    }
+
+    .btn-export:hover {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.45), rgba(5, 150, 105, 0.55));
+      border-color: #34d399;
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-export:active {
+      transform: translateY(0);
+    }
+
+    /* 聲音發聲來源選擇 (Audio Output Routing) */
+    .output-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+
+    .panel-header {
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--accent);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .output-tabs-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+
+    .output-card-btn {
+      background: var(--bg-card);
+      border: 2px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      color: var(--text-main);
+      text-align: left;
+      transition: all 0.2s;
+    }
+
+    .output-card-btn:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(56, 189, 248, 0.06);
+    }
+
+    .output-card-btn.active {
+      border-color: var(--accent-green);
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.1));
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.25);
+    }
+
+    .output-card-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+    }
+
+    .output-card-info {
+      flex: 1;
+    }
+
+    .output-card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .output-card-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .output-check {
+      font-size: 1.1rem;
+      color: var(--accent-green);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .output-card-btn.active .output-check {
+      opacity: 1;
+    }
+
+    .midi-drawer {
+      background: rgba(9, 13, 22, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .midi-drawer-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-drawer {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-drawer:hover {
+      background: rgba(56, 189, 248, 0.3);
+      border-color: var(--accent);
+    }
+
+    .midi-hint-box {
+      background: rgba(56, 189, 248, 0.06);
+      border-left: 3px solid var(--accent);
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+
+    /* 段落選擇矩陣 */
+    .section-matrix-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+
+    .section-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .section-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text-main);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .section-btn:hover {
+      border-color: rgba(56, 189, 248, 0.5);
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .section-btn.active {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 182, 212, 0.25));
+      border-color: var(--accent-green);
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+    }
+
+    .sec-badge {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .badge-intro { color: #f59e0b; }
+    .badge-main { color: #10b981; }
+    .badge-ending { color: #f43f5e; }
+    .badge-other { color: #38bdf8; }
+
+    .sec-bars {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* 播放主控制列 */
+    .transport-bar {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .transport-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-play {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-play:hover {
+      background: linear-gradient(135deg, #059669, #047857);
+      transform: translateY(-1px);
+    }
+
+    .btn-play.playing {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    }
+
+    .btn-solo-play {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-solo-play:hover {
+      background: linear-gradient(135deg, #4f46e5, #4338ca);
+      transform: translateY(-1px);
+    }
+
+    .btn-solo-play.playing {
+      background: linear-gradient(135deg, #ec4899, #db2777);
+      box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4);
+    }
+
+    .btn-stop {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      border: 1px solid var(--border-color);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-stop:hover {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: var(--accent-rose);
+      color: #fda4af;
+    }
+
+    .btn-loop {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-loop.active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* 播放進度顯示大字體 */
+    .position-display {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #38bdf8;
+      background: #090d16;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      letter-spacing: 1px;
+    }
+
+    /* 速度控制群 */
+    .bpm-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .bpm-label {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .bpm-val {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      min-width: 44px;
+      text-align: right;
+    }
+
+    .bpm-slider {
+      width: 120px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .bpm-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+
+    .bpm-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+    }
+
+    /* 8 伴奏聲部混音盤 */
+    .mixer-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .mixer-grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(110px, 1fr));
+      gap: 10px;
+      overflow-x: auto;
+    }
+
+    .vol-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      min-width: 24px;
+      text-align: right;
+      font-family: monospace;
+    }
+
+    .mixer-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-top: 3px solid var(--part-accent, var(--accent));
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      position: relative;
+      user-select: none;
+    }
+
+    .mixer-card:hover {
+      border-color: var(--part-accent, var(--accent));
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .mixer-card.is-focused {
+      border: 2px solid var(--part-accent, var(--accent));
+      border-top: 4px solid var(--part-accent, var(--accent));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(0, 0, 0, 0.3) 100%), var(--bg-card);
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.2), 0 4px 14px rgba(0, 0, 0, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .focus-badge {
+      display: none;
+      font-size: 0.58rem;
+      font-weight: 800;
+      color: #0f172a;
+      background: var(--part-accent, var(--accent));
+      padding: 1px 4px;
+      border-radius: 3px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+
+    .mixer-card.is-focused .focus-badge {
+      display: inline-block;
+    }
+
+    /* 🎯 聚焦聲部資訊列 (Phase 1 聚焦聯動，為 Phase 2 鋼琴捲軸預備) */
+    .focused-track-banner {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-left: 5px solid var(--part-accent, var(--accent));
+      border-radius: 12px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+
+    .focused-track-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .focused-tag {
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #0f172a;
+      background: var(--part-accent, var(--accent));
+      padding: 4px 9px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .focused-title-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .focused-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .focused-voice {
+      font-size: 0.85rem;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .focused-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .focused-track-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-banner-action {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .btn-banner-action:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-banner-action.active-solo {
+      background: rgba(245, 158, 11, 0.25);
+      border-color: #f59e0b;
+      color: #fbbf24;
+      font-weight: 700;
+    }
+
+    .btn-banner-action.active-mute {
+      background: rgba(244, 63, 94, 0.25);
+      border-color: var(--accent-rose);
+      color: #fda4af;
+      font-weight: 700;
+    }
+
+    .part-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .channel-pill {
+      font-size: 0.68rem;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+    }
+
+    .part-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+    }
+
+    .activity-led {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      transition: background 0.05s;
+    }
+
+    .activity-led.flash {
+      background: var(--part-accent, var(--accent));
+      box-shadow: 0 0 8px var(--part-accent, var(--accent));
+    }
+
+    .part-voice {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-height: 18px;
+      line-height: 18px;
+    }
+
+    .part-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mixer-btn {
+      flex: 1;
+      padding: 4px 0;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-mute.muted {
+      background: var(--accent-rose);
+      color: #fff;
+      border-color: var(--accent-rose);
+    }
+
+    .btn-solo.soloed {
+      background: var(--accent-gold);
+      color: #000;
+      border-color: var(--accent-gold);
+    }
+
+    .part-vol-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .part-vol-slider {
+      flex: 1;
+      min-width: 0;
+      accent-color: var(--part-accent, var(--accent));
+      cursor: pointer;
+    }
+
+    .audio-output-select {
+      background: #0f172a;
+      color: #fff;
+      border: 1px solid var(--border-color);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* 🎹 單軌專注編輯工作台 (Phase 2 & 3: 展開音符、拍子、樂器、力度拉桿與數字輸入) */
+    .single-track-editor-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .editor-toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .editor-track-badge {
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: #0f172a;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .editor-voice-tag {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .editor-meta-pill {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .editor-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    /* 🎛️ 力度 (Velocity) 拉桿 + 數字框雙向連動 */
+    .editor-vel-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+
+    .editor-vel-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+
+    .editor-vel-slider {
+      width: 100px;
+      cursor: pointer;
+      accent-color: var(--part-accent, var(--accent));
+    }
+
+    .editor-vel-input {
+      width: 48px;
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: #38bdf8;
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 2px 4px;
+      text-align: center;
+    }
+
+    .editor-vel-status {
+      font-size: 0.72rem;
+      color: var(--accent-green);
+      font-weight: 600;
+      min-width: 110px;
+    }
+
+    .editor-zoom-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .editor-mini-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .editor-mini-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+    }
+
+    .editor-mini-btn.active {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: var(--accent);
+      color: #38bdf8;
+      font-weight: 700;
+    }
+
+    /* 捲動視窗 */
+    .editor-viewport-wrap {
+      display: flex;
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 440px;
+      background: #060910;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      position: relative;
+    }
+
+    /* 左側琴鍵列 */
+    .editor-key-column {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      background: #090d16;
+      border-right: 1px solid var(--border-color);
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.5);
+      flex-shrink: 0;
+      width: 135px;
+    }
+
+    .editor-corner-cell {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      background: #0d1322;
+    }
+
+    .editor-key-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      transition: background 0.1s;
+      user-select: none;
+    }
+
+    .editor-key-row.is-white-key {
+      background: #111827;
+      color: #e2e8f0;
+    }
+
+    .editor-key-row.is-white-key:hover {
+      background: #1e293b;
+      color: #fff;
+    }
+
+    .editor-key-row.is-black-key {
+      background: #090d16;
+      color: #94a3b8;
+    }
+
+    .editor-key-row.is-black-key:hover {
+      background: #172033;
+      color: #38bdf8;
+    }
+
+    .key-name.is-root {
+      color: #38bdf8;
+      font-weight: 800;
+    }
+
+    .key-badge {
+      font-size: 0.55rem;
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 700;
+    }
+
+    .key-icon {
+      font-size: 0.85rem;
+      margin-right: 4px;
+    }
+
+    .key-sub {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    /* 右側時間標尺與音符層 */
+    .editor-canvas-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .editor-time-ruler {
+      height: 38px;
+      background: #0d1322;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      position: sticky;
+      top: 0;
+      z-index: 8;
+    }
+
+    .ruler-bar-cell {
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 4px 6px 2px 6px;
+      box-sizing: border-box;
+    }
+
+    .ruler-bar-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .ruler-beats-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .ruler-beat-marker {
+      font-size: 0.62rem;
+      font-family: monospace;
+      color: var(--text-muted);
+    }
+
+    .editor-grid-content {
+      position: relative;
+      background: #060910;
+    }
+
+    .grid-row-bg {
+      position: absolute;
+      left: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+
+    .grid-row-bg.row-black {
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .grid-v-line {
+      position: absolute;
+      top: 0;
+      width: 1px;
+      pointer-events: none;
+      box-sizing: border-box;
+    }
+
+    .grid-v-line.bar-line {
+      background: rgba(255, 255, 255, 0.15);
+      z-index: 1;
+    }
+
+    .grid-v-line.beat-line {
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 1;
+    }
+
+    /* 音符方塊 (Note Block) */
+    .editor-note-block {
+      position: absolute;
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
+      overflow: hidden;
+      white-space: nowrap;
+      z-index: 2;
+      transition: transform 0.1s, box-shadow 0.15s;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-sizing: border-box;
+    }
+
+    .editor-note-block:hover {
+      transform: scaleY(1.08);
+      border-color: #fff;
+      z-index: 4;
+    }
+
+    .editor-note-block.is-selected {
+      border: 2px solid #ffffff !important;
+      box-shadow: 0 0 14px #ffffff, 0 0 8px var(--part-accent) !important;
+      z-index: 6 !important;
+      opacity: 1 !important;
+    }
+
+    .note-block-text {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .note-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 7px;
+      height: 100%;
+      cursor: ew-resize;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 0 3px 3px 0;
+      transition: background 0.15s;
+    }
+
+    .note-resize-handle:hover {
+      background: #ffffff;
+      box-shadow: 0 0 6px #fff;
+    }
+
+    .editor-note-block.is-dragging {
+      opacity: 0.9 !important;
+      cursor: grabbing !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 10px #ffffff !important;
+      z-index: 10 !important;
+      transition: none !important;
+    }
+
+    .editor-quantize-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .editor-tool-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #94a3b8;
+    }
+
+    .editor-select {
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      color: #38bdf8;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      padding: 3px 6px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .editor-action-btn {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border-color);
+      transition: all 0.15s;
+    }
+
+    .editor-action-btn.btn-danger {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: var(--accent-rose);
+      color: #fda4af;
+    }
+
+    .editor-action-btn.btn-danger:hover {
+      background: rgba(244, 63, 94, 0.4);
+      color: #fff;
+    }
+
+    .editor-hint-bar {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed rgba(255, 255, 255, 0.08);
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+
+    /* 播放游標線 (GPU 加速) */
+    .editor-playhead {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 2px;
+      background: #38bdf8;
+      box-shadow: 0 0 10px #38bdf8;
+      z-index: 9;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    .playhead-cap {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid #38bdf8;
+      margin-left: -5px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span class="brand-icon">🎵</span>
+      <div>
+        <span class="brand-title">Yamaha STY 單軌聚焦編輯與播放器</span>
+        <span class="brand-sub">Yamaha Style Player & Editor (零延遲微秒排程 ｜ 4小節滿版 ｜ PSR-SX920 直連)</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="midi-status-pill" class="status-pill">⚪ 偵測 MIDI 中...</span>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- 檔案上傳與快速範本 -->
+    <section>
+      <div id="drop-zone" class="drop-zone">
+        <span class="drop-zone-icon">📂</span>
+        <div class="drop-zone-title">點擊選擇或拖曳 Yamaha STY 伴奏檔案至此</div>
+        <div class="drop-zone-desc">支援 .sty, .prs, .sst 等 Yamaha 原廠伴奏格式</div>
+        <div class="sample-bar" onclick="event.stopPropagation()">
+          <span style="font-size: 0.75rem; color: #94a3b8;">經典示範伴奏：</span>
+          <button class="sample-btn" data-file="LoveSong.T547.sty">🎵 LoveSong.T547.sty (70 BPM)</button>
+          <button class="sample-btn" data-file="4006_SX900.T547.sty">🎵 4006_SX900.T547.sty (92 BPM)</button>
+          <button class="sample-btn" data-file="1024_容易受傷的女人.sty">🎵 容易受傷的女人.sty (66 BPM)</button>
+          <button class="sample-btn" data-file="SX920_V2_4Bar_Test.sty">🎵 SX920_V2_4Bar_Test.sty (120 BPM)</button>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept=".sty,.prs,.sst,.mid" style="display: none;">
+    </section>
+
+    <!-- 伴奏規格儀表板 -->
+    <section class="style-banner">
+      <div>
+        <div id="style-title" class="style-title">準備就緒</div>
+        <div id="style-info" class="style-info">請載入 STY 檔案以開始播放</div>
+      </div>
+      <button id="btn-export-sty" class="btn-export" title="匯出當前編輯後的完整 STY 伴奏檔 (保留 SFF2 / CASM / OTS)">
+        <span>💾</span>
+        <span>匯出 STY 伴奏檔</span>
+      </button>
+    </section>
+
+    <!-- 聲音發聲來源選擇 (Audio Output Routing) -->
+    <section class="output-panel">
+      <div class="panel-header">
+        <span>聲音發聲來源選擇 (Audio Output Routing)</span>
+        <span id="output-current-status" style="font-size: 0.78rem; color: #38bdf8; font-weight: normal;">🔊 當前輸出：電腦喇叭 / 耳機 (Web Audio)</span>
+      </div>
+      <div class="output-tabs-container">
+        <button id="btn-output-webaudio" class="output-card-btn active">
+          <div class="output-card-icon">🔊</div>
+          <div class="output-card-info">
+            <div class="output-card-title">電腦喇叭 / 耳機 (Web Audio)</div>
+            <div class="output-card-sub">瀏覽器內建多樂器軟體合成 (免接線、隨選隨聽)</div>
+          </div>
+          <div class="output-check">✔</div>
+        </button>
+
+        <button id="btn-output-midi" class="output-card-btn">
+          <div class="output-card-icon">🎹</div>
+          <div class="output-card-info">
+            <div class="output-card-title">Yamaha 實體電子琴 (PSR-SX920 Web MIDI)</div>
+            <div class="output-card-sub">直通電子琴旗艦 AWM2 音源，聆聽原廠最高音質伴奏！</div>
+          </div>
+          <div class="output-check">✔</div>
+        </button>
+      </div>
+
+      <!-- 琴端專屬設定抽屜 (切換至實體琴發聲時自動展開) -->
+      <div id="midi-drawer" class="midi-drawer" style="display: none;">
+        <div class="midi-drawer-controls">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label for="select-midi-port" style="font-size: 0.82rem; color: #94a3b8; font-weight: bold;">MIDI 輸出埠：</label>
+            <select id="select-midi-port" class="audio-output-select" style="min-width: 220px;"></select>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-refresh-midi" class="btn-drawer">🔄 重新整理設備</button>
+            <button id="btn-test-piano" class="btn-drawer" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399;">🎵 琴端發聲測試</button>
+          </div>
+        </div>
+        <div class="midi-hint-box">
+          <div style="font-weight: bold; color: #38bdf8; margin-bottom: 4px;">💡 PSR-SX920 琴端發聲設定重點：</div>
+          <div>1. 請在琴右側螢幕旁按下 <strong>[MENU]</strong> ➔ 點擊螢幕上的 <strong>[MIDI]</strong> 選單。</div>
+          <div>2. 在左側預設模板中選擇 <strong style="color: #fff;">「Song」</strong>（最推薦）或 <strong style="color: #fff;">「All Parts」</strong>，琴端即可立即解鎖 8 大伴奏聲部，直接聆聽旗艦音源！</div>
+          <div>3. 請確認琴上的總音量旋鈕與 <strong>[STYLE-ACMP]</strong> 伴奏音量滑桿已開啟。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 播放主控制列 -->
+    <section class="transport-bar">
+      <div class="transport-main">
+        <button id="btn-play" class="btn-play">▶ 播放全曲 (All)</button>
+        <button id="btn-play-solo" class="btn-solo-play">🎧 僅播此軌 (Solo)</button>
+        <button id="btn-stop" class="btn-stop">⏹ 停止</button>
+        <button id="btn-loop" class="btn-loop active">🔁 循環: 開啟</button>
+      </div>
+
+      <div id="label-position" class="position-display">
+        小節 01 / 01 | 拍 1.0 | Tick 000000
+      </div>
+
+      <div class="bpm-control">
+        <span class="bpm-label">BPM:</span>
+        <span id="bpm-value" class="bpm-val">120</span>
+        <button id="btn-bpm-minus-10" class="bpm-btn">-10</button>
+        <button id="btn-bpm-minus-1" class="bpm-btn">-1</button>
+        <input type="range" id="slider-bpm" class="bpm-slider" min="40" max="240" value="120">
+        <button id="btn-bpm-plus-1" class="bpm-btn">+1</button>
+        <button id="btn-bpm-plus-10" class="bpm-btn">+10</button>
+        <button id="btn-bpm-reset" class="bpm-btn">重設</button>
+      </div>
+    </section>
+
+    <!-- 段落選擇器矩陣 -->
+    <section class="section-matrix-panel">
+      <div class="panel-header">
+        <span>伴奏段落選擇 (Yamaha Sections)</span>
+        <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">點擊即可無縫切換播放段落</span>
+      </div>
+      <div id="section-buttons" class="section-grid">
+        <!-- 動態渲染各段落按鈕 -->
+      </div>
+    </section>
+
+    <!-- 8 伴奏聲部混音盤 -->
+    <section class="mixer-panel">
+      <div class="panel-header">
+        <span>8 大伴奏聲部狀態與混音盤 (8-Part Arranger Mixer)</span>
+        <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">點選任一卡牌切換焦點編輯聲部 ｜ LED 發聲閃爍 ｜ 靜音 ｜ 獨奏 ｜ 音量</span>
+      </div>
+      <div id="mixer-grid" class="mixer-grid">
+        <!-- 動態渲染 8 個聲部卡片 -->
+      </div>
+    </section>
+
+    <!-- 🎯 當前編輯焦點聲部條 (Phase 1 聚焦聯動，為 Phase 2 鋼琴捲軸預備) -->
+    <section id="focused-track-banner" class="focused-track-banner">
+      <div class="focused-track-left">
+        <span class="focused-tag">🎯 當前編輯焦點</span>
+        <div class="focused-title-wrap">
+          <span id="focused-track-title" class="focused-title">CH 9 - Rhythm 1</span>
+          <span id="focused-track-voice" class="focused-voice">Live! StudioDrumKit</span>
+        </div>
+        <span id="focused-track-meta" class="focused-meta">音符數: 0 ｜ MIDI 通道: 9</span>
+      </div>
+      <div class="focused-track-actions">
+        <button id="btn-banner-solo" class="btn-banner-action">🎧 獨奏此軌 (Solo)</button>
+        <button id="btn-banner-mute" class="btn-banner-action">🔇 靜音此軌 (Mute)</button>
+      </div>
+    </section>
+
+    <!-- 🎹 單軌專注編輯工作台 (Phase 2 & 3: 展開音符、拍子、樂器、力度拉桿與數字輸入) -->
+    <section id="single-track-editor" class="single-track-editor-panel">
+      <!-- 由 SingleTrackEditor 動態渲染 -->
+    </section>
+
+  </main>
+
+  <script type="module" src="/src/player/player-app.ts"></script>
+</body>
+</html>

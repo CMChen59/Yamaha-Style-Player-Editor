@@ -1,0 +1,17 @@
+# 相依套件目錄
+node_modules/
+.pnpm-store/
+
+# 構建輸出
+dist/
+dist-test/
+
+# 編輯器與暫存檔
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# 測試報告
+coverage/
