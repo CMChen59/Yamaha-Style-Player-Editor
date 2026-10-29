@@ -2215,6 +2215,405 @@
       color: #090d16;
       box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
     }
+
+    /* ==========================================================================
+       Tier 2-1 Step 3: 跨段落克隆與衍生 (Section Clone Modal)
+       ========================================================================== */
+    .btn-sec-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      color: #c084fc;
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .btn-sec-action:hover {
+      background: #a855f7;
+      color: #090d16;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .sec-divider {
+      width: 1px;
+      height: 18px;
+      background: rgba(255, 255, 255, 0.15);
+      margin: 0 4px;
+    }
+
+    .section-clone-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(3, 7, 18, 0.78);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: scFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes scFadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .section-clone-modal {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 14px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+      width: 92vw;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: #f8fafc;
+    }
+
+    .sc-modal-header {
+      background: #1e293b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sc-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sc-modal-title {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .sc-header-badge {
+      background: rgba(168, 85, 247, 0.2);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .sc-close-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+
+    .sc-close-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #f8fafc;
+    }
+
+    .sc-modal-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      max-height: 72vh;
+      overflow-y: auto;
+    }
+
+    .sc-field-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #94a3b8;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .sc-section-route-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .sc-route-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sc-route-arrow {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #c084fc;
+      white-space: nowrap;
+      padding-top: 18px;
+    }
+
+    .sc-select {
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #f8fafc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.84rem;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+
+    .sc-select:focus {
+      border-color: #c084fc;
+      box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25);
+    }
+
+    .sc-custom-target-wrap {
+      margin-top: 8px;
+    }
+
+    .sc-input-text {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid rgba(168, 85, 247, 0.5);
+      color: #f8fafc;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .sc-input-text:focus {
+      border-color: #c084fc;
+      box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.3);
+    }
+
+    .sc-channels-box {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .sc-channels-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .sc-channel-presets {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sc-preset-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sc-preset-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+    }
+
+    .sc-channels-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    @media (max-width: 640px) {
+      .sc-channels-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .sc-channel-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+
+    .sc-channel-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .sc-channel-item.is-checked {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--part-accent, #38bdf8);
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .sc-ch-checkbox {
+      accent-color: var(--part-accent, #38bdf8);
+      cursor: pointer;
+    }
+
+    .sc-ch-icon {
+      font-size: 1.05rem;
+    }
+
+    .sc-ch-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .sc-ch-title {
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sc-ch-count {
+      font-size: 0.68rem;
+      color: #64748b;
+    }
+
+    .sc-options-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .sc-options-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px 14px;
+    }
+
+    @media (max-width: 600px) {
+      .sc-options-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .sc-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sc-checkbox-label input[type="checkbox"] {
+      accent-color: #a855f7;
+      cursor: pointer;
+    }
+
+    .sc-modal-footer {
+      background: #1e293b;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .sc-summary-text {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      flex: 1;
+    }
+
+    .sc-summary-text strong {
+      color: #f8fafc;
+    }
+
+    .sc-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sc-btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+      font-size: 0.82rem;
+      padding: 7px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sc-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+    }
+
+    .sc-btn-primary {
+      background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+      border: none;
+      color: #ffffff;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 7px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
+    }
+
+    .sc-btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(168, 85, 247, 0.45);
+    }
+
+    .sc-btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -2365,6 +2764,8 @@
             <input type="number" id="input-custom-bars" class="input-custom-bars" min="1" max="32" value="4" title="自訂小節數 (1~32)">
             <button id="btn-apply-custom-bars" class="btn-apply-bars" title="套用小節數">套用</button>
           </div>
+          <div class="sec-divider"></div>
+          <button id="btn-open-section-clone" class="btn-sec-action" title="跨段落複製與加花衍生">📋 複製段落</button>
         </div>
       </div>
       <div id="section-buttons" class="section-grid">

@@ -216,7 +216,7 @@ export class VoicePickerModal {
       this.searchInput.value = '';
       this.clearSearchBtn.style.display = 'none';
       this.performSearch();
-      this.searchInput.focus();
+      this.searchInput?.focus?.();
     });
 
     // 載入更多按鈕
@@ -465,7 +465,7 @@ export class VoicePickerModal {
     // 顯示 Modal
     this.backdropEl.style.display = 'flex';
     setTimeout(() => {
-      this.searchInput.focus();
+      this.searchInput?.focus?.();
     }, 50);
   }
 

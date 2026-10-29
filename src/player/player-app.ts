@@ -8,6 +8,7 @@ import { YamahaWriter } from '../core/writer/yamaha-writer';
 import { YamahaStyleModifier } from '../core/writer/style-modifier';
 import type { PlaybackNoteEvent } from './sty-playback-engine';
 import { VoicePickerModal } from './voice-picker-modal';
+import { SectionCloneModal } from './section-clone-modal';
 import type { YamahaVoice } from '../core/data/yamaha-voices';
 
 // Yamaha 標準 8 伴奏聲部定義
@@ -79,6 +80,8 @@ export class PlayerApp {
   private outputCurrentStatus!: HTMLElement;
   private btnExportSty!: HTMLButtonElement;
   private voicePicker!: VoicePickerModal;
+  private sectionCloneModal!: SectionCloneModal;
+  private btnOpenSectionClone!: HTMLButtonElement;
 
   constructor() {
     document.addEventListener('DOMContentLoaded', () => this.init());
@@ -104,6 +107,7 @@ export class PlayerApp {
     });
 
     this.voicePicker = new VoicePickerModal();
+    this.sectionCloneModal = new SectionCloneModal();
 
     this.setFocusedChannel(8); // 預設聚焦 CH 9 Rhythm 1
     this.initMidi();
@@ -134,6 +138,7 @@ export class PlayerApp {
     this.mixerContainer = document.getElementById('mixer-grid')!;
     this.midiStatusPill = document.getElementById('midi-status-pill')!;
     this.btnExportSty = document.getElementById('btn-export-sty') as HTMLButtonElement;
+    this.btnOpenSectionClone = document.getElementById('btn-open-section-clone') as HTMLButtonElement;
 
     // 🎯 聚焦聲部資訊橫幅元件
     this.focusedTrackBanner = document.getElementById('focused-track-banner')!;
@@ -161,6 +166,12 @@ export class PlayerApp {
         this.resizeCurrentSection(bars);
       });
     });
+
+    if (this.btnOpenSectionClone) {
+      this.btnOpenSectionClone.addEventListener('click', () => {
+        this.openSectionCloneModal();
+      });
+    }
 
     if (this.btnApplyCustomBars) {
       this.btnApplyCustomBars.addEventListener('click', () => {
@@ -884,6 +895,41 @@ export class PlayerApp {
     styPlaybackEngine.loadParsed(this.currentParsed);
     this.renderSectionButtons();
     this.selectSection(this.activeSectionName);
+  }
+
+  /**
+   * 開啟跨段落克隆與衍生視窗 (Section Clone Modal)
+   */
+  public openSectionCloneModal() {
+    if (!this.currentParsed) {
+      alert('請先載入 STY 伴奏檔案');
+      return;
+    }
+
+    const currentSec = this.activeSectionName || 'Main A';
+    this.sectionCloneModal.open(
+      this.currentParsed,
+      currentSec,
+      (srcSec, targetSec, options) => {
+        const result = YamahaStyleModifier.cloneSection(
+          this.currentParsed!,
+          srcSec,
+          targetSec,
+          options
+        );
+
+        if (!result.success) {
+          alert(`段落複製失敗: ${result.message || '未知錯誤'}`);
+          return;
+        }
+
+        // 重新載入播放引擎以解析最新段落 Marker 與小節長度
+        styPlaybackEngine.loadParsed(this.currentParsed!);
+        this.renderSectionButtons();
+        this.selectSection(targetSec);
+        alert(`🎉 已成功將【${srcSec}】複製至【${targetSec}】！\n共複製 ${result.copiedNotesCount} 顆音符，包含 ${result.copiedChannels.length} 個聲部。`);
+      }
+    );
   }
 
   /**

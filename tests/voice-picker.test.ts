@@ -30,6 +30,9 @@ class MockElement {
   public parentElement: MockElement | null = null;
   public listeners: Record<string, Function[]> = {};
 
+  public focus() {}
+  public blur() {}
+
   public classList = {
     add: (...classes: string[]) => {
       this.className = [...new Set([...this.className.split(' ').filter(Boolean), ...classes])].join(' ');
