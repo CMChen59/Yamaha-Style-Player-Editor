@@ -19,6 +19,7 @@
 
 import type { PlaybackNoteEvent, PartVoiceInfo } from './sty-playback-engine';
 import { styPlaybackEngine } from './sty-playback-engine';
+import { QuantizeEngine, type QuantizeGridType, type QuantizeOptions } from '../core/writer/quantize-engine';
 import { YAMAHA_DRUM_VOICES } from '../creator/drum-step-grid';
 
 export interface HistoryRecord {
@@ -56,7 +57,20 @@ export class SingleTrackEditor {
   private rows: EditorRowInfo[] = [];
 
   // 量化與多選編輯狀態
-  private quantizeResolution: number = 16; // 1/16 拍 (480/4 = 120 ticks)
+  public get quantizeResolution(): number {
+    switch (this.quantizeGrid) {
+      case '1/4': return 4;
+      case '1/8': return 8;
+      case '1/16': return 16;
+      case '1/32': return 32;
+      default: return 16;
+    }
+  }
+  private quantizeGrid: QuantizeGridType = '1/16';
+  private quantizeStrength: number = 100;
+  private quantizeSwing: number = 50;
+  private quantizeLengths: boolean = false;
+  private isQuantizePanelOpen: boolean = false;
   private selectedEvents: Set<PlaybackNoteEvent> = new Set();
   private defaultVelocity: number = 100;
   private velocityMode: 'relative' | 'absolute' = 'relative';
@@ -114,6 +128,9 @@ export class SingleTrackEditor {
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault();
         this.redo();
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
+        e.preventDefault();
+        this.executeQuantize();
       }
     });
   }
@@ -291,8 +308,8 @@ export class SingleTrackEditor {
   /**
    * 取得當前量化單位之 Tick 數值
    */
-  private getStepTicks(): number {
-    return Math.max(1, Math.round((this.division * 4) / this.quantizeResolution));
+  public getStepTicks(): number {
+    return QuantizeEngine.getGridStepTicks(this.quantizeGrid, this.division);
   }
 
   /**
@@ -452,15 +469,20 @@ export class SingleTrackEditor {
           <span id="ed-vel-status" class="editor-vel-status">預設寫入力度: ${this.defaultVelocity}</span>
         </div>
 
-        <!-- 📐 量化解析度 -->
+        <!-- 📐 量化與律動控制模組 (Tier 2-2) -->
         <div class="editor-quantize-box">
-          <span class="editor-tool-label">量化:</span>
-          <select id="ed-quantize-select" class="editor-select" title="網格吸附與新音符時值單位">
-            <option value="16" ${this.quantizeResolution === 16 ? 'selected' : ''}>1/16 拍</option>
-            <option value="8" ${this.quantizeResolution === 8 ? 'selected' : ''}>1/8 拍</option>
-            <option value="4" ${this.quantizeResolution === 4 ? 'selected' : ''}>1/4 拍</option>
-            <option value="32" ${this.quantizeResolution === 32 ? 'selected' : ''}>1/32 拍</option>
+          <span class="editor-tool-label">網格:</span>
+          <select id="ed-quantize-select" class="editor-select" title="網格吸附與量化解析度 (含三連音)">
+            <option value="1/16" ${this.quantizeGrid === '1/16' ? 'selected' : ''}>1/16 拍</option>
+            <option value="1/8" ${this.quantizeGrid === '1/8' ? 'selected' : ''}>1/8 拍</option>
+            <option value="1/4" ${this.quantizeGrid === '1/4' ? 'selected' : ''}>1/4 拍</option>
+            <option value="1/32" ${this.quantizeGrid === '1/32' ? 'selected' : ''}>1/32 拍</option>
+            <option value="1/16T" ${this.quantizeGrid === '1/16T' ? 'selected' : ''}>1/16 三連音</option>
+            <option value="1/8T" ${this.quantizeGrid === '1/8T' ? 'selected' : ''}>1/8 三連音</option>
+            <option value="1/4T" ${this.quantizeGrid === '1/4T' ? 'selected' : ''}>1/4 三連音</option>
           </select>
+          <button id="ed-btn-quantize-now" class="editor-action-btn btn-quantize" title="立即將音符吸附對齊網格 (快速鍵: Q，有選取時量化選取，未選取時全軌量化)">⚡ 量化 (Q)</button>
+          <button id="ed-btn-quantize-settings" class="editor-mini-btn ${this.isQuantizePanelOpen ? 'active' : ''}" title="展開/收合量化強度與搖擺律動面板">⚙️ 律動</button>
         </div>
 
         <!-- ↩️ 復原 / ↪️ 重做 -->
@@ -478,6 +500,24 @@ export class SingleTrackEditor {
           <button id="ed-btn-zoom-out" class="editor-mini-btn" title="縮小時間軸">🔍 -</button>
           <button id="ed-btn-zoom-in" class="editor-mini-btn" title="放大時間軸">🔍 +</button>
         </div>
+
+        <!-- 🎛️ 量化律動參數設定抽屜 (Tier 2-2) -->
+        <div id="ed-quantize-panel" class="editor-quantize-panel" style="display: ${this.isQuantizePanelOpen ? 'flex' : 'none'};">
+          <div class="q-setting-item">
+            <span class="q-label">強度:</span>
+            <input type="range" id="ed-q-strength-slider" min="0" max="100" value="${this.quantizeStrength}" class="q-slider" title="量化吸附強度 (0% ~ 100%)">
+            <span id="ed-q-strength-val" class="q-val-badge">${this.quantizeStrength}%</span>
+          </div>
+          <div class="q-setting-item">
+            <span class="q-label">搖擺 (Swing):</span>
+            <input type="range" id="ed-q-swing-slider" min="50" max="75" value="${this.quantizeSwing}" class="q-slider" title="後半拍延遲搖擺 (50% 直音 ~ 66.7% Shuffle ~ 75% 點奏)">
+            <span id="ed-q-swing-val" class="q-val-badge">${this.quantizeSwing === 50 ? '50% (直音)' : (this.quantizeSwing === 67 ? '67% (Shuffle)' : `${this.quantizeSwing}%`)}</span>
+          </div>
+          <label class="q-checkbox-label" title="同時將音符長度整定為網格倍數">
+            <input type="checkbox" id="ed-q-chk-lengths" ${this.quantizeLengths ? 'checked' : ''}>
+            <span>同步量化時值</span>
+          </label>
+        </div>
       </div>
     `;
 
@@ -486,7 +526,7 @@ export class SingleTrackEditor {
     // 操作提示條
     const hintBar = document.createElement('div');
     hintBar.className = 'editor-hint-bar';
-    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b></span>`;
+    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b></span>`;
     this.container.appendChild(hintBar);
 
     // 2. 建立主編輯捲動工作區並先掛載至 DOM，以便取得真實精確的 viewport clientWidth
@@ -1415,13 +1455,63 @@ export class SingleTrackEditor {
       }
     });
 
-    // 量化解析度下拉選單
+    // 量化解析度下拉選單 (Tier 2-2)
     const quantizeSelect = this.container.querySelector('#ed-quantize-select') as HTMLSelectElement;
     quantizeSelect?.addEventListener('change', () => {
-      this.quantizeResolution = parseInt(quantizeSelect.value, 10);
-      if (this.velStatus) {
-        this.velStatus.textContent = `量化解析度已設為 1/${this.quantizeResolution} 拍`;
+      const val = quantizeSelect.value;
+      if (val === '16' || val === '1/16') { this.quantizeGrid = '1/16'; }
+      else if (val === '8' || val === '1/8') { this.quantizeGrid = '1/8'; }
+      else if (val === '4' || val === '1/4') { this.quantizeGrid = '1/4'; }
+      else if (val === '32' || val === '1/32') { this.quantizeGrid = '1/32'; }
+      else {
+        this.quantizeGrid = val as QuantizeGridType;
       }
+      if (this.velStatus) {
+        this.velStatus.textContent = `量化解析度已設為 ${this.quantizeGrid}`;
+      }
+    });
+
+    // ⚡ 立即量化按鈕 (Q)
+    const btnQuantizeNow = this.container.querySelector('#ed-btn-quantize-now');
+    btnQuantizeNow?.addEventListener('click', () => {
+      this.executeQuantize();
+    });
+
+    // ⚙️ 律動設定抽屜按鈕
+    const btnQSettings = this.container.querySelector('#ed-btn-quantize-settings');
+    const qPanel = this.container.querySelector('#ed-quantize-panel') as HTMLElement;
+    btnQSettings?.addEventListener('click', () => {
+      this.isQuantizePanelOpen = !this.isQuantizePanelOpen;
+      if (qPanel) {
+        qPanel.style.display = this.isQuantizePanelOpen ? 'flex' : 'none';
+      }
+      btnQSettings.classList.toggle('active', this.isQuantizePanelOpen);
+    });
+
+    // 強度滑桿
+    const sliderQStrength = this.container.querySelector('#ed-q-strength-slider') as HTMLInputElement;
+    const badgeQStrength = this.container.querySelector('#ed-q-strength-val');
+    sliderQStrength?.addEventListener('input', () => {
+      this.quantizeStrength = parseInt(sliderQStrength.value, 10) || 100;
+      if (badgeQStrength) badgeQStrength.textContent = `${this.quantizeStrength}%`;
+    });
+
+    // 搖擺滑桿
+    const sliderQSwing = this.container.querySelector('#ed-q-swing-slider') as HTMLInputElement;
+    const badgeQSwing = this.container.querySelector('#ed-q-swing-val');
+    sliderQSwing?.addEventListener('input', () => {
+      this.quantizeSwing = parseInt(sliderQSwing.value, 10) || 50;
+      if (badgeQSwing) {
+        badgeQSwing.textContent = this.quantizeSwing === 50
+          ? '50% (直音)'
+          : (this.quantizeSwing === 67 ? '67% (Shuffle)' : `${this.quantizeSwing}%`);
+      }
+    });
+
+    // 時值量化勾選
+    const chkQLengths = this.container.querySelector('#ed-q-chk-lengths') as HTMLInputElement;
+    chkQLengths?.addEventListener('change', () => {
+      this.quantizeLengths = chkQLengths.checked;
     });
 
     // ↩️ 復原 / ↪️ 重做按鈕
@@ -1558,4 +1648,81 @@ export class SingleTrackEditor {
       }
     }
   }
+  /**
+   * 執行智慧量化與搖擺律動 (支援 Q 鍵快速鍵、選取音符或全軌量化)
+   */
+  public executeQuantize(): boolean {
+    if (!this.events || this.events.length === 0) {
+      if (this.velStatus) this.velStatus.textContent = '⚠️ 當前聲部無任何音符可供量化';
+      return false;
+    }
+
+    const beforeEvents = this.events.map(e => ({ ...e }));
+    const hasSelection = this.selectedEvents.size > 0;
+    const targetCount = hasSelection ? this.selectedEvents.size : this.events.length;
+
+    const options: QuantizeOptions = {
+      grid: this.quantizeGrid,
+      strength: this.quantizeStrength,
+      swing: this.quantizeSwing,
+      quantizeStarts: true,
+      quantizeLengths: this.quantizeLengths,
+      totalTicks: this.totalTicks,
+      division: this.division,
+    };
+
+    if (hasSelection) {
+      const selectedSet = new Set(this.selectedEvents);
+      const newSelectedEvents = new Set<PlaybackNoteEvent>();
+
+      this.events = this.events.map(ev => {
+        if (!selectedSet.has(ev)) return ev;
+        const qNote = QuantizeEngine.quantizeNote(ev, options);
+        newSelectedEvents.add(qNote);
+        return qNote;
+      });
+
+      this.selectedEvents = newSelectedEvents;
+    } else {
+      this.events = QuantizeEngine.quantizeNotes(this.events, options);
+    }
+
+    this.events.sort((a, b) => a.relTick - b.relTick);
+
+    const desc = hasSelection
+      ? `量化選取音符 (${targetCount} 顆, ${this.quantizeGrid}, 強度 ${this.quantizeStrength}%)`
+      : `全軌量化 (${targetCount} 顆, ${this.quantizeGrid}, 強度 ${this.quantizeStrength}%)`;
+
+    this.pushHistory(desc, beforeEvents, this.events);
+    this.notifyEventsChanged();
+    this.render();
+
+    if (this.velStatus) {
+      const swingLabel = this.quantizeSwing > 50 ? `, 搖擺 ${this.quantizeSwing}%` : '';
+      this.velStatus.textContent = `⚡ 已${desc}${swingLabel}`;
+    }
+
+    const firstNote = hasSelection
+      ? Array.from(this.selectedEvents)[0]
+      : this.events[0];
+    if (firstNote) {
+      try {
+        styPlaybackEngine.previewNote(this.channel, firstNote.noteNumber, firstNote.velocity);
+      } catch {
+        // 略過無音訊硬體或 headless 環境下的 AudioContext 例外
+      }
+    }
+
+    return true;
+  }
+
+  public getQuantizeGrid(): QuantizeGridType { return this.quantizeGrid; }
+  public setQuantizeGrid(g: QuantizeGridType) {
+    this.quantizeGrid = g;
+  }
+  public getQuantizeStrength(): number { return this.quantizeStrength; }
+  public setQuantizeStrength(s: number) { this.quantizeStrength = s; }
+  public getQuantizeSwing(): number { return this.quantizeSwing; }
+  public setQuantizeSwing(s: number) { this.quantizeSwing = s; }
+  public setQuantizeLengths(l: boolean) { this.quantizeLengths = l; }
 }
