@@ -20,6 +20,7 @@
 import type { PlaybackNoteEvent, PartVoiceInfo } from './sty-playback-engine';
 import { styPlaybackEngine } from './sty-playback-engine';
 import { QuantizeEngine, type QuantizeGridType, type QuantizeOptions } from '../core/writer/quantize-engine';
+import { PitchTransposer } from '../core/writer/pitch-transposer';
 import { YAMAHA_DRUM_VOICES } from '../creator/drum-step-grid';
 
 export interface HistoryRecord {
@@ -131,6 +132,14 @@ export class SingleTrackEditor {
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
         e.preventDefault();
         this.executeQuantize();
+      } else if (e.key === 'ArrowUp' && (e.altKey || this.selectedEvents.size > 0)) {
+        e.preventDefault();
+        const semitones = (e.shiftKey || e.ctrlKey) ? 12 : 1;
+        this.transposeCurrent(semitones);
+      } else if (e.key === 'ArrowDown' && (e.altKey || this.selectedEvents.size > 0)) {
+        e.preventDefault();
+        const semitones = (e.shiftKey || e.ctrlKey) ? -12 : -1;
+        this.transposeCurrent(semitones);
       }
     });
   }
@@ -469,6 +478,17 @@ export class SingleTrackEditor {
           <span id="ed-vel-status" class="editor-vel-status">預設寫入力度: ${this.defaultVelocity}</span>
         </div>
 
+        <!-- 🎹 移調與八度升降模組 (Tier 2-3) -->
+        <div class="editor-transpose-box">
+          <span class="editor-tool-label">移調:</span>
+          <div class="editor-transpose-btns">
+            <button id="ed-btn-octave-down" class="transpose-btn" title="降八度 (-8va / -12 半音) (快速鍵: Shift+Alt+Down 或 Shift+Down)">-8va</button>
+            <button id="ed-btn-semi-down" class="transpose-btn" title="降半音 (-1 半音) (快速鍵: Alt+Down 或 Down)">-1</button>
+            <button id="ed-btn-semi-up" class="transpose-btn" title="升半音 (+1 半音) (快速鍵: Alt+Up 或 Up)">+1</button>
+            <button id="ed-btn-octave-up" class="transpose-btn" title="升八度 (+8va / +12 半音) (快速鍵: Shift+Alt+Up 或 Shift+Up)">+8va</button>
+          </div>
+        </div>
+
         <!-- 📐 量化與律動控制模組 (Tier 2-2) -->
         <div class="editor-quantize-box">
           <span class="editor-tool-label">網格:</span>
@@ -526,7 +546,7 @@ export class SingleTrackEditor {
     // 操作提示條
     const hintBar = document.createElement('div');
     hintBar.className = 'editor-hint-bar';
-    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b></span>`;
+    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b> ｜ <b>Alt+↑/↓ 移調 (Shift+Alt+↑/↓ 八度)</b></span>`;
     this.container.appendChild(hintBar);
 
     // 2. 建立主編輯捲動工作區並先掛載至 DOM，以便取得真實精確的 viewport clientWidth
@@ -1725,4 +1745,94 @@ export class SingleTrackEditor {
   public getQuantizeSwing(): number { return this.quantizeSwing; }
   public setQuantizeSwing(s: number) { this.quantizeSwing = s; }
   public setQuantizeLengths(l: boolean) { this.quantizeLengths = l; }
+  /**
+   * 執行移調或八度升降 (支援選取音符或全軌移調，保留和弦音程差與邊界保護)
+   * @param semitones 半音數 (+1, -1, +12, -12 或自訂)
+   */
+  public transposeCurrent(semitones: number): boolean {
+    if (!this.events || this.events.length === 0) {
+      if (this.velStatus) this.velStatus.textContent = '⚠️ 當前聲部無任何音符可供移調';
+      return false;
+    }
+
+    if (PitchTransposer.isDrumChannel(this.channel)) {
+      if (this.velStatus) {
+        this.velStatus.textContent = '⚠️ 打擊樂聲部 (Rhythm) 停用移調以保護鼓點配置';
+      }
+      return false;
+    }
+
+    const beforeEvents = this.events.map(e => ({ ...e }));
+    const hasSelection = this.selectedEvents.size > 0;
+    const targetNotes = hasSelection
+      ? Array.from(this.selectedEvents)
+      : [...this.events];
+
+    const result = PitchTransposer.transposeNotes(targetNotes, semitones, {
+      channel: this.channel,
+      minNote: 0,
+      maxNote: 127,
+    });
+
+    if (!result.success) {
+      if (this.velStatus && result.message) {
+        this.velStatus.textContent = result.message;
+      }
+      return false;
+    }
+
+    if (hasSelection) {
+      const selectedSet = new Set(this.selectedEvents);
+      const newSelectedEvents = new Set<PlaybackNoteEvent>();
+
+      this.events = this.events.map(ev => {
+        if (!selectedSet.has(ev)) return ev;
+        const shiftedNote: PlaybackNoteEvent = {
+          ...ev,
+          noteNumber: ev.noteNumber + result.actualShift,
+        };
+        newSelectedEvents.add(shiftedNote);
+        return shiftedNote;
+      });
+
+      this.selectedEvents = newSelectedEvents;
+    } else {
+      this.events = result.notes;
+    }
+
+    let shiftDesc = '';
+    if (result.actualShift === 12) shiftDesc = '升八度 (+8va)';
+    else if (result.actualShift === -12) shiftDesc = '降八度 (-8va)';
+    else if (result.actualShift > 0) shiftDesc = `升 ${result.actualShift} 半音`;
+    else shiftDesc = `降 ${Math.abs(result.actualShift)} 半音`;
+
+    const desc = hasSelection
+      ? `移調選取音符: ${shiftDesc} (${targetNotes.length} 顆)`
+      : `全軌移調: ${shiftDesc} (${this.events.length} 顆)`;
+
+    this.pushHistory(desc, beforeEvents, this.events);
+    this.calculateRows(); // 重新自適應琴鍵縱向音域範圍
+    this.notifyEventsChanged();
+    this.render();
+
+    if (this.velStatus) {
+      const limitNotice = result.isLimited ? ' (觸碰邊界已受限)' : '';
+      this.velStatus.textContent = `🎵 已${desc}${limitNotice}`;
+    }
+
+    // 試聽移調後的音符
+    const auditionNote = hasSelection
+      ? Array.from(this.selectedEvents)[0]
+      : this.events[0];
+    if (auditionNote) {
+      try {
+        styPlaybackEngine.previewNote(this.channel, auditionNote.noteNumber, auditionNote.velocity);
+      } catch {
+        // 略過無音訊輸出環境
+      }
+    }
+
+    return true;
+  }
+
 }
