@@ -7,6 +7,8 @@ import { SingleTrackEditor } from './single-track-editor';
 import { YamahaWriter } from '../core/writer/yamaha-writer';
 import { YamahaStyleModifier } from '../core/writer/style-modifier';
 import type { PlaybackNoteEvent } from './sty-playback-engine';
+import { VoicePickerModal } from './voice-picker-modal';
+import type { YamahaVoice } from '../core/data/yamaha-voices';
 
 // Yamaha 標準 8 伴奏聲部定義
 interface PartDef {
@@ -73,6 +75,7 @@ export class PlayerApp {
   private btnTestPiano!: HTMLButtonElement;
   private outputCurrentStatus!: HTMLElement;
   private btnExportSty!: HTMLButtonElement;
+  private voicePicker!: VoicePickerModal;
 
   constructor() {
     document.addEventListener('DOMContentLoaded', () => this.init());
@@ -93,6 +96,11 @@ export class PlayerApp {
     this.trackEditor.setOnRequestSwitchChannel((channel) => {
       this.setFocusedChannel(channel);
     });
+    this.trackEditor.setOnOpenVoicePicker((channel) => {
+      this.openVoicePickerForChannel(channel);
+    });
+
+    this.voicePicker = new VoicePickerModal();
 
     this.setFocusedChannel(8); // 預設聚焦 CH 9 Rhythm 1
     this.initMidi();
@@ -225,6 +233,12 @@ export class PlayerApp {
       styPlaybackEngine.setChannelSolo(nextSolo);
       this.syncMixerSoloButtons();
       this.updatePlayStateUI();
+    });
+
+    this.focusedTrackVoice.style.cursor = 'pointer';
+    this.focusedTrackVoice.title = '點擊開啟 Yamaha 原廠音色庫更換音色';
+    this.focusedTrackVoice.addEventListener('click', () => {
+      this.openVoicePickerForChannel(this.focusedChannel);
     });
 
     this.btnBannerMute.addEventListener('click', () => {
@@ -512,8 +526,8 @@ export class PlayerApp {
       const voiceEl = document.getElementById(`part-voice-${part.channel}`);
       const info = voices.get(part.channel);
       if (voiceEl && info) {
-        voiceEl.textContent = info.voiceName;
-        voiceEl.title = `${info.voiceName} (Category: ${info.category}, MSB: ${info.msb}, LSB: ${info.lsb}, PC: ${info.pc + 1})`;
+        voiceEl.textContent = `${info.voiceName} ✏️`;
+        voiceEl.title = `${info.voiceName} (Category: ${info.category}, MSB: ${info.msb}, LSB: ${info.lsb}, PC: ${info.pc + 1}) - 點擊更換音色`;
       }
     });
 
@@ -620,7 +634,7 @@ export class PlayerApp {
           <div id="led-ch-${part.channel}" class="activity-led"></div>
         </div>
         <div class="part-title">${part.label}</div>
-        <div id="part-voice-${part.channel}" class="part-voice">${part.defaultName}</div>
+        <div id="part-voice-${part.channel}" class="part-voice clickable-voice" title="點擊開啟 Yamaha 原廠音色庫更換音色">${part.defaultName} ✏️</div>
         <div class="part-controls">
           <button id="btn-mute-${part.channel}" class="mixer-btn btn-mute">Mute</button>
           <button id="btn-solo-${part.channel}" class="mixer-btn btn-solo">Solo</button>
@@ -647,6 +661,12 @@ export class PlayerApp {
       // 事件綁定
       const btnMute = card.querySelector(`#btn-mute-${part.channel}`) as HTMLButtonElement;
       const btnSolo = card.querySelector(`#btn-solo-${part.channel}`) as HTMLButtonElement;
+      const voiceEl = card.querySelector(`#part-voice-${part.channel}`);
+      voiceEl?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openVoicePickerForChannel(part.channel);
+      });
+
       const sliderVol = card.querySelector(`#vol-${part.channel}`) as HTMLInputElement;
 
       btnMute.addEventListener('click', (e) => {
@@ -784,6 +804,56 @@ export class PlayerApp {
   /**
    * 匯出完整 STY 伴奏檔並觸發瀏覽器下載
    */
+  /**
+   * 開啟指定 Channel 的 Yamaha 原廠音色搜尋與選擇視窗 (Voice Picker Modal)
+   */
+  public openVoicePickerForChannel(channel: number) {
+    const part = YAMAHA_PARTS.find(p => p.channel === channel) || YAMAHA_PARTS[0];
+    const currentVoice = styPlaybackEngine.getPartVoices().get(channel) || null;
+    this.voicePicker.open(channel, part.label, currentVoice, (targetCh, selectedVoice) => {
+      this.applyVoiceToChannel(targetCh, selectedVoice);
+    });
+  }
+
+  /**
+   * 套用選取的 Yamaha 原廠音色至指定聲部
+   * 1. 即時更新播放引擎與合成器 / 琴端 MIDI
+   * 2. 即時更新記憶體中的 STY 結構 (Track 0 Bank/Program Change + CASM/OTS 混音)
+   * 3. 即時更新面板伴奏小卡與頂部聚焦橫幅 / 單軌編輯器工具列
+   * 4. 播放示範試聽樂句 (Audition Phrase)
+   */
+  public applyVoiceToChannel(channel: number, voice: YamahaVoice) {
+    // 1. 更新播放引擎 (軟體合成器 or 實體 MIDI)
+    styPlaybackEngine.setChannelVoice(channel, voice);
+
+    // 2. 更新記憶體中 STY 的二進位混音配置，確保安全匯出包含新音色
+    if (this.currentParsed) {
+      YamahaStyleModifier.setPartMixing(this.currentParsed, channel, {
+        bankMsb: voice.msb,
+        bankLsb: voice.lsb,
+        programChange: voice.pc,
+      });
+    }
+
+    // 3. 更新伴奏小卡 UI
+    const voiceEl = document.getElementById(`part-voice-${channel}`);
+    if (voiceEl) {
+      const name = voice.chineseName ? `${voice.name} (${voice.chineseName})` : voice.name;
+      voiceEl.textContent = `${name} ✏️`;
+      voiceEl.title = `${voice.name} (MSB: ${voice.msb}, LSB: ${voice.lsb}, PC: ${voice.pc + 1}) - 點擊更換音色`;
+    }
+
+    // 4. 若當前正聚焦該聲部，更新頂部聚焦橫幅與單軌編輯器標籤
+    if (this.focusedChannel === channel) {
+      this.updateFocusedBanner();
+      const updatedInfo = styPlaybackEngine.getPartVoices().get(channel) || null;
+      this.trackEditor.updateVoiceInfo(updatedInfo);
+    }
+
+    // 5. 播放試聽音色示範樂句
+    styPlaybackEngine.previewVoicePhrase(channel, voice);
+  }
+
   private exportCurrentStyle() {
     if (!this.currentParsed) {
       alert('尚未載入任何 STY 伴奏檔案，請先拖曳或選擇伴奏檔案！');

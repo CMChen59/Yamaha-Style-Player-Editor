@@ -4,7 +4,7 @@ import { drumSynth } from '../creator/drum-synth';
 import { bassSynth } from '../creator/bass-synth';
 import { ChordSynth } from '../creator/chord-synth';
 import { midiManager } from '../core/audio/midi-manager';
-import { findYamahaVoice } from '../core/data/yamaha-voices';
+import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
 
 export function formatYamahaPan(pan: number): string {
   if (pan === 64) return 'C';
@@ -799,6 +799,61 @@ export class StyPlaybackEngine {
         const synth = this.chordSynths.get(channel);
         if (synth) synth.playNote(note, velocity, durMs);
       }
+    }
+  }
+
+  /**
+   * 更換特定聲部的 Yamaha 原廠音色設定
+   */
+  public setChannelVoice(channel: number, voice: YamahaVoice) {
+    const name = voice.chineseName ? `${voice.name} (${voice.chineseName})` : voice.name;
+    const info: PartVoiceInfo = {
+      channel,
+      msb: voice.msb,
+      lsb: voice.lsb,
+      pc: voice.pc,
+      voiceName: name,
+      category: voice.category,
+    };
+    this.partVoices.set(channel, info);
+
+    // 1. 若處於 Web MIDI 輸出模式，向實體琴發送 Bank Select 與 Program Change
+    if (this.outputMode === 'midi' && midiManager.getSelectedOutput()) {
+      midiManager.sendVoiceChange(channel, { msb: voice.msb, lsb: voice.lsb, pc: voice.pc });
+    }
+
+    // 2. 若處於 Web Audio 軟體合成器模式，通知該軌道專屬合成器切換樂器模型
+    const synth = this.chordSynths.get(channel);
+    if (synth) {
+      synth.setVoice({ category: voice.category, name: voice.name });
+    }
+  }
+
+  /**
+   * 試聽特定音色之示範樂句或和弦琶音 (Audition Phrase)
+   */
+  public previewVoicePhrase(channel: number, voice: YamahaVoice) {
+    const isDrum = voice.category === 'Drums' || voice.category === 'Percussion' || channel === 8 || channel === 9;
+
+    if (this.outputMode === 'midi' && midiManager.getSelectedOutput()) {
+      // 送出音色切換
+      midiManager.sendVoiceChange(channel, { msb: voice.msb, lsb: voice.lsb, pc: voice.pc });
+    }
+
+    if (isDrum) {
+      // 鼓組試聽：大鼓 (36) + 閉鈸 (42) + 小鼓 (38)
+      this.previewNote(channel, 36, 110, 200);
+      setTimeout(() => this.previewNote(channel, 42, 95, 150), 120);
+      setTimeout(() => this.previewNote(channel, 38, 105, 200), 240);
+    } else if (voice.category === 'Bass' || channel === 10) {
+      // 貝斯試聽：低音根音 (C2 36) -> 五音 (G2 43)
+      this.previewNote(channel, 36, 105, 250);
+      setTimeout(() => this.previewNote(channel, 43, 100, 300), 180);
+    } else {
+      // 旋律/和弦樂器：大三和弦琶音 (C4 60 -> E4 64 -> G4 67)
+      this.previewNote(channel, 60, 100, 250);
+      setTimeout(() => this.previewNote(channel, 64, 95, 250), 140);
+      setTimeout(() => this.previewNote(channel, 67, 105, 380), 280);
     }
   }
 

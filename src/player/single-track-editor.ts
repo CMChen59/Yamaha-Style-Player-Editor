@@ -69,6 +69,7 @@ export class SingleTrackEditor {
   private redoStack: HistoryRecord[] = [];
   private maxHistorySteps: number = 50;
   private onRequestSwitchChannel: ((channel: number) => void) | null = null;
+  private onOpenVoicePicker: ((channel: number) => void) | null = null;
   private velocityDragBeforeSnapshot: PlaybackNoteEvent[] | null = null;
 
   // DOM 參照
@@ -129,6 +130,25 @@ export class SingleTrackEditor {
    */
   public setOnRequestSwitchChannel(cb: (channel: number) => void) {
     this.onRequestSwitchChannel = cb;
+  }
+
+  /**
+   * 設定開啟 Yamaha 原廠音色庫選擇器回呼
+   */
+  public setOnOpenVoicePicker(cb: (channel: number) => void) {
+    this.onOpenVoicePicker = cb;
+  }
+
+  /**
+   * 即時更新頂部工具列音色資訊
+   */
+  public updateVoiceInfo(voiceInfo: PartVoiceInfo | null) {
+    this.voiceInfo = voiceInfo;
+    const voiceTag = this.container.querySelector('.editor-voice-tag');
+    if (voiceTag) {
+      voiceTag.textContent = voiceInfo ? `${voiceInfo.voiceName} ✏️` : '預設音色 ✏️';
+      voiceTag.setAttribute('title', voiceInfo ? `${voiceInfo.voiceName} (點擊更換音色)` : '點擊更換音色');
+    }
   }
 
   /**
@@ -402,7 +422,7 @@ export class SingleTrackEditor {
     toolbar.innerHTML = `
       <div class="editor-toolbar-left">
         <span class="editor-track-badge" style="background: ${this.partAccentColor};">CH ${this.channel + 1} - ${this.partLabel}</span>
-        <span class="editor-voice-tag">${this.voiceInfo?.voiceName || 'Default Voice'}</span>
+        <span class="editor-voice-tag clickable-voice-tag" title="${this.voiceInfo ? this.voiceInfo.voiceName + ' (點擊更換音色)' : '點擊更換音色'}">${this.voiceInfo?.voiceName || '預設音色'} ✏️</span>
         <span class="editor-meta-pill">拍號: ${this.timeSignature.numerator}/${this.timeSignature.denominator} | 總計: ${this.totalBars} 小節 | PPQ: ${this.division}</span>
         <span id="ed-note-count-pill" class="editor-meta-pill">音符總數: ${this.events.length}</span>
       </div>
@@ -1386,6 +1406,14 @@ export class SingleTrackEditor {
     this.container.querySelector('#ed-vel-nudge-p5')?.addEventListener('click', () => this.nudgeVelocity(5));
     this.container.querySelector('#ed-vel-nudge-p10')?.addEventListener('click', () => this.nudgeVelocity(10));
     this.container.querySelector('#ed-vel-humanize')?.addEventListener('click', () => this.humanizeVelocity(8));
+
+    // 點擊音色標籤開啟音色選擇器
+    const voiceTag = this.container.querySelector('.editor-voice-tag');
+    voiceTag?.addEventListener('click', () => {
+      if (this.onOpenVoicePicker) {
+        this.onOpenVoicePicker(this.channel);
+      }
+    });
 
     // 量化解析度下拉選單
     const quantizeSelect = this.container.querySelector('#ed-quantize-select') as HTMLSelectElement;

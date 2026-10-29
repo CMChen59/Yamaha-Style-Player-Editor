@@ -1487,6 +1487,633 @@
       border-top: 8px solid #38bdf8;
       margin-left: -5px;
     }
+
+    /* ==========================================================================
+       Tier 1-4: Yamaha 原廠 2,300+ 音色選擇器 (Voice Picker Modal) 專業 DAW 樣式
+       ========================================================================== */
+    .clickable-voice {
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 2px 4px;
+      margin: -2px -4px;
+      transition: all 0.18s ease;
+      display: inline-block;
+    }
+
+    .clickable-voice:hover {
+      color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.15);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .clickable-voice-tag {
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .clickable-voice-tag:hover {
+      background: rgba(56, 189, 248, 0.25) !important;
+      color: #38bdf8 !important;
+      border-color: #38bdf8 !important;
+    }
+
+    /* Modal 遮罩層 (Backdrop) */
+    .voice-picker-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(3, 7, 18, 0.78);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: vpFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes vpFadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Modal 主視窗 */
+    .voice-picker-modal {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 14px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+      width: 94vw;
+      max-width: 1120px;
+      height: 88vh;
+      max-height: 860px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: #f8fafc;
+    }
+
+    /* 頂部標題列 */
+    .voice-picker-header {
+      background: #1e293b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .vp-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .vp-title {
+      font-size: 1.18rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+
+    .vp-target-badge {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .vp-close-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      font-size: 1.1rem;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .vp-close-btn:hover {
+      background: rgba(244, 63, 94, 0.2);
+      border-color: rgba(244, 63, 94, 0.4);
+      color: #f43f5e;
+      transform: scale(1.05);
+    }
+
+    /* 搜尋與快篩橫條 */
+    .voice-picker-filter-bar {
+      background: #151e32;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .vp-search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .vp-search-icon {
+      position: absolute;
+      left: 14px;
+      font-size: 0.95rem;
+      color: #64748b;
+      pointer-events: none;
+    }
+
+    .vp-search-input {
+      width: 100%;
+      background: #090e1a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 9px 38px 9px 40px;
+      font-size: 0.9rem;
+      color: #f8fafc;
+      outline: none;
+      transition: all 0.18s;
+    }
+
+    .vp-search-input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+      background: #0b1222;
+    }
+
+    .vp-clear-search-btn {
+      position: absolute;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .vp-clear-search-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+      color: #fff;
+    }
+
+    .vp-filter-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .vp-pill-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+    }
+
+    .vp-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .vp-pill-btn.active {
+      background: #38bdf8;
+      border-color: #38bdf8;
+      color: #090d16;
+      font-weight: 600;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+    }
+
+    /* Modal 中間主體：左側導航 + 右側列表 */
+    .voice-picker-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* 左側分類側欄 */
+    .vp-category-sidebar {
+      width: 210px;
+      background: #0b1120;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      overflow-y: auto;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .vp-cat-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.84rem;
+      color: #cbd5e1;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+      width: 100%;
+    }
+
+    .vp-cat-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #f8fafc;
+    }
+
+    .vp-cat-btn.active {
+      background: rgba(56, 189, 248, 0.18);
+      color: #38bdf8;
+      font-weight: 600;
+      border-left: 3px solid #38bdf8;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .vp-cat-icon {
+      font-size: 1.05rem;
+      width: 20px;
+      text-align: center;
+    }
+
+    .vp-cat-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* 右側主列表區域 */
+    .vp-content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #111827;
+      min-width: 0;
+    }
+
+    .vp-content-header {
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .vp-results-count {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .vp-hint-tip {
+      font-size: 0.74rem;
+      color: #64748b;
+    }
+
+    /* 音色卡牌網格 */
+    .vp-voice-grid {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 18px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 12px;
+      align-content: start;
+    }
+
+    /* 音色卡牌 */
+    .voice-card {
+      background: #1a2234;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 9px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.16s ease;
+      position: relative;
+    }
+
+    .voice-card:hover {
+      background: #202b42;
+      border-color: rgba(56, 189, 248, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    .voice-card.is-selected {
+      background: rgba(56, 189, 248, 0.14) !important;
+      border-color: #38bdf8 !important;
+      box-shadow: 0 0 0 1px #38bdf8, 0 6px 16px rgba(56, 189, 248, 0.2);
+    }
+
+    .vc-top-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      flex-wrap: nowrap;
+    }
+
+    .vc-category-pill {
+      background: rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .vp-type-tag {
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .type-sart {
+      background: rgba(236, 72, 153, 0.2);
+      color: #f472b6;
+      border: 1px solid rgba(236, 72, 153, 0.35);
+    }
+
+    .type-mega {
+      background: rgba(168, 85, 247, 0.2);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.35);
+    }
+
+    .type-live {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+    }
+
+    .type-sweet {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .type-cool {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .type-drums {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+
+    .vp-rec-star {
+      font-size: 0.75rem;
+      color: #f59e0b;
+    }
+
+    .vc-specs {
+      margin-left: auto;
+      font-family: monospace;
+      color: #64748b;
+      font-size: 0.68rem;
+    }
+
+    .vc-name {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #f8fafc;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vc-chinese-name {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      min-height: 1.1em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vc-bottom-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .vc-btn-audition {
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: #38bdf8;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .vc-btn-audition:hover {
+      background: #38bdf8;
+      color: #090d16;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+    }
+
+    .vc-btn-select {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #e2e8f0;
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .vc-btn-select:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff;
+    }
+
+    /* 查無音色狀態 */
+    .vp-empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: #64748b;
+    }
+
+    .vp-empty-icon {
+      font-size: 2.4rem;
+      margin-bottom: 12px;
+      opacity: 0.7;
+    }
+
+    .vp-empty-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .vp-empty-desc {
+      font-size: 0.82rem;
+      color: #64748b;
+    }
+
+    /* 載入更多按鈕區域 */
+    .vp-load-more-wrap {
+      padding: 10px 18px 14px 18px;
+      display: flex;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.15);
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      flex-shrink: 0;
+    }
+
+    .vp-load-more-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      font-size: 0.82rem;
+      padding: 7px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .vp-load-more-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    /* 底部操作列 */
+    .voice-picker-footer {
+      background: #1e293b;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 12px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .vp-footer-info {
+      font-size: 0.86rem;
+      color: #cbd5e1;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .vp-footer-info strong {
+      color: #38bdf8;
+    }
+
+    .vp-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .vp-action-btn {
+      padding: 8px 18px;
+      border-radius: 7px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+    }
+
+    .btn-audition {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #38bdf8;
+    }
+
+    .btn-audition:hover:not(:disabled) {
+      background: rgba(56, 189, 248, 0.28);
+      color: #bae6fd;
+    }
+
+    .btn-cancel {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+    }
+
+    .btn-cancel:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    .btn-confirm {
+      background: #38bdf8;
+      border: 1px solid #38bdf8;
+      color: #090d16;
+    }
+
+    .btn-confirm:hover:not(:disabled) {
+      background: #0ea5e9;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+    }
+
+    .vp-action-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
