@@ -40,6 +40,9 @@ export class PlayerApp {
   private dropZone!: HTMLElement;
   private fileInput!: HTMLInputElement;
   private sectionButtonsContainer!: HTMLElement;
+  private currentSecNameBadge!: HTMLElement;
+  private inputCustomBars!: HTMLInputElement;
+  private btnApplyCustomBars!: HTMLButtonElement;
   private btnPlay!: HTMLButtonElement;
   private btnPlaySolo!: HTMLButtonElement;
   private btnStop!: HTMLButtonElement;
@@ -113,6 +116,9 @@ export class PlayerApp {
     this.dropZone = document.getElementById('drop-zone')!;
     this.fileInput = document.getElementById('file-input') as HTMLInputElement;
     this.sectionButtonsContainer = document.getElementById('section-buttons')!;
+    this.currentSecNameBadge = document.getElementById('current-sec-name-badge')!;
+    this.inputCustomBars = document.getElementById('input-custom-bars') as HTMLInputElement;
+    this.btnApplyCustomBars = document.getElementById('btn-apply-custom-bars') as HTMLButtonElement;
     this.btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
     this.btnPlaySolo = document.getElementById('btn-play-solo') as HTMLButtonElement;
     this.btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
@@ -148,6 +154,33 @@ export class PlayerApp {
   }
 
   private setupEventListeners() {
+    // Tier 2-1: 段落小節長度調整快捷按鈕
+    document.querySelectorAll('.btn-sec-bar').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const bars = parseInt((btn as HTMLElement).dataset.bars || '4', 10);
+        this.resizeCurrentSection(bars);
+      });
+    });
+
+    if (this.btnApplyCustomBars) {
+      this.btnApplyCustomBars.addEventListener('click', () => {
+        const val = parseInt(this.inputCustomBars.value, 10);
+        if (!isNaN(val) && val >= 1 && val <= 32) {
+          this.resizeCurrentSection(val);
+        } else {
+          alert('請輸入有效的小節數 (1 ~ 32)');
+        }
+      });
+    }
+
+    if (this.inputCustomBars) {
+      this.inputCustomBars.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          this.btnApplyCustomBars.click();
+        }
+      });
+    }
+
     // 檔案拖曳與點選
     this.dropZone.addEventListener('click', () => this.fileInput.click());
     this.fileInput.addEventListener('change', (e) => {
@@ -536,6 +569,7 @@ export class PlayerApp {
 
     // 依段落同步混音台音量滑桿與數值
     this.syncMixerVolumes();
+    this.syncSectionResizeUI();
 
     // 更新當前聚焦聲部的音符統計與資訊
     this.updateFocusedBanner();
@@ -804,6 +838,54 @@ export class PlayerApp {
   /**
    * 匯出完整 STY 伴奏檔並觸發瀏覽器下載
    */
+  /**
+   * 同步段落小節長度調整控制列的 UI 狀態 (高亮對應按鈕與更新標籤)
+   */
+  public syncSectionResizeUI() {
+    if (!this.currentParsed || !this.activeSectionName) return;
+    const currentBars = YamahaStyleModifier.getSectionMeasureCount(this.currentParsed, this.activeSectionName);
+    if (this.currentSecNameBadge) {
+      this.currentSecNameBadge.textContent = `${this.activeSectionName} (${currentBars}小節)`;
+    }
+    if (this.inputCustomBars) {
+      this.inputCustomBars.value = currentBars.toString();
+    }
+    document.querySelectorAll('.btn-sec-bar').forEach((btn) => {
+      const b = parseInt((btn as HTMLElement).dataset.bars || '0', 10);
+      btn.classList.toggle('active', b === currentBars);
+    });
+  }
+
+  /**
+   * 調整當前選取段落之小節長度 (Measure Cut & Extend)
+   * 支援循環延伸 (Loop) 與裁切，即時刷新單軌鋼琴捲軸與播放器時鐘
+   */
+  public resizeCurrentSection(newBars: number) {
+    if (!this.currentParsed || !this.activeSectionName) {
+      alert('請先載入 STY 伴奏檔案並選取欲調整的段落');
+      return;
+    }
+
+    const currentBars = YamahaStyleModifier.getSectionMeasureCount(this.currentParsed, this.activeSectionName);
+    if (currentBars === newBars) return;
+
+    const ok = YamahaStyleModifier.resizeSectionMeasures(
+      this.currentParsed,
+      this.activeSectionName,
+      newBars
+    );
+
+    if (!ok) {
+      alert(`調整段落 ${this.activeSectionName} 小節長度失敗，請重試`);
+      return;
+    }
+
+    // 重新載入播放引擎並刷新介面
+    styPlaybackEngine.loadParsed(this.currentParsed);
+    this.renderSectionButtons();
+    this.selectSection(this.activeSectionName);
+  }
+
   /**
    * 開啟指定 Channel 的 Yamaha 原廠音色搜尋與選擇視窗 (Voice Picker Modal)
    */

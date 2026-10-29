@@ -2114,6 +2114,107 @@
       cursor: not-allowed;
       pointer-events: none;
     }
+
+    /* ==========================================================================
+       Tier 2-1: 段落小節長度調整 (Section Measure Resize) 專業控制列
+       ========================================================================== */
+    .section-resize-ctrls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .sec-resize-label {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .current-sec-name-badge {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+    }
+
+    .sec-bars-quick-btns {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .btn-sec-bar {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      font-size: 0.74rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-weight: 500;
+    }
+
+    .btn-sec-bar:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-sec-bar.active {
+      background: #38bdf8;
+      border-color: #38bdf8;
+      color: #090d16;
+      font-weight: 700;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+    }
+
+    .sec-bars-custom-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .input-custom-bars {
+      width: 48px;
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      color: #f8fafc;
+      font-size: 0.78rem;
+      text-align: center;
+      padding: 3px 4px;
+      outline: none;
+      transition: all 0.15s;
+    }
+
+    .input-custom-bars:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+    }
+
+    .btn-apply-bars {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-apply-bars:hover {
+      background: #38bdf8;
+      color: #090d16;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -2245,8 +2346,26 @@
     <!-- 段落選擇器矩陣 -->
     <section class="section-matrix-panel">
       <div class="panel-header">
-        <span>伴奏段落選擇 (Yamaha Sections)</span>
-        <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">點擊即可無縫切換播放段落</span>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <span>伴奏段落選擇 (Yamaha Sections)</span>
+          <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">點擊即可無縫切換播放段落</span>
+        </div>
+        <!-- Tier 2-1: 段落小節長度調整模組 -->
+        <div class="section-resize-ctrls" id="section-resize-ctrls">
+          <span class="sec-resize-label">📏 當前段落小節長度:</span>
+          <span id="current-sec-name-badge" class="current-sec-name-badge">Main A (4小節)</span>
+          <div class="sec-bars-quick-btns">
+            <button class="btn-sec-bar" data-bars="1">1 小節</button>
+            <button class="btn-sec-bar" data-bars="2">2 小節</button>
+            <button class="btn-sec-bar" data-bars="4">4 小節</button>
+            <button class="btn-sec-bar" data-bars="8">8 小節</button>
+            <button class="btn-sec-bar" data-bars="16">16 小節</button>
+          </div>
+          <div class="sec-bars-custom-wrap">
+            <input type="number" id="input-custom-bars" class="input-custom-bars" min="1" max="32" value="4" title="自訂小節數 (1~32)">
+            <button id="btn-apply-custom-bars" class="btn-apply-bars" title="套用小節數">套用</button>
+          </div>
+        </div>
       </div>
       <div id="section-buttons" class="section-grid">
         <!-- 動態渲染各段落按鈕 -->
