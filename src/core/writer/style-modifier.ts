@@ -14,6 +14,23 @@ import type {
   MidiEvent,
 } from '../models/types';
 
+export interface CloneSectionOptions {
+  channels?: number[];        // 指定欲複製的聲部通道 (預設 8~15 全聲部)
+  overwrite?: boolean;        // 若目標段落已存在音符，是否清空覆蓋 (預設 true)
+  matchMeasures?: boolean;    // 是否將目標段落的小節長度調整為與來源段落一致 (預設 true)
+  copyMixing?: boolean;       // 是否將來源段落的專屬音色/混音 (CC 7, 10, 91, 93, PC, Bank) 複製至目標段落 (預設 true)
+  copyCasm?: boolean;         // 是否將來源段落的 CASM 轉調與映射規則同步賦予目標段落 (預設 true)
+}
+
+export interface CloneSectionResult {
+  success: boolean;
+  copiedNotesCount: number;
+  copiedChannels: number[];
+  srcMeasureCount: number;
+  targetMeasureCount: number;
+  message?: string;
+}
+
 export interface StylePartMixingParams {
   volume?: number;       // 0 ~ 127 (CC 7)
   pan?: number;          // 0 ~ 127 (CC 10, 64 is Center)
@@ -506,6 +523,213 @@ export class YamahaStyleModifier {
     YamahaPadModifier.sanitizeTrackDuplicateNotes(track0);
     YamahaPadModifier.rebuildTrackRawChunk(track0);
     return true;
+  }
+
+  /**
+   * 步驟 2.1: 在現有 STY 伴奏檔中建立全新音樂段落 (Section Marker)
+   * 自動計算並追加至最後一個段落後方，並於 Track 0 插入 Marker 事件
+   */
+  public static createSection(
+    parsed: YamahaFileParsed,
+    sectionName: string,
+    measureCount: number = 4
+  ): boolean {
+    if (!parsed || !parsed.tracks || parsed.tracks.length === 0) return false;
+    const track0 = parsed.tracks[0];
+    if (!track0 || !track0.events) return false;
+
+    const trimmed = sectionName.trim();
+    if (!trimmed) return false;
+
+    const existing = parsed.sections.find(s => s.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) return true; // 已存在無須重複建立
+
+    const division = parsed.division || 480;
+    const timeSig = parsed.timeSignature || { numerator: 4, denominator: 4 };
+    const ticksPerMeasure = Math.round(division * timeSig.numerator * (4 / timeSig.denominator));
+    const sectionDuration = Math.max(1, measureCount) * ticksPerMeasure;
+
+    // 計算新段落插入的起始 Tick (在最後一個音樂段落的結束點)
+    const musical = StyleRemixer.getMusicalSections(parsed);
+    let newStartTick = 0;
+    if (musical.length > 0) {
+      const lastSec = musical[musical.length - 1];
+      const lastRange = StyleRemixer.getSectionTickRange(parsed, lastSec.name);
+      if (lastRange) {
+        newStartTick = lastRange.endTick;
+      } else {
+        newStartTick = lastSec.startTick + (lastSec.measureCount ?? 4) * ticksPerMeasure;
+      }
+    }
+
+    // 在 track0 中插入 Marker Meta Event (metaType = 6)
+    const encoder = new TextEncoder();
+    const markerEvent: MidiEvent = {
+      delta: 0,
+      type: 'meta',
+      metaType: 6,
+      metaData: encoder.encode(trimmed),
+      text: trimmed,
+    };
+
+    let curTick = 0;
+    const annotated = track0.events.map((ev, idx) => {
+      curTick += ev.delta;
+      return { ev: { ...ev }, absTick: curTick, index: idx };
+    });
+
+    annotated.push({
+      ev: markerEvent,
+      absTick: newStartTick,
+      index: 9999990,
+    });
+
+    annotated.sort((a, b) => {
+      if (a.absTick !== b.absTick) return a.absTick - b.absTick;
+      if (a.ev.type === 'meta' && a.ev.metaType === 6) return -1;
+      if (b.ev.type === 'meta' && b.ev.metaType === 6) return 1;
+      return a.index - b.index;
+    });
+
+    let prev = 0;
+    track0.events = annotated.map(item => {
+      item.ev.delta = Math.max(0, item.absTick - prev);
+      prev = item.absTick;
+      return item.ev;
+    });
+
+    // 更新 parsed.sections
+    parsed.sections.push({
+      name: trimmed,
+      startTick: newStartTick,
+      endTick: newStartTick + sectionDuration,
+      measureCount,
+    });
+
+    YamahaPadModifier.rebuildTrackRawChunk(track0);
+    return true;
+  }
+
+  /**
+   * 步驟 2.1: 完整跨段落克隆引擎 (Clone Section)
+   * 支援將來源段落 (如 Main A) 的所有聲部音符、音色、混音與 CASM 轉調規則完整複製到目標段落 (如 Main B)
+   */
+  public static cloneSection(
+    parsed: YamahaFileParsed,
+    srcSec: string,
+    targetSec: string,
+    options?: CloneSectionOptions
+  ): CloneSectionResult {
+    if (!parsed || !parsed.tracks || parsed.tracks.length === 0) {
+      return { success: false, copiedNotesCount: 0, copiedChannels: [], srcMeasureCount: 0, targetMeasureCount: 0, message: '無效的 STY 結構' };
+    }
+
+    const srcRange = StyleRemixer.getSectionTickRange(parsed, srcSec);
+    if (!srcRange) {
+      return { success: false, copiedNotesCount: 0, copiedChannels: [], srcMeasureCount: 0, targetMeasureCount: 0, message: `來源段落 ${srcSec} 不存在` };
+    }
+
+    if (srcSec.trim().toLowerCase() === targetSec.trim().toLowerCase()) {
+      return { success: false, copiedNotesCount: 0, copiedChannels: [], srcMeasureCount: srcRange.measureCount, targetMeasureCount: srcRange.measureCount, message: '來源段落與目標段落不能相同' };
+    }
+
+    // 1. 若目標段落不存在，自動建立該段落
+    let targetRange = StyleRemixer.getSectionTickRange(parsed, targetSec);
+    if (!targetRange) {
+      const created = this.createSection(parsed, targetSec, srcRange.measureCount);
+      if (!created) {
+        return { success: false, copiedNotesCount: 0, copiedChannels: [], srcMeasureCount: srcRange.measureCount, targetMeasureCount: 0, message: `無法建立目標段落 ${targetSec}` };
+      }
+      targetRange = StyleRemixer.getSectionTickRange(parsed, targetSec);
+      if (!targetRange) {
+        return { success: false, copiedNotesCount: 0, copiedChannels: [], srcMeasureCount: srcRange.measureCount, targetMeasureCount: 0, message: `無法定位新建立的目標段落 ${targetSec}` };
+      }
+    }
+
+    // 2. 小節長度對齊 (預設 matchMeasures = true)
+    const matchMeasures = options?.matchMeasures !== false;
+    if (matchMeasures && targetRange.measureCount !== srcRange.measureCount) {
+      this.resizeSectionMeasures(parsed, targetSec, srcRange.measureCount);
+      targetRange = StyleRemixer.getSectionTickRange(parsed, targetSec)!;
+    }
+
+    // 3. 確定欲複製的聲部通道 (預設 8~15 全聲部)
+    const channelsToCopy = options?.channels && options.channels.length > 0
+      ? options.channels
+      : [8, 9, 10, 11, 12, 13, 14, 15];
+
+    const overwrite = options?.overwrite !== false;
+    let copiedNotesCount = 0;
+    const copiedChannels: number[] = [];
+
+    const srcDur = srcRange.endTick - srcRange.startTick;
+    const targetDur = targetRange.endTick - targetRange.startTick;
+    const loopCount = targetDur > srcDur ? Math.ceil(targetDur / srcDur) : 1;
+
+    for (const ch of channelsToCopy) {
+      const srcNotes = StyleRemixer.extractSectionChannelNotes(parsed, srcRange.startTick, srcRange.endTick, ch);
+
+      if (srcNotes.length === 0) {
+        if (overwrite) {
+          this.clearSectionNotes(parsed, targetSec, ch);
+        }
+        continue;
+      }
+
+      const combinedNotes: Array<{ noteNumber: number; relTick: number; durationTicks: number; velocity: number }> = [];
+      for (let loop = 0; loop < loopCount; loop++) {
+        const loopOffset = loop * srcDur;
+        for (const n of srcNotes) {
+          const start = n.startTick + loopOffset;
+          if (start < targetDur) {
+            combinedNotes.push({
+              noteNumber: n.note,
+              relTick: start,
+              durationTicks: Math.min(n.durationTick, targetDur - start),
+              velocity: n.velocity,
+            });
+          }
+        }
+      }
+
+      const ok = this.replaceSectionChannelNotes(parsed, targetSec, ch, combinedNotes);
+      if (ok) {
+        copiedNotesCount += combinedNotes.length;
+        copiedChannels.push(ch);
+      }
+    }
+
+    // 4. 複製段落專屬音色與混音 (若 copyMixing !== false)
+    if (options?.copyMixing !== false) {
+      for (const ch of channelsToCopy) {
+        const srcOverride = StyleRemixer.getSectionChannelOverride(parsed, srcRange.startTick, srcRange.endTick, ch);
+        if (srcOverride && Object.keys(srcOverride).length > 0) {
+          this.setPartMixing(parsed, ch, {
+            bankMsb: srcOverride.bankMsb,
+            bankLsb: srcOverride.bankLsb,
+            programChange: srcOverride.pc,
+            volume: srcOverride.volume,
+            pan: srcOverride.pan,
+          }, { targetSection: targetSec });
+        }
+      }
+    }
+
+    // 5. 複製 CASM 轉調與映射規則 (若 copyCasm !== false)
+    if (options?.copyCasm !== false && parsed.casmMappings) {
+      const srcCasm = parsed.casmMappings[srcSec.trim().toLowerCase()];
+      if (srcCasm) {
+        parsed.casmMappings[targetSec.trim().toLowerCase()] = { ...srcCasm };
+      }
+    }
+
+    return {
+      success: true,
+      copiedNotesCount,
+      copiedChannels,
+      srcMeasureCount: srcRange.measureCount,
+      targetMeasureCount: targetRange.measureCount,
+    };
   }
 
   /**
