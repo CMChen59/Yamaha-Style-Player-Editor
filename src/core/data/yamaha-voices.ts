@@ -115,20 +115,28 @@ function getVoiceIndex(): VoiceIndex {
       pcMap.set(voice.pc, voice);
     }
 
-    // 預先建置小寫搜尋字串
+    // 預先建置小寫搜尋字串 (包含 0-based 與 1-based PC、標準 MSB-LSB-PC 三聯號、中英文名稱與分類)
+    const pc1Based = voice.pc + 1;
     const searchTokens = [
       voice.name.toLowerCase(),
-      voice.chineseName.toLowerCase(),
+      voice.chineseName ? voice.chineseName.toLowerCase() : '',
       voice.category.toLowerCase(),
       voice.type ? voice.type.toLowerCase() : '',
+      // 0-based MIDI PC (如 0-119-88)
       `${voice.msb}-${voice.lsb}-${voice.pc}`,
+      `${voice.msb} ${voice.lsb} ${voice.pc}`,
       `pc:${voice.pc}`,
       `pc ${voice.pc}`,
       voice.pc.toString(),
+      // 1-based Yamaha 琴端螢幕顯示 (如 0-119-89)
+      `${voice.msb}-${voice.lsb}-${pc1Based}`,
+      `${voice.msb} ${voice.lsb} ${pc1Based}`,
+      `pc:${pc1Based}`,
+      `pc ${pc1Based}`,
+      pc1Based.toString(),
       voice.icon.toLowerCase(),
       voice.suitability || '',
     ].join(' ');
-
     searchCache.push({ voice, searchStr: searchTokens });
   }
 
@@ -147,8 +155,68 @@ export function searchYamahaVoices(
 ): YamahaVoice[] {
   const { searchCache } = getVoiceIndex();
   const q = query.trim().toLowerCase();
-  const queryTokens = q ? q.split(/\s+/).filter(t => t.length > 0) : [];
 
+  // 檢測是否為 Yamaha 三聯號或前綴查詢 (支援 "0-119-89", "0-119-8", "0-119-", "0 119 89")
+  const tripletMatch = q.match(/^(\d+)[- ](\d+)(?:[- ](\d*))?$/);
+  if (tripletMatch) {
+    const m = parseInt(tripletMatch[1], 10);
+    const l = parseInt(tripletMatch[2], 10);
+    const pStr = tripletMatch[3] !== undefined ? tripletMatch[3] : '';
+    const p = pStr !== '' ? parseInt(pStr, 10) : null;
+
+    const matches: YamahaVoice[] = [];
+    for (let i = 0; i < searchCache.length; i++) {
+      const { voice } = searchCache[i];
+      if (voice.msb !== m || voice.lsb !== l) continue;
+
+      if (p === null) {
+        // 僅輸入 MSB-LSB (如 "0-119" 或 "0-119-") -> 列出該 Bank 的所有音色
+        matches.push(voice);
+      } else {
+        const pc1 = voice.pc + 1;
+        const pc0 = voice.pc;
+        const isExact1 = pc1 === p;
+        const isExact0 = pc0 === p;
+        const isPrefix1 = pc1.toString().startsWith(pStr);
+        const isPrefix0 = pc0.toString().startsWith(pStr);
+
+        if (isExact1 || isExact0 || isPrefix1 || isPrefix0) {
+          matches.push(voice);
+        }
+      }
+    }
+
+    // 智慧排序：
+    // 1. 完全符合 1-based (琴端螢幕顯示 PC) 置頂
+    // 2. 完全符合 0-based (MIDI 底層數值 PC) 次之
+    // 3. 1-based 前綴相符
+    // 4. 0-based 前綴相符
+    // 5. 依 PC 數值升冪排序
+    if (p !== null && matches.length > 1) {
+      matches.sort((a, b) => {
+        const a1 = (a.pc + 1) === p;
+        const b1 = (b.pc + 1) === p;
+        if (a1 && !b1) return -1;
+        if (!a1 && b1) return 1;
+
+        const a0 = a.pc === p;
+        const b0 = b.pc === p;
+        if (a0 && !b0) return -1;
+        if (!a0 && b0) return 1;
+
+        const ap1 = (a.pc + 1).toString().startsWith(pStr);
+        const bp1 = (b.pc + 1).toString().startsWith(pStr);
+        if (ap1 && !bp1) return -1;
+        if (!ap1 && bp1) return 1;
+
+        return a.pc - b.pc;
+      });
+    }
+
+    return matches;
+  }
+
+  const queryTokens = q ? q.split(/\s+/).filter(t => t.length > 0) : [];
   const results: YamahaVoice[] = [];
 
   for (let i = 0; i < searchCache.length; i++) {

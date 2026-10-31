@@ -5,6 +5,7 @@ import { bassSynth } from '../creator/bass-synth';
 import { ChordSynth } from '../creator/chord-synth';
 import { midiManager } from '../core/audio/midi-manager';
 import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
+import { ChordTransposer, type ChordDefinition } from '../core/writer/chord-transposer';
 
 export function formatYamahaPan(pan: number): string {
   if (pan === 64) return 'C';
@@ -15,7 +16,7 @@ export function formatYamahaPan(pan: number): string {
 export interface PlaybackCCEvent {
   relTick: number;          // 相對於段落起始的 Tick
   channel: number;          // 目的 MIDI Channel (8~15)
-  sourceChannel: number;    // 原始 MIDI 來源 Channel (0~15)
+  sourceChannel?: number;   // 原始 MIDI 來源 Channel (0~15)
   controller: number;       // 控制器編號 (e.g. 11: Expression, 1: Mod, 64: Sustain, etc.)
   value: number;            // 控制器數值 (0~127)
 }
@@ -76,6 +77,9 @@ export class StyPlaybackEngine {
   // 聲部專屬合成器 (Channel 11~15 各自獨立 ChordSynth 實例，避免音色互相覆蓋)
   private chordSynths: Map<number, ChordSynth> = new Map();
   private partVoices: Map<number, PartVoiceInfo> = new Map();
+  private customVoiceOverrides: Map<number, YamahaVoice> = new Map();
+  private auditionChord: ChordDefinition = ChordTransposer.buildChord('C', 'maj');
+  private onChordChangeCallback: ((chord: ChordDefinition) => void) | null = null;
 
   // 聲部靜音與獨奏 (Channel 8~15)
   private mutedChannels: Set<number> = new Set();
@@ -98,19 +102,39 @@ export class StyPlaybackEngine {
       this.channelPans.set(c, 64);
       this.channelReverbs.set(c, 40);
       this.channelChoruses.set(c, 0);
-      if (c >= 11) {
-        this.chordSynths.set(c, new ChordSynth());
-      }
+      // 為所有伴奏聲部建立專屬合成器 (支援 Ch 8 Rhy1 旋律性樂器如 Pizzicato Strings)
+      this.chordSynths.set(c, new ChordSynth());
     }
+  }
+
+  /**
+   * 判定特定聲部是否為真實鼓組/打擊樂 (True Drum Kit)
+   * Yamaha STY 中 Rhythm 1 (Ch 8) 經常使用非鼓組的旋律樂器 (如 Pizzicato Strings, 木琴, 琶音器等)
+   */
+  public isChannelDrum(channel: number): boolean {
+    const overrideVoice = this.customVoiceOverrides.get(channel);
+    if (overrideVoice) {
+      return overrideVoice.category === 'Drums' || overrideVoice.msb === 127;
+    }
+    const pv = this.partVoices.get(channel);
+    if (pv) {
+      return pv.category === 'Drums' || pv.msb === 127;
+    }
+    const part = this.getPartInfo(channel);
+    if (part) {
+      return part.category === 'Drums' || part.bankMsb === 127;
+    }
+    // 預設兜底：只有 Channel 9 (Rh2, 標準打擊樂通道) 預設為鼓
+    return channel === 9;
   }
 
   public getPartInfo(c: number): any {
     if (!this.parsed) return undefined;
     let part = this.parsed.parts.find(p => p.channel === c);
     if (!part) {
-      const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 0, 9: 9 };
+      const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 8, 9: 9 };
       const fb = sff1FallbackMap[c];
-      if (fb !== undefined) {
+      if (fb !== undefined && fb !== c) {
         part = this.parsed.parts.find(p => p.channel === fb);
       }
     }
@@ -119,6 +143,8 @@ export class StyPlaybackEngine {
 
   public loadParsed(parsed: YamahaFileParsed) {
     this.stop();
+    this.resetAuditionChord();
+    this.customVoiceOverrides.clear();
     this.parsed = parsed;
     this.bpm = parsed.bpm || 120;
     this.currentSection = null;
@@ -330,6 +356,27 @@ export class StyPlaybackEngine {
     }
   }
 
+  /**
+   * 即時套用單一控制器數值 (支援 WebAudio 合成器與 Web MIDI 實體琴即時聽覺反饋)
+   */
+  public applyLiveControlChange(channel: number, controller: number, value: number): void {
+    const clamped = Math.max(0, Math.min(127, Math.round(value)));
+    if (controller === 7) {
+      this.setChannelVolume(channel, clamped);
+    } else if (controller === 10) {
+      this.setChannelPan(channel, clamped);
+    } else {
+      if (this.outputMode === 'midi') {
+        midiManager.sendControlChange(channel, controller, clamped);
+      } else {
+        const synth = this.chordSynths.get(channel);
+        if (synth && controller === 11) {
+          synth.setExpression(clamped);
+        }
+      }
+    }
+  }
+
   public getPartVoices(): Map<number, PartVoiceInfo> {
     return this.partVoices;
   }
@@ -339,7 +386,13 @@ export class StyPlaybackEngine {
    */
   public selectSection(sectionName: string): boolean {
     if (!this.parsed) return false;
-    const target = this.parsed.sections.find(s => s.name.toLowerCase() === sectionName.toLowerCase());
+    const target = this.parsed.sections.find(s => {
+      const sName = s.name.toLowerCase();
+      const qName = sectionName.toLowerCase();
+      return sName === qName ||
+        (qName === 'break' && sName === 'fill in ba') ||
+        (qName === 'fill in ba' && sName === 'break');
+    });
     if (!target) return false;
 
     const wasPlaying = this.isPlaying;
@@ -550,6 +603,19 @@ export class StyPlaybackEngine {
     return this.sectionCCEvents;
   }
 
+  public getChannelCCEvents(channel: number, controller?: number): PlaybackCCEvent[] {
+    return this.sectionCCEvents.filter(
+      (e) => e.channel === channel && (controller === undefined || e.controller === controller)
+    );
+  }
+
+  public setChannelCCEvents(channel: number, controller: number, newEvents: PlaybackCCEvent[]): void {
+    const kept = this.sectionCCEvents.filter(
+      (e) => !(e.channel === channel && e.controller === controller)
+    );
+    this.sectionCCEvents = [...kept, ...newEvents].sort((a, b) => a.relTick - b.relTick);
+  }
+
   public getInitialExpression(channel: number): number {
     const firstInSec = this.sectionCCEvents.find(e => e.channel === channel && e.controller === 11);
     if (firstInSec && firstInSec.relTick === 0) {
@@ -611,6 +677,17 @@ export class StyPlaybackEngine {
       }
     }
 
+    // 覆蓋當前段落 (this.currentSection) 起始小節專屬之控制器快照
+    if (this.currentSection?.initialControllers) {
+      for (const [srcStr, ctrl] of Object.entries(this.currentSection.initialControllers)) {
+        const ch = parseInt(srcStr, 10);
+        if (ctrl.volume !== undefined) sourceVolumes[ch] = ctrl.volume;
+        if (ctrl.pan !== undefined) sourcePans[ch] = ctrl.pan;
+        if (ctrl.reverb !== undefined) sourceReverbs[ch] = ctrl.reverb;
+        if (ctrl.chorus !== undefined) sourceChoruses[ch] = ctrl.chorus;
+      }
+    }
+
     for (let destCh = 8; destCh <= 15; destCh++) {
       let matchedSrc: number | undefined;
 
@@ -629,11 +706,11 @@ export class StyPlaybackEngine {
         matchedSrc = destCh;
       }
 
-      // 3. 若仍無，嘗試 SFF1 傳統通道反推
+      // 3. 若仍無，嘗試 SFF1 傳統通道反推 (移除 8:0 誤對應)
       if (matchedSrc === undefined) {
-        const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 0, 9: 9 };
+        const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 8, 9: 9 };
         const fb = sff1FallbackMap[destCh];
-        if (fb !== undefined) matchedSrc = fb;
+        if (fb !== undefined && (sourceVolumes[fb] !== undefined || sourcePans[fb] !== undefined)) matchedSrc = fb;
       }
 
       // 解析音量 (Volume / CC 7)
@@ -676,8 +753,42 @@ export class StyPlaybackEngine {
       private setupPartVoices(rawVoices: Record<number, { msb: number; lsb: number; pc: number }>, casmSecMap?: Record<number, number>) {
     this.partVoices.clear();
 
+    // 若當前段落有專屬 ProgramChange / Bank 快照，同步進 rawVoices
+    if (this.currentSection?.initialControllers) {
+      for (const [srcStr, ctrl] of Object.entries(this.currentSection.initialControllers)) {
+        const ch = parseInt(srcStr, 10);
+        if (ctrl.programChange !== undefined) {
+          if (!rawVoices[ch]) rawVoices[ch] = { msb: 0, lsb: 0, pc: 0 };
+          rawVoices[ch].pc = ctrl.programChange;
+          if (ctrl.bankMsb !== undefined) rawVoices[ch].msb = ctrl.bankMsb;
+          if (ctrl.bankLsb !== undefined) rawVoices[ch].lsb = ctrl.bankLsb;
+        }
+      }
+    }
+
     // 映射各聲部音色 (以 Yamaha CASM 路由為最高優先準則)
     for (let destCh = 8; destCh <= 15; destCh++) {
+      // 0. 若使用者已手動設定/覆寫此聲部音色，以使用者的自訂音色為最高優先級！
+      if (this.customVoiceOverrides.has(destCh)) {
+        const customVoice = this.customVoiceOverrides.get(destCh)!;
+        const name = customVoice.chineseName ? `${customVoice.name} (${customVoice.chineseName})` : customVoice.name;
+        const info: PartVoiceInfo = {
+          channel: destCh,
+          msb: customVoice.msb,
+          lsb: customVoice.lsb,
+          pc: customVoice.pc,
+          voiceName: name,
+          category: customVoice.category,
+        };
+        this.partVoices.set(destCh, info);
+
+        // 同步更新軟體合成器模型
+        const synth = this.chordSynths.get(destCh);
+        if (synth) {
+          synth.setVoice({ category: customVoice.category, id: customVoice.id, name: customVoice.name });
+        }
+        continue;
+      }
       let matchedSrc: number | undefined;
 
       // 1. 優先查核當前段落 CASM 映射表 (將 Source Channel 映射至 Destination Channel)
@@ -695,16 +806,24 @@ export class StyPlaybackEngine {
         matchedSrc = destCh;
       }
 
-      // 3. 若仍無，嘗試 SFF1 傳統通道反推 (10->1, 11->2, 12->3, 13->4, 14->5, 15->6, 8->0, 9->9)
+      // 3. 若仍無，嘗試 SFF1 傳統通道反推 (10->1, 11->2, 12->3, 13->4, 14->5, 15->6, 8->8, 9->9)
       if (matchedSrc === undefined) {
-        const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 0, 9: 9 };
+        const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 8, 9: 9 };
         const fb = sff1FallbackMap[destCh];
         if (fb !== undefined && rawVoices[fb]) matchedSrc = fb;
       }
 
-      if (matchedSrc === undefined) matchedSrc = destCh;
-
-      const v = rawVoices[matchedSrc] || rawVoices[destCh] || { msb: 0, lsb: 0, pc: 0 };
+      // 4. 若仍無匹配來源：如果是 Dest 8 (Rh1)，保持鼓組類別 (Drums)，預設套用主鼓組 rawVoices[9] 或標準鼓組
+      let v: { msb: number; lsb: number; pc: number };
+      if (matchedSrc !== undefined && rawVoices[matchedSrc]) {
+        v = rawVoices[matchedSrc];
+      } else if (rawVoices[destCh]) {
+        v = rawVoices[destCh];
+      } else if (destCh === 8) {
+        v = rawVoices[9] || { msb: 127, lsb: 0, pc: 0 };
+      } else {
+        v = { msb: 0, lsb: 0, pc: 0 };
+      }
       const found = findYamahaVoice(v.msb, v.lsb, v.pc);
       const name = found ? (found.chineseName ? `${found.name} (${found.chineseName})` : found.name) : `Voice (${v.msb}-${v.lsb}-${v.pc + 1})`;
       const category = found?.category || this.inferCategoryByChannel(destCh);
@@ -806,6 +925,7 @@ export class StyPlaybackEngine {
    * 更換特定聲部的 Yamaha 原廠音色設定
    */
   public setChannelVoice(channel: number, voice: YamahaVoice) {
+    this.customVoiceOverrides.set(channel, voice);
     const name = voice.chineseName ? `${voice.name} (${voice.chineseName})` : voice.name;
     const info: PartVoiceInfo = {
       channel,
@@ -834,6 +954,11 @@ export class StyPlaybackEngine {
    */
   public previewVoicePhrase(channel: number, voice: YamahaVoice) {
     const isDrum = voice.category === 'Drums' || voice.category === 'Percussion' || channel === 8 || channel === 9;
+    // 在 Web Audio 模式下，即時切換該聲部合成器聲音模型為當前試聽音色！
+    const synth = this.chordSynths.get(channel);
+    if (synth) {
+      synth.setVoice({ category: voice.category, id: voice.id, name: voice.name });
+    }
 
     if (this.outputMode === 'midi' && midiManager.getSelectedOutput()) {
       // 送出音色切換
@@ -942,10 +1067,14 @@ export class StyPlaybackEngine {
             const midiTimestamp = performance.now() + deltaMs;
             midiManager.sendControlChange(ccEvent.channel, ccEvent.controller, ccEvent.value, midiTimestamp);
           } else {
-            if (ccEvent.controller === 11) {
-              const synth = this.chordSynths.get(ccEvent.channel);
-              if (synth) {
+            const synth = this.chordSynths.get(ccEvent.channel);
+            if (synth) {
+              if (ccEvent.controller === 11) {
                 synth.setExpression(ccEvent.value, eventAudioTime);
+              } else if (ccEvent.controller === 7) {
+                synth.setVolume(ccEvent.value);
+              } else if (ccEvent.controller === 10) {
+                synth.setPan(ccEvent.value);
               }
             }
           }
@@ -969,15 +1098,25 @@ export class StyPlaybackEngine {
 
           this.activeChannelsInWindow.add(event.channel);
 
+          const isDrum = this.isChannelDrum(event.channel);
+          const noteToPlay = isDrum
+            ? event.noteNumber
+            : ChordTransposer.transposeSingleNote(
+                event.noteNumber,
+                this.auditionChord,
+                event.channel,
+                isDrum
+              );
+
           if (this.outputMode === 'webaudio') {
             const effVol = this.getEffectiveChannelVolume(event.channel);
             const scaledVel = Math.round(event.velocity * (effVol / 127));
             if (scaledVel <= 0) continue;
-            this.playWebAudioNote(event.channel, event.noteNumber, scaledVel, durMs, eventAudioTime);
+            this.playWebAudioNote(event.channel, noteToPlay, scaledVel, durMs, eventAudioTime);
           } else {
             // 在 MIDI 模式下，實體琴已由 CC 7 (Effective Channel Volume) 調控音軌總量，
             // NoteOn 保持 STY 原始真實敲擊力度，不進行二次雙重衰減！
-            this.playMidiNote(event.channel, event.noteNumber, event.velocity, durMs, eventAudioTime, nowAudioTime);
+            this.playMidiNote(event.channel, noteToPlay, event.velocity, durMs, eventAudioTime, nowAudioTime);
           }
         }
       }
@@ -1040,19 +1179,66 @@ export class StyPlaybackEngine {
     }
   }
 
+  public setAuditionChord(chord: ChordDefinition) {
+    this.auditionChord = chord;
+    if (this.onChordChangeCallback) {
+      this.onChordChangeCallback(chord);
+    }
+  }
+
+  public getAuditionChord(): ChordDefinition {
+    return this.auditionChord;
+  }
+
+  public resetAuditionChord() {
+    this.setAuditionChord(ChordTransposer.buildChord('C', 'maj'));
+  }
+
+  public onChordChange(cb: (chord: ChordDefinition) => void) {
+    this.onChordChangeCallback = cb;
+  }
+
+  /**
+   * 彈奏和弦試聽音形 (Audition Chord Preview)
+   * 點選和弦按鍵時，短暫彈奏該和弦的和弦音與 Bass，提供清晰立即的聽覺反饋
+   */
+  public previewChord(chord: ChordDefinition) {
+    if (this.isPlaying) return;
+    const bassNote = 36 + chord.semitonesFromC;
+    const chordNotes = chord.intervals.map(iv => 60 + chord.semitonesFromC + iv);
+
+    if (this.outputMode === 'midi') {
+      if (midiManager.getSelectedOutput()) {
+        midiManager.sendNoteOn(10, bassNote, 85);
+        chordNotes.forEach(n => midiManager.sendNoteOn(11, n, 80));
+        setTimeout(() => {
+          midiManager.sendNoteOff(10, bassNote);
+          chordNotes.forEach(n => midiManager.sendNoteOff(11, n));
+        }, 350);
+      }
+    } else {
+      bassSynth.playNote(bassNote, 85, 350);
+      const synth = this.chordSynths.get(11) || this.chordSynths.get(12);
+      if (synth) {
+        chordNotes.forEach(n => synth.playNote(n, 75, 350));
+      }
+    }
+  }
+
   public getIsPlaying(): boolean {
     return this.isPlaying;
   }
 
   private playWebAudioNote(channel: number, note: number, velocity: number, durMs: number, when: number) {
-    if (channel === 8 || channel === 9) {
-      // 節奏部 (Rhythm 1: Ch 8, Rhythm 2: Ch 9)
+    const isDrum = this.isChannelDrum(channel);
+    if (isDrum) {
+      // 真實打擊鼓組
       drumSynth.playNote(note, velocity, when);
     } else if (channel === 10) {
       // 貝斯部 (Bass: Ch 10)
       bassSynth.playNote(note, velocity, durMs, when);
     } else {
-      // 和弦與樂句部 (Ch 11~15 各自專屬合成器實例)
+      // 和弦、樂句與旋律性節奏部 (如 Ch 8 Pizzicato Strings 或 Ch 11~15)
       const synth = this.chordSynths.get(channel);
       if (synth) {
         synth.playNote(note, velocity, durMs, when);

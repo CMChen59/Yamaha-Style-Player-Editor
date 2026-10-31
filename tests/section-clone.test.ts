@@ -17,9 +17,10 @@ describe('Tier 2-1 Step 1: 伴奏風格跨段落克隆引擎 (Section Clone & Tr
     expect(srcRange).toBeDefined();
 
     // 統計 Main A 各通道原本的音符數
-    const mainANotesTotal = [8, 9, 10, 11, 12, 13, 14, 15].reduce((sum, ch) => {
-      return sum + StyleRemixer.countNotesInChannel(parsed, srcRange.startTick, srcRange.endTick, ch);
-    }, 0);
+    let mainANotesTotal = 0;
+    for (let ch = 0; ch < 16; ch++) {
+      mainANotesTotal += StyleRemixer.countNotesInChannel(parsed, srcRange.startTick, srcRange.endTick, ch);
+    }
     expect(mainANotesTotal).toBeGreaterThan(0);
 
     // 執行克隆：Main A ➔ Main B (全聲部覆蓋)
@@ -36,9 +37,10 @@ describe('Tier 2-1 Step 1: 伴奏風格跨段落克隆引擎 (Section Clone & Tr
 
     // 驗證 Main B 的音符總數現在與 Main A 完全一致
     const targetRange = StyleRemixer.getSectionTickRange(parsed, 'Main B')!;
-    const mainBNotesTotal = [8, 9, 10, 11, 12, 13, 14, 15].reduce((sum, ch) => {
-      return sum + StyleRemixer.countNotesInChannel(parsed, targetRange.startTick, targetRange.endTick, ch);
-    }, 0);
+    let mainBNotesTotal = 0;
+    for (let ch = 0; ch < 16; ch++) {
+      mainBNotesTotal += StyleRemixer.countNotesInChannel(parsed, targetRange.startTick, targetRange.endTick, ch);
+    }
     expect(mainBNotesTotal).toBe(mainANotesTotal);
 
     // 驗證二進位匯出無損且 CASM 轉調結構完整保留

@@ -415,11 +415,189 @@
     .badge-intro { color: #f59e0b; }
     .badge-main { color: #10b981; }
     .badge-ending { color: #f43f5e; }
+    .badge-break { color: #a855f7; }
     .badge-other { color: #38bdf8; }
 
     .sec-bars {
       font-size: 0.72rem;
       color: var(--text-muted);
+    }
+
+
+    /* 🎹 虛擬左手和弦轉調測試條 (Virtual Chord Audition Bar) */
+    .chord-audition-bar {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 22px;
+      margin-top: 14px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .chord-bar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 10px;
+    }
+
+    .chord-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .chord-bar-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #38bdf8;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chord-bar-desc {
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+
+    .current-chord-badge {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      padding: 5px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #current-chord-name {
+      color: #38bdf8;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .chord-detail-tag {
+      background: rgba(56, 189, 248, 0.15);
+      color: #7dd3fc;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+    }
+
+    .chord-pills-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .chord-pill {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: #e2e8f0;
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .chord-pill:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.5);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .chord-pill.is-active-chord {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(99, 102, 241, 0.35));
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+      font-weight: 700;
+      transform: translateY(-1px);
+    }
+
+    .chord-pill.is-active-chord::before {
+      content: '●';
+      color: #38bdf8;
+      font-size: 0.65rem;
+    }
+
+    .chord-custom-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      font-size: 0.84rem;
+      color: #cbd5e1;
+    }
+
+    .chord-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .chord-select:focus {
+      border-color: #38bdf8;
+    }
+
+    .btn-chord-apply {
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid #38bdf8;
+      color: #38bdf8;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-chord-apply:hover {
+      background: #38bdf8;
+      color: #0f172a;
+    }
+
+    .btn-chord-reset {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      color: #94a3b8;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-left: auto;
+    }
+
+    .btn-chord-reset:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #fca5a5;
     }
 
     /* 播放主控制列 */
@@ -694,6 +872,115 @@
 
     .mixer-card.is-focused .focus-badge {
       display: inline-block;
+    }
+
+    /* ➕ 聲部啟用與空白軌道樣式 (Plan A: Add Track & Auto CASM) */
+    .mixer-card.is-inactive {
+      opacity: 0.82;
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    .mixer-card.is-inactive:hover {
+      opacity: 1;
+      border-color: #10b981;
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25);
+    }
+
+    .inactive-pill {
+      font-size: 0.58rem;
+      font-weight: 700;
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      padding: 1px 5px;
+      border-radius: 3px;
+      letter-spacing: 0.3px;
+    }
+
+    .btn-activate-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px dashed #10b981;
+      color: #34d399;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      transition: all 0.2s ease;
+    }
+
+    .clickable-voice.voice-inactive:hover .btn-activate-badge {
+      background: #10b981;
+      color: #fff;
+      border-style: solid;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+    }
+
+    .banner-status-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .banner-status-badge.inactive {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.45);
+    }
+
+    .banner-status-badge.active {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .banner-activate-btn {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(6, 182, 212, 0.25) 100%);
+      border: 1px solid #10b981;
+      color: #6ee7b7;
+      font-weight: 700;
+      font-size: 0.78rem;
+      padding: 5px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .banner-activate-btn:hover {
+      background: #10b981;
+      color: #fff;
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.6);
+      transform: translateY(-1px);
+    }
+
+    .editor-status-pill.pill-inactive {
+      background: rgba(16, 185, 129, 0.18);
+      border: 1px dashed #10b981;
+      color: #34d399;
+      font-weight: 700;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-right: 6px;
+      transition: all 0.2s;
+    }
+
+    .editor-status-pill.pill-inactive:hover {
+      background: #10b981;
+      border-style: solid;
+      color: #fff;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
     }
 
     /* 🎯 聚焦聲部資訊列 (Phase 1 聚焦聯動，為 Phase 2 鋼琴捲軸預備) */
@@ -1435,6 +1722,12 @@
       border-color: rgba(255, 255, 255, 0.25);
     }
 
+    .editor-action-btn.active {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+
     .editor-action-btn:disabled {
       opacity: 0.35;
       cursor: not-allowed;
@@ -1606,6 +1899,392 @@
       border-right: 6px solid transparent;
       border-top: 8px solid #38bdf8;
       margin-left: -5px;
+    }
+
+    /* 🔴 PSR-SX920 步進錄音專屬工作條 (Step Recording Action Bar) */
+    .editor-step-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: linear-gradient(90deg, rgba(244, 63, 94, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+      border-radius: 8px;
+      padding: 6px 14px;
+      box-shadow: 0 4px 16px rgba(244, 63, 94, 0.15);
+      flex-wrap: wrap;
+      transition: all 0.25s ease;
+    }
+
+    .step-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .step-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .step-rec-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.4);
+      color: #f43f5e;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .step-rec-toggle-btn:hover {
+      background: rgba(244, 63, 94, 0.25);
+      border-color: #f43f5e;
+      color: #fff;
+    }
+
+    .step-rec-toggle-btn.recording {
+      background: #f43f5e;
+      color: #fff;
+      border-color: #f43f5e;
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.5);
+      animation: pulse-rec 1.8s infinite;
+    }
+
+    .rec-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f43f5e;
+      display: inline-block;
+      transition: all 0.2s;
+    }
+
+    .step-rec-toggle-btn.recording .rec-dot {
+      background: #fff;
+      box-shadow: 0 0 6px #fff;
+    }
+
+    @keyframes pulse-rec {
+      0%, 100% { box-shadow: 0 0 10px rgba(244, 63, 94, 0.5); }
+      50% { box-shadow: 0 0 20px rgba(244, 63, 94, 0.95); }
+    }
+
+    .step-action-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f1f5f9;
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .step-action-btn:hover {
+      background: rgba(244, 63, 94, 0.25);
+      border-color: #f43f5e;
+      color: #fff;
+    }
+
+    .step-btn-rest {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.45);
+      color: #fbbf24;
+      font-weight: 700;
+    }
+
+    .step-btn-rest:hover {
+      background: rgba(245, 158, 11, 0.32);
+      border-color: #f59e0b;
+      color: #fff;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
+    }
+
+    .step-btn-tie {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: rgba(56, 189, 248, 0.6);
+      color: #38bdf8;
+      font-weight: 800;
+      box-shadow: 0 0 6px rgba(56, 189, 248, 0.2);
+    }
+
+    .step-btn-tie:hover {
+      background: rgba(56, 189, 248, 0.35);
+      border-color: #38bdf8;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+    }
+
+    .step-btn-back {
+      background: rgba(244, 63, 94, 0.12);
+      border-color: rgba(244, 63, 94, 0.35);
+      color: #fda4af;
+    }
+
+    .step-btn-back:hover {
+      background: rgba(244, 63, 94, 0.28);
+      border-color: #f43f5e;
+      color: #fff;
+    }
+
+    .step-btn-rewind {
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.3);
+      color: #cbd5e1;
+    }
+
+    .step-btn-rewind:hover {
+      background: rgba(148, 163, 184, 0.25);
+      border-color: #94a3b8;
+      color: #fff;
+    }
+
+    .step-action-btn:active {
+      transform: translateY(1px);
+    }
+
+    .step-pos-badge {
+      font-size: 0.75rem;
+      font-family: monospace;
+      font-weight: 700;
+      color: #f43f5e;
+      background: rgba(244, 63, 94, 0.12);
+      padding: 3px 10px;
+      border-radius: 5px;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+
+    .step-chord-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      padding: 3px 10px;
+      border-radius: 5px;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* 步進錄音游標 (Step Cursor) */
+    .editor-step-cursor {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 2px;
+      background: #f43f5e;
+      box-shadow: 0 0 10px rgba(244, 63, 94, 0.9), 0 0 4px #fff;
+      z-index: 11;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    .step-cursor-cap {
+      position: absolute;
+      top: -24px;
+      left: -28px;
+      background: #f43f5e;
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(244, 63, 94, 0.6);
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      user-select: none;
+    }
+
+    .step-cursor-cap::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 5px solid #f43f5e;
+    }
+
+    /* ==========================================================================
+       計畫 B: CC 控制器自動化控制線 (Automation Lanes) 專業 DAW 樣式
+       ========================================================================== */
+    .editor-automation-lane-wrap {
+      display: flex;
+      margin-top: 6px;
+      background: #060910;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    /* 左側控制欄 (與上方琴鍵列 135px 寬度完全一致) */
+    .editor-lane-ctrl-col {
+      width: 135px;
+      flex-shrink: 0;
+      background: #090d16;
+      border-right: 1px solid var(--border-color);
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      box-sizing: border-box;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.4);
+      z-index: 5;
+    }
+
+    .lane-ctrl-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .lane-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #38bdf8;
+      letter-spacing: 0.3px;
+    }
+
+    .lane-val-badge {
+      font-size: 0.65rem;
+      font-family: monospace;
+      font-weight: 700;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    .lane-cc-select {
+      background: #0d1322;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+      font-size: 0.68rem;
+      padding: 3px 4px;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .lane-cc-select:focus {
+      border-color: #38bdf8;
+    }
+
+    .lane-quick-tools {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+    }
+
+    .lane-tool-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 3px 2px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+
+    .lane-tool-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: rgba(56, 189, 248, 0.5);
+      color: #fff;
+    }
+
+    .lane-tool-btn:active {
+      transform: translateY(1px);
+    }
+
+    .lane-tip-text {
+      font-size: 0.58rem;
+      color: var(--text-muted);
+      line-height: 1.25;
+      text-align: center;
+      margin-top: auto;
+    }
+
+    /* 右側可水平捲動的軌道區域 */
+    .editor-lane-scroll {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+      position: relative;
+      background: #060910;
+    }
+
+    .editor-lane-scroll::-webkit-scrollbar {
+      height: 4px;
+    }
+    .editor-lane-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+
+    .editor-lane-canvas {
+      position: relative;
+    }
+
+    .lane-playhead {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 2px;
+      background: #38bdf8;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.8), 0 0 2px #fff;
+      z-index: 10;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    .lane-svg {
+      display: block;
+      cursor: crosshair;
+      user-select: none;
+    }
+
+    .lane-node {
+      transition: r 0.1s ease, fill 0.1s ease;
+      cursor: grab;
+    }
+
+    .lane-node:hover {
+      r: 7;
+      fill: #38bdf8;
+      filter: drop-shadow(0 0 6px #38bdf8);
+    }
+
+    .lane-node.is-dragging {
+      cursor: grabbing;
+      r: 8;
+      fill: #f59e0b;
     }
 
     /* ==========================================================================
@@ -2813,7 +3492,11 @@
         <div class="midi-drawer-controls">
           <div style="display: flex; align-items: center; gap: 8px;">
             <label for="select-midi-port" style="font-size: 0.82rem; color: #94a3b8; font-weight: bold;">MIDI 輸出埠：</label>
-            <select id="select-midi-port" class="audio-output-select" style="min-width: 220px;"></select>
+            <select id="select-midi-port" class="audio-output-select" style="min-width: 200px;"></select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label for="select-midi-in-port" style="font-size: 0.82rem; color: #f43f5e; font-weight: bold;">MIDI 輸入埠 (琴鍵步進)：</label>
+            <select id="select-midi-in-port" class="audio-output-select" style="min-width: 200px;"></select>
           </div>
           <div style="display: flex; gap: 8px;">
             <button id="btn-refresh-midi" class="btn-drawer">🔄 重新整理設備</button>
@@ -2821,10 +3504,11 @@
           </div>
         </div>
         <div class="midi-hint-box">
-          <div style="font-weight: bold; color: #38bdf8; margin-bottom: 4px;">💡 PSR-SX920 琴端發聲設定重點：</div>
+          <div style="font-weight: bold; color: #38bdf8; margin-bottom: 4px;">💡 PSR-SX920 琴端發聲與連線步進錄音設定重點：</div>
           <div>1. 請在琴右側螢幕旁按下 <strong>[MENU]</strong> ➔ 點擊螢幕上的 <strong>[MIDI]</strong> 選單。</div>
           <div>2. 在左側預設模板中選擇 <strong style="color: #fff;">「Song」</strong>（最推薦）或 <strong style="color: #fff;">「All Parts」</strong>，琴端即可立即解鎖 8 大伴奏聲部，直接聆聽旗艦音源！</div>
           <div>3. 請確認琴上的總音量旋鈕與 <strong>[STYLE-ACMP]</strong> 伴奏音量滑桿已開啟。</div>
+          <div>4. <strong>實體琴鍵連線步進錄音</strong>：在下方單軌專注編輯器中點擊「🔴 步進錄音」，直接在 PSR-SX920 琴鍵上彈奏單音或多音和弦，放開琴鍵即自動精準記錄並依時值推進！支援空白鍵休止、T 鍵延音與退步撤銷。</div>
         </div>
       </div>
     </section>
@@ -2859,6 +3543,55 @@
         <button id="btn-bpm-plus-1" class="bpm-btn">+1</button>
         <button id="btn-bpm-plus-10" class="bpm-btn">+10</button>
         <button id="btn-bpm-reset" class="bpm-btn">重設</button>
+      </div>
+    </section>
+
+    <!-- 虛擬左手和弦轉調測試條 (Virtual Chord Audition Bar) -->
+    <section class="chord-audition-bar" id="chord-audition-bar">
+      <div class="chord-bar-header">
+        <div class="chord-title-wrap">
+          <span class="chord-bar-title">🎹 虛擬左手和弦轉調測試 (Virtual Chord Audition)</span>
+          <span class="chord-bar-desc">點擊和弦即時模擬 Yamaha CASM 轉調發聲 · 僅供即時監聽試聽，不改動原始 C 調檔案</span>
+        </div>
+        <div class="current-chord-badge" id="current-chord-badge">
+          當前和弦：<strong id="current-chord-name">C (原調)</strong>
+          <span class="chord-detail-tag" id="current-chord-detail">大三和弦 · 基準原音 (未位移)</span>
+        </div>
+      </div>
+
+      <div class="chord-bar-body">
+        <!-- 常用流行和弦快捷鍵 (Popular Chords) -->
+        <div class="chord-pills-row" id="chord-pills-row"></div>
+
+        <!-- 自由組合任意和弦 -->
+        <div class="chord-custom-row">
+          <span class="custom-chord-label">🔍 自由組合：</span>
+          <select id="select-chord-root" class="chord-select">
+            <option value="C">C</option>
+            <option value="C#">C# / Db</option>
+            <option value="D">D</option>
+            <option value="Eb">Eb / D#</option>
+            <option value="E">E</option>
+            <option value="F">F</option>
+            <option value="F#">F# / Gb</option>
+            <option value="G">G</option>
+            <option value="Ab">Ab / G#</option>
+            <option value="A">A</option>
+            <option value="Bb">Bb / A#</option>
+            <option value="B">B</option>
+          </select>
+          <select id="select-chord-type" class="chord-select">
+            <option value="maj">Major (大三)</option>
+            <option value="m">Minor (小三)</option>
+            <option value="7">7 (屬七)</option>
+            <option value="maj7">Maj7 (大七)</option>
+            <option value="m7">m7 (小七)</option>
+            <option value="sus4">Sus4 (掛留四)</option>
+            <option value="dim">Dim (減和弦)</option>
+          </select>
+          <button id="btn-apply-custom-chord" class="btn-chord-apply">套用和弦</button>
+          <button id="btn-reset-chord" class="btn-chord-reset">🔄 重設原調 (C)</button>
+        </div>
       </div>
     </section>
 

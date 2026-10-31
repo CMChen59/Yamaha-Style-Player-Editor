@@ -264,7 +264,15 @@ export class VoicePickerModal {
    * 執行搜尋運算
    */
   private performSearch() {
-    const query = this.searchInput.value;
+    const query = this.searchInput.value.trim();
+    // 檢測是否為三聯號查詢 (如 "0-119-89", "0 119 89")
+    const isTriplet = /^(\d+)[- ](\d+)(?:[- ](\d*))?$/.test(query);
+    if (isTriplet && this.activeCategory !== 'ALL') {
+      this.activeCategory = 'ALL';
+      this.categoryListEl.querySelectorAll('.vp-cat-btn').forEach(btn => {
+        btn.classList.toggle('active', (btn as HTMLElement).dataset.category === 'ALL');
+      });
+    }
     this.currentResults = searchYamahaVoices(query, this.activeCategory, this.activeSuitability);
     this.displayedCount = this.pageSize;
     this.renderVoiceGrid(true);
@@ -283,13 +291,21 @@ export class VoicePickerModal {
     this.resultsCountEl.textContent = `共找到 ${total} 種音色${total > this.displayedCount ? ` (目前顯示前 ${this.displayedCount} 筆)` : ''}`;
 
     if (total === 0) {
+      const isCatFiltered = this.activeCategory !== 'ALL';
       this.voiceGridEl.innerHTML = `
         <div class="vp-empty-state">
           <div class="vp-empty-icon">🔍</div>
           <div class="vp-empty-title">查無相符音色</div>
-          <div class="vp-empty-desc">請嘗試更換分類、縮減關鍵字或切換為「全部類型」</div>
+          <div class="vp-empty-desc">${isCatFiltered ? `在「${this.activeCategory}」分類中找不到相符音色` : '請嘗試縮減關鍵字或切換為「全部類型」'}</div>
+          ${isCatFiltered ? '<button id="vp-btn-search-all-cat" class="vp-action-btn" style="margin-top:12px;background:#3b82f6;color:#fff;">🌐 在全部音色分類中搜尋</button>' : ''}
         </div>
       `;
+      const btnSearchAll = this.voiceGridEl.querySelector('#vp-btn-search-all-cat');
+      if (btnSearchAll) {
+        btnSearchAll.addEventListener('click', () => {
+          this.setCategory('ALL');
+        });
+      }
       this.btnLoadMore.style.display = 'none';
       return;
     }
@@ -425,10 +441,9 @@ export class VoicePickerModal {
       this.activeCategory = 'Drums';
     } else if (channel === 10) {
       this.activeCategory = 'Bass';
-    } else if (currentVoice?.category) {
-      const foundCat = VOICE_CATEGORIES.find(c => c.key.toLowerCase() === currentVoice.category.toLowerCase());
-      this.activeCategory = foundCat ? foundCat.key : 'ALL';
     } else {
+      // 伴奏與旋律聲部 (Ch 11~16 / Chord 1, Chord 2, Pad, Phrase 1, Phrase 2):
+      // 預設為 'ALL'，允許使用者自由挑選所有分類音色，避免因原音色為打擊樂 (如顫音琴) 而被鎖定在特定分類中！
       this.activeCategory = 'ALL';
     }
 

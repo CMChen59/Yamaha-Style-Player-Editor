@@ -17,7 +17,7 @@ describe('ChordTransposer 虛擬和弦即時轉調引擎測試', () => {
     expect(resultCh9[2].note).toBe(42);
 
     const chordG = ChordTransposer.buildChord('G', 'maj');
-    const resultCh8 = ChordTransposer.transposeNotes(drumNotes, chordG, 8, false);
+    const resultCh8 = ChordTransposer.transposeNotes(drumNotes, chordG, 8, true);
     expect(resultCh8[0].note).toBe(36);
     expect(resultCh8[1].note).toBe(38);
   });

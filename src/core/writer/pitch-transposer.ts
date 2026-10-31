@@ -16,6 +16,7 @@ export interface TransposeOptions {
   maxNote?: number;             // 預設 127 (MIDI 最高音 G9) 或 108 (鋼琴 C8)
   allowDrumTranspose?: boolean; // 鼓軌是否允許移調 (預設 false)
   channel?: number;             // 聲部 Channel (8, 9 為打擊樂 Rhythm 1, 2)
+  isDrum?: boolean;             // 是否為打擊樂聲部 (動態音色判定)
 }
 
 export interface TransposableNote {
@@ -70,7 +71,7 @@ export class PitchTransposer {
     }
 
     const channel = options?.channel;
-    const isDrum = this.isDrumChannel(channel);
+    const isDrum = options?.isDrum !== undefined ? options.isDrum : this.isDrumChannel(channel);
 
     // 鼓軌保護：若未明確允許，禁止移調並返回警告
     if (isDrum && options?.allowDrumTranspose !== true) {

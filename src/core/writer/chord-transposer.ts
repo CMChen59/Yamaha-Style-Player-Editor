@@ -114,6 +114,111 @@ export class ChordTransposer {
   }
 
   /**
+   * 依據 Yamaha CASM 規則將單顆 C 基準音符轉換至目標和弦
+   * 
+   * @param pitch 來源音高 (0~127，假設以 C 基準錄製)
+   * @param targetChord 目標和弦定義
+   * @param channel MIDI 通道 (8~15)
+   * @param isDrum 是否為打擊樂/鼓組聲部
+   * @param lowLimit 該聲部音高下限 (預設 0)
+   * @param highLimit 該聲部音高上限 (預設 127)
+   * @param ntr 轉調規則 (Root Transpose / Root Fixed)
+   * @param ntt 音符變換表 (Bypass / Chord / Bass / Melody)
+   */
+  public static transposeSingleNote(
+    pitch: number,
+    targetChord: ChordDefinition,
+    channel: number,
+    isDrum: boolean = false,
+    lowLimit: number = 0,
+    highLimit: number = 127,
+    ntr?: NtrRule,
+    ntt?: NttRule
+  ): number {
+    // 1. 打擊樂 / 鼓組 (isDrum=true 或標準鼓軌 Ch 9) 或設定為 Root Fixed + Bypass (原音直通) 之聲部: 保持原音不變
+    // 注意：Yamaha STY 的 Rhythm 1 (Ch 8) 經常配置旋律樂器 (如 Pizzicato Strings / 馬林巴)，必須支援動態判定是否為鼓組！
+    const effectiveDrum = isDrum || (channel === 9 && isDrum !== false);
+    if (effectiveDrum || (ntr === 'Root Fixed' && ntt === 'Bypass')) {
+      return pitch;
+    }
+
+    // 2. 若為 C 大三和弦且半音位移為 0，且非特殊變形，直接回傳
+    if (targetChord.semitonesFromC === 0 && targetChord.type === 'maj' && ntr !== 'Root Fixed') {
+      return pitch;
+    }
+
+    const rootShift = ntr === 'Root Fixed' ? 0 : targetChord.semitonesFromC;
+    const isBass = channel === 10; // Ch 10 為 Bass 聲部
+    const isChordPart = channel === 11 || channel === 12; // Ch 11/12 為 Chord 1/2
+
+    const pitchClass = ((pitch % 12) + 12) % 12; // 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
+
+    // 3. 和弦變形規則 (NTT: Note Transposition Table 模擬)
+    // 在 C 基準中，主要音為：C (0), D (2), E (4), F (5), G (7), A (9), B (11)
+    let scaleShift = 0;
+
+    if (ntt !== 'Bypass') {
+      if (targetChord.type === 'm' || targetChord.type === 'm7' || targetChord.type === 'dim') {
+        // 小調和弦：將大三度音 (E, pitchClass=4) 降半音轉為小三度 (Eb, pitchClass=3)
+        if (pitchClass === 4) {
+          scaleShift = -1;
+        }
+        // 減和弦：五度音 (G, pitchClass=7) 降半音 (Gb, pitchClass=6)
+        if (targetChord.type === 'dim' && pitchClass === 7) {
+          scaleShift = -1;
+        }
+      } else if (targetChord.type === 'sus4') {
+        // 掛留四和弦：將大三度音 (E, pitchClass=4) 升為純四度 (F, pitchClass=5)
+        if (pitchClass === 4) {
+          scaleShift = +1;
+        }
+      } else if (targetChord.type === '7') {
+        // 屬七和弦：若原音包含大七度 (B, pitchClass=11)，降為小七度 (Bb, pitchClass=10)
+        if (pitchClass === 11) {
+          scaleShift = -1;
+        }
+      }
+    }
+
+    // 4. 疊加根音位移與音階調整
+    let newPitch = pitch + rootShift + scaleShift;
+
+    // 5. 八度保護與音域防護 (Octave Wrap & Note Limits)
+    if (isBass) {
+      // Bass 最佳音域：28 (E1) ~ 55 (G3)
+      const effectiveLow = Math.max(28, lowLimit);
+      const effectiveHigh = Math.min(55, highLimit);
+
+      while (newPitch < effectiveLow && newPitch + 12 <= effectiveHigh) {
+        newPitch += 12;
+      }
+      while (newPitch > effectiveHigh && newPitch - 12 >= effectiveLow) {
+        newPitch -= 12;
+      }
+    } else if (isChordPart) {
+      // 和弦吉他/鋼琴最佳音域：40 (E2) ~ 90 (F#6)
+      while (newPitch < 40) newPitch += 12;
+      while (newPitch > 90) newPitch -= 12;
+    }
+
+    // 嚴格保證在 MIDI 0 ~ 127 及 High/Low Limits 內
+    newPitch = Math.min(Math.min(127, highLimit), Math.max(Math.max(0, lowLimit), newPitch));
+    return newPitch;
+  }
+
+  /**
+   * 取得和弦的中文詳細說明描述
+   */
+  public static getChordDescription(chord: ChordDefinition): string {
+    const typeLabel = CHORD_TYPE_INTERVALS[chord.type]?.label || chord.type;
+    if (chord.root === 'C' && chord.type === 'maj') {
+      return `${typeLabel} · 基準原音 (未位移)`;
+    }
+    const shiftStr = chord.semitonesFromC > 0 ? `+${chord.semitonesFromC}` : `${chord.semitonesFromC}`;
+    return `${typeLabel} · 半音位移 ${shiftStr}`;
+  }
+
+  /**
    * 依據 Yamaha CASM 規則將 C 基準音符轉換至目標和弦
    * 
    * @param notes 來源音符 (假設以 C 基準錄製)
@@ -135,79 +240,18 @@ export class ChordTransposer {
     ntr?: NtrRule,
     ntt?: NttRule
   ): NoteEvent[] {
-    // 1. 打擊樂 / 鼓組 (Ch 8 / Ch 9 / isDrum) 或設定為 Root Fixed + Bypass (原音直通) 之聲部: 保持原音不變
-    if (isDrum || channel === 8 || channel === 9 || (ntr === 'Root Fixed' && ntt === 'Bypass')) {
-      return notes.map((n) => ({ ...n }));
-    }
-
-    // 2. 若為 C 大三和弦且半音位移為 0，且非特殊變形，直接回傳
-    if (targetChord.semitonesFromC === 0 && targetChord.type === 'maj' && ntr !== 'Root Fixed') {
-      return notes.map((n) => ({ ...n }));
-    }
-
-    const rootShift = ntr === 'Root Fixed' ? 0 : targetChord.semitonesFromC;
-    const isBass = channel === 10; // Ch 10 為 Bass 聲部
-    const isChordPart = channel === 11 || channel === 12; // Ch 11/12 為 Chord 1/2
-
-    return notes.map((origNote) => {
-      let pitch = origNote.note;
-      const pitchClass = pitch % 12; // 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
-
-      // 3. 和弦變形規則 (NTT: Note Transposition Table 模擬)
-      // 在 C 基準中，主要音為：C (0), D (2), E (4), F (5), G (7), A (9), B (11)
-      let scaleShift = 0;
-
-      if (ntt !== 'Bypass') {
-        if (targetChord.type === 'm' || targetChord.type === 'm7' || targetChord.type === 'dim') {
-          // 小調和弦：將大三度音 (E, pitchClass=4) 降半音轉為小三度 (Eb, pitchClass=3)
-          if (pitchClass === 4) {
-            scaleShift = -1;
-          }
-          // 減和弦：五度音 (G, pitchClass=7) 降半音 (Gb, pitchClass=6)
-          if (targetChord.type === 'dim' && pitchClass === 7) {
-            scaleShift = -1;
-          }
-        } else if (targetChord.type === 'sus4') {
-          // 掛留四和弦：將大三度音 (E, pitchClass=4) 升為純四度 (F, pitchClass=5)
-          if (pitchClass === 4) {
-            scaleShift = +1;
-          }
-        } else if (targetChord.type === '7') {
-          // 屬七和弦：若原音包含大七度 (B, pitchClass=11)，降為小七度 (Bb, pitchClass=10)
-          if (pitchClass === 11) {
-            scaleShift = -1;
-          }
-        }
-      }
-
-      // 4. 疊加根音位移與音階調整
-      let newPitch = pitch + rootShift + scaleShift;
-
-      // 5. 八度保護與音域防護 (Octave Wrap & Note Limits)
-      if (isBass) {
-        // Bass 最佳音域：28 (E1) ~ 55 (G3)
-        const effectiveLow = Math.max(28, lowLimit);
-        const effectiveHigh = Math.min(55, highLimit);
-
-        while (newPitch < effectiveLow && newPitch + 12 <= effectiveHigh) {
-          newPitch += 12;
-        }
-        while (newPitch > effectiveHigh && newPitch - 12 >= effectiveLow) {
-          newPitch -= 12;
-        }
-      } else if (isChordPart) {
-        // 和弦吉他/鋼琴最佳音域：48 (C3) ~ 84 (C6)
-        while (newPitch < 40) newPitch += 12;
-        while (newPitch > 90) newPitch -= 12;
-      }
-
-      // 嚴格保證在 MIDI 0 ~ 127 及 High/Low Limits 內
-      newPitch = Math.min(Math.min(127, highLimit), Math.max(Math.max(0, lowLimit), newPitch));
-
-      return {
-        ...origNote,
-        note: newPitch,
-      };
-    });
+    return notes.map((origNote) => ({
+      ...origNote,
+      note: this.transposeSingleNote(
+        origNote.note,
+        targetChord,
+        channel,
+        isDrum,
+        lowLimit,
+        highLimit,
+        ntr,
+        ntt
+      ),
+    }));
   }
 }

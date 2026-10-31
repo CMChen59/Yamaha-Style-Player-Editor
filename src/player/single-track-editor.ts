@@ -17,17 +17,22 @@
  *  - 點擊空白處新增音符、時值伸縮、量化吸附。
  */
 
-import type { PlaybackNoteEvent, PartVoiceInfo } from './sty-playback-engine';
+import type { PlaybackNoteEvent, PlaybackCCEvent, PartVoiceInfo } from './sty-playback-engine';
 import { styPlaybackEngine } from './sty-playback-engine';
 import { QuantizeEngine, type QuantizeGridType, type QuantizeOptions } from '../core/writer/quantize-engine';
 import { PitchTransposer } from '../core/writer/pitch-transposer';
 import { YAMAHA_DRUM_VOICES } from '../creator/drum-step-grid';
+import { StepRecorder, type StepResolution, type StepRecordEntry } from '../core/writer/step-recorder';
+import { midiManager } from '../core/audio/midi-manager';
 
 export interface HistoryRecord {
   channel: number;
   description: string;
   beforeEvents: PlaybackNoteEvent[];
   afterEvents: PlaybackNoteEvent[];
+  controller?: number;
+  beforeCCEvents?: PlaybackCCEvent[];
+  afterCCEvents?: PlaybackCCEvent[];
 }
 
 export interface EditorRowInfo {
@@ -85,7 +90,17 @@ export class SingleTrackEditor {
   private maxHistorySteps: number = 50;
   private onRequestSwitchChannel: ((channel: number) => void) | null = null;
   private onOpenVoicePicker: ((channel: number) => void) | null = null;
+  private onRequestActivate: ((channel: number) => void) | null = null;
+  public isChannelActive: boolean = true;
   private velocityDragBeforeSnapshot: PlaybackNoteEvent[] | null = null;
+
+  // 🔴 PSR-SX920 實體琴鍵步進錄音核心 (Web MIDI Step Input)
+  private stepRecorder: StepRecorder | null = null;
+  private isStepRecording: boolean = false;
+  private stepResolution: StepResolution = '1/16';
+  private stepVelocityMode: 'as-played' | 'fixed' = 'as-played';
+  private stepCursorEl: HTMLElement | null = null;
+  private heldPitches: Set<number> = new Set();
 
   // DOM 參照
   private playheadEl: HTMLElement | null = null;
@@ -93,6 +108,17 @@ export class SingleTrackEditor {
   private velInput: HTMLInputElement | null = null;
   private velStatus: HTMLElement | null = null;
   private gridScrollEl: HTMLElement | null = null;
+
+  // 🎛️ 計畫 B: CC 控制器自動化控制線 (Automation Lanes)
+  private activeController: number = 11; // 預設 CC 11 Expression (表情動態)
+  private isLaneVisible: boolean = true;
+  private laneHeight: number = 100;
+  private ccEventsMap: Map<number, PlaybackCCEvent[]> = new Map();
+  private onCCEventsChanged: ((channel: number, controller: number, events: PlaybackCCEvent[]) => void) | null = null;
+  private laneScrollEl: HTMLElement | null = null;
+  private lanePlayheadEl: HTMLElement | null = null;
+  private laneSvgEl: SVGSVGElement | null = null;
+  private laneValReadoutEl: HTMLElement | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -104,10 +130,36 @@ export class SingleTrackEditor {
       }
     });
 
+    // 綁定 Web MIDI 實體琴鍵音符輸入監聽器
+    midiManager.onNoteInput((type, pitch, velocity, ch) => {
+      this.handleMidiNoteInput(type, pitch, velocity, ch);
+    });
+
     // 鍵盤快捷鍵：Delete / Backspace 批次刪除選取音符，Ctrl+A 全選，Escape 取消選取
     window.addEventListener('keydown', (e: KeyboardEvent) => {
       const tag = (document.activeElement?.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      // 🔴 步進錄音快捷鍵：Space = 休止, T = 延音, Backspace = 退步, Home = 回起點
+      if (this.isStepRecording) {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          this.insertRest();
+          return;
+        } else if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          this.tiePreviousNote();
+          return;
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          this.rewindStepCursor();
+          return;
+        } else if (e.key === 'Backspace' && this.selectedEvents.size === 0) {
+          e.preventDefault();
+          this.stepBack();
+          return;
+        }
+      }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (this.selectedEvents.size > 0) {
@@ -163,6 +215,13 @@ export class SingleTrackEditor {
    */
   public setOnOpenVoicePicker(cb: (channel: number) => void) {
     this.onOpenVoicePicker = cb;
+  }
+
+  /**
+   * 設定聲部啟用請求回呼 (當使用者在未啟用聲部輸入音符或錄音時自動觸發)
+   */
+  public setOnRequestActivate(cb: (channel: number) => void) {
+    this.onRequestActivate = cb;
   }
 
   /**
@@ -224,6 +283,31 @@ export class SingleTrackEditor {
   }
 
   /**
+   * 推入 CC 控制器歷史記錄 (Undo / Redo)
+   */
+  public pushCCHistory(
+    description: string,
+    controller: number,
+    beforeCC: PlaybackCCEvent[],
+    afterCC: PlaybackCCEvent[]
+  ) {
+    this.undoStack.push({
+      channel: this.channel,
+      description,
+      beforeEvents: this.events.map(e => ({ ...e })),
+      afterEvents: this.events.map(e => ({ ...e })),
+      controller,
+      beforeCCEvents: beforeCC.map(c => ({ ...c })),
+      afterCCEvents: afterCC.map(c => ({ ...c })),
+    });
+    if (this.undoStack.length > this.maxHistorySteps) {
+      this.undoStack.shift();
+    }
+    this.redoStack = [];
+    this.updateHistoryButtons();
+  }
+
+  /**
    * 復原上一步操作 (Ctrl+Z)
    */
   public undo(): boolean {
@@ -241,6 +325,11 @@ export class SingleTrackEditor {
     this.events.sort((a, b) => a.relTick - b.relTick);
     this.selectedEvents.clear();
     this.initialVelocities.clear();
+
+    if (record.controller !== undefined && record.beforeCCEvents) {
+      this.ccEventsMap.set(record.controller, record.beforeCCEvents.map(c => ({ ...c })));
+      this.notifyCCEventsChanged(record.controller);
+    }
 
     this.notifyEventsChanged();
     this.render();
@@ -270,6 +359,11 @@ export class SingleTrackEditor {
     this.events.sort((a, b) => a.relTick - b.relTick);
     this.selectedEvents.clear();
     this.initialVelocities.clear();
+
+    if (record.controller !== undefined && record.afterCCEvents) {
+      this.ccEventsMap.set(record.controller, record.afterCCEvents.map(c => ({ ...c })));
+      this.notifyCCEventsChanged(record.controller);
+    }
 
     this.notifyEventsChanged();
     this.render();
@@ -315,6 +409,63 @@ export class SingleTrackEditor {
   }
 
   /**
+   * 設定 CC 控制器自動化變更回呼 (同步寫入 parsed SMF Track 0)
+   */
+  public setOnCCEventsChanged(cb: (channel: number, controller: number, events: PlaybackCCEvent[]) => void) {
+    this.onCCEventsChanged = cb;
+  }
+
+  /**
+   * 通知特定 CC 控制器資料已變更，零延遲同步至播放引擎與宿主 STY 結構
+   */
+  private notifyCCEventsChanged(controller: number) {
+    const list = this.ccEventsMap.get(controller) || [];
+    list.sort((a, b) => a.relTick - b.relTick);
+    styPlaybackEngine.setChannelCCEvents(this.channel, controller, list);
+    if (this.onCCEventsChanged) {
+      this.onCCEventsChanged(this.channel, controller, list);
+    }
+  }
+
+  /**
+   * 初始化 CC 控制器資料並補齊友善預設點 (Tick 0)
+   */
+  private initCCEvents(incomingCC: PlaybackCCEvent[]) {
+    this.ccEventsMap.clear();
+    incomingCC.forEach((ev) => {
+      const list = this.ccEventsMap.get(ev.controller) || [];
+      list.push({ ...ev });
+      this.ccEventsMap.set(ev.controller, list);
+    });
+
+    this.ccEventsMap.forEach((list) => {
+      list.sort((a, b) => a.relTick - b.relTick);
+    });
+
+    // 補齊常見控制器基準節點，防止完全空白
+    this.ensureDefaultCCPoint(11, 127); // Expression
+    this.ensureDefaultCCPoint(7, 100);  // Volume
+    this.ensureDefaultCCPoint(10, 64);  // Pan
+    this.ensureDefaultCCPoint(1, 0);    // Modulation
+    this.ensureDefaultCCPoint(64, 0);   // Sustain
+  }
+
+  private ensureDefaultCCPoint(controller: number, defaultVal: number) {
+    let list = this.ccEventsMap.get(controller);
+    if (!list || list.length === 0) {
+      list = [
+        {
+          channel: this.channel,
+          controller,
+          value: defaultVal,
+          relTick: 0,
+        },
+      ];
+      this.ccEventsMap.set(controller, list);
+    }
+  }
+
+  /**
    * 取得當前量化單位之 Tick 數值
    */
   public getStepTicks(): number {
@@ -333,7 +484,9 @@ export class SingleTrackEditor {
     totalBars: number,
     division: number,
     timeSignature: { numerator: number; denominator: number },
-    voiceInfo: PartVoiceInfo | null
+    voiceInfo: PartVoiceInfo | null,
+    isActive: boolean = true,
+    ccEvents: PlaybackCCEvent[] = []
   ) {
     this.channel = channel;
     this.partLabel = partLabel;
@@ -344,8 +497,26 @@ export class SingleTrackEditor {
     this.division = division || 480;
     this.timeSignature = timeSignature || { numerator: 4, denominator: 4 };
     this.voiceInfo = voiceInfo;
+    this.isChannelActive = isActive;
     this.selectedEvents.clear();
     this.initialVelocities.clear();
+
+    // 🎛️ 載入 CC 控制器事件
+    this.initCCEvents(ccEvents);
+
+    if (!this.stepRecorder) {
+      this.initStepRecorder();
+    } else {
+      this.stepRecorder.configure({
+        ppq: this.division,
+        timeSignature: this.timeSignature,
+        resolution: this.stepResolution,
+        maxBars: this.totalBars,
+        velocityMode: this.stepVelocityMode,
+        fixedVelocity: this.defaultVelocity,
+      });
+      this.stepRecorder.reset();
+    }
 
     this.calculateRows();
     this.render();
@@ -355,7 +526,7 @@ export class SingleTrackEditor {
    * 計算該軌道需要顯示的縱向行 (Rows)
    */
   private calculateRows() {
-    const isDrum = this.channel === 8 || this.channel === 9;
+    const isDrum = styPlaybackEngine.isChannelDrum(this.channel);
 
     if (isDrum) {
       // 鼓組軌道：彙整事件中的音高，並補齊常用的核心打擊樂器
@@ -448,7 +619,8 @@ export class SingleTrackEditor {
     toolbar.innerHTML = `
       <div class="editor-toolbar-left">
         <span class="editor-track-badge" style="background: ${this.partAccentColor};">CH ${this.channel + 1} - ${this.partLabel}</span>
-        <span class="editor-voice-tag clickable-voice-tag" title="${this.voiceInfo ? this.voiceInfo.voiceName + ' (點擊更換音色)' : '點擊更換音色'}">${this.voiceInfo?.voiceName || '預設音色'} ✏️</span>
+        ${!this.isChannelActive ? '<span class="editor-status-pill pill-inactive" id="ed-pill-activate" title="此聲部尚未啟用，點擊挑選樂器音色並自動建立 CASM 伴奏規則">➕ 點此啟用聲部</span>' : ''}
+        <span class="editor-voice-tag clickable-voice-tag" title="${this.voiceInfo ? this.voiceInfo.voiceName + ' (點擊更換音色)' : '點擊更換音色'}">${this.voiceInfo?.voiceName || (this.isChannelActive ? '預設音色' : '未配置音色')} ✏️</span>
         <span class="editor-meta-pill">拍號: ${this.timeSignature.numerator}/${this.timeSignature.denominator} | 總計: ${this.totalBars} 小節 | PPQ: ${this.division}</span>
         <span id="ed-note-count-pill" class="editor-meta-pill">音符總數: ${this.events.length}</span>
       </div>
@@ -511,8 +683,16 @@ export class SingleTrackEditor {
           <button id="ed-btn-redo" class="editor-action-btn" title="重做上一步操作 (Ctrl+Y 或 Ctrl+Shift+Z)" disabled>↪️ 重做</button>
         </div>
 
+        <!-- 🔴 PSR-SX920 實體琴鍵步進錄音工作台切換按鈕 -->
+        <button id="ed-btn-step-rec" class="step-rec-toggle-btn ${this.isStepRecording ? 'recording' : ''}" title="切換 PSR-SX920 實體琴鍵步進錄音模式 (實體琴鍵/虛擬鍵盤彈奏即時寫入)">
+          <span class="rec-dot"></span> 步進錄音
+        </button>
+
         <!-- 🗑️ 刪除按鈕 (支援批次刪除) -->
         <button id="ed-btn-delete" class="editor-action-btn btn-danger" title="刪除選取的音符 (或按 Delete / Backspace 鍵)">🗑️ 刪除音符</button>
+
+        <!-- 🎛️ 計畫 B: CC 控制線切換按鈕 -->
+        <button id="ed-btn-toggle-lane" class="editor-action-btn ${this.isLaneVisible ? 'active' : ''}" title="顯示 / 隱藏 CC 控制器自動化控制線 (Expression / Volume / Pan)">🎛️ CC 控制線</button>
 
         <div class="editor-zoom-btns">
           <button id="ed-btn-fit-4" class="editor-mini-btn ${!this.isUserZoomed ? 'active' : ''}" title="保證視野內完整呈現 4 個小節">🎯 4 小節</button>
@@ -543,10 +723,54 @@ export class SingleTrackEditor {
 
     this.container.appendChild(toolbar);
 
+    // 🔴 PSR-SX920 步進錄音專屬工作條 (Step Recording Action Bar)
+    const stepBar = document.createElement('div');
+    stepBar.id = 'ed-step-bar';
+    stepBar.className = 'editor-step-bar';
+    stepBar.style.display = this.isStepRecording ? 'flex' : 'none';
+    stepBar.innerHTML = `
+      <div class="step-bar-left">
+        <span style="font-size: 0.75rem; font-weight: 800; color: #f43f5e; display: flex; align-items: center; gap: 4px;">
+          <span class="rec-dot" style="background:#f43f5e;"></span> 琴鍵步進錄音:
+        </span>
+
+        <select id="ed-step-res-select" class="editor-select" title="選擇單步錄入時值">
+          <option value="1/16" ${this.stepResolution === '1/16' ? 'selected' : ''}>1/16 音符 (1/4 拍)</option>
+          <option value="1/8" ${this.stepResolution === '1/8' ? 'selected' : ''}>1/8 音符 (半拍)</option>
+          <option value="1/4" ${this.stepResolution === '1/4' ? 'selected' : ''}>1/4 音符 (1 拍)</option>
+          <option value="1/2" ${this.stepResolution === '1/2' ? 'selected' : ''}>1/2 音符 (2 拍)</option>
+          <option value="1/1" ${this.stepResolution === '1/1' ? 'selected' : ''}>全音符 (1 小節)</option>
+          <option value="1/32" ${this.stepResolution === '1/32' ? 'selected' : ''}>1/32 音符</option>
+          <option value="1/8T" ${this.stepResolution === '1/8T' ? 'selected' : ''}>1/8 三連音</option>
+          <option value="1/16T" ${this.stepResolution === '1/16T' ? 'selected' : ''}>1/16 三連音</option>
+        </select>
+
+        <select id="ed-step-vel-mode" class="editor-select" title="錄入力度模式">
+          <option value="as-played" ${this.stepVelocityMode === 'as-played' ? 'selected' : ''}>🎹 琴鍵真實力度</option>
+          <option value="fixed" ${this.stepVelocityMode === 'fixed' ? 'selected' : ''}>🎯 固定力度 (依滑桿)</option>
+        </select>
+
+        <button id="ed-btn-step-rest" class="step-action-btn step-btn-rest" title="插入休止符並前進 1 步 (快速鍵: 空白鍵 Space)">⏭ 休止 (Space)</button>
+        <button id="ed-btn-step-tie" class="step-action-btn step-btn-tie" title="延音 (Tie)：延長前一個音符 1 步時值 (快速鍵: T 鍵)">⁀ 延音 Tie (T)</button>
+        <button id="ed-btn-step-back" class="step-action-btn step-btn-back" title="退回上一步 (快速鍵: Backspace)">⏮ 退步 (Bksp)</button>
+        <button id="ed-btn-step-rewind" class="step-action-btn step-btn-rewind" title="游標回小節起點 (Tick 0)">⏪ 回起點</button>
+      </div>
+
+      <div class="step-bar-right">
+        <span id="ed-step-pos-badge" class="step-pos-badge">📍 第 1 小節 1.1 拍 (Tick 0)</span>
+        <span id="ed-step-chord-badge" class="step-chord-badge">🎹 等待琴鍵輸入...</span>
+      </div>
+    `;
+    this.container.appendChild(stepBar);
+
     // 操作提示條
     const hintBar = document.createElement('div');
     hintBar.className = 'editor-hint-bar';
-    hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b> ｜ <b>Alt+↑/↓ 移調 (Shift+Alt+↑/↓ 八度)</b></span>`;
+    if (this.isStepRecording) {
+      hintBar.innerHTML = `<span>🔴 <b>步進錄音進行中:</b> 在 PSR-SX920 彈奏和弦或旋律，放開琴鍵即寫入 ｜ <b>空白鍵 (Space)</b> 插入休止 ｜ <b>T 鍵</b> 延音 ｜ <b>Backspace</b> 退步 ｜ 點擊標尺直接跳轉游標</span>`;
+    } else {
+      hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b> ｜ <b>Alt+↑/↓ 移調 (Shift+Alt+↑/↓ 八度)</b></span>`;
+    }
     this.container.appendChild(hintBar);
 
     // 2. 建立主編輯捲動工作區並先掛載至 DOM，以便取得真實精確的 viewport clientWidth
@@ -595,9 +819,15 @@ export class SingleTrackEditor {
         `;
       }
 
-      // 點擊琴鍵試聽
+      // 點擊琴鍵試聽 (若步進錄音開啟，亦可觸發單步錄入)
       rowLabel.addEventListener('click', () => {
         styPlaybackEngine.previewNote(this.channel, r.note, this.defaultVelocity);
+        if (this.isStepRecording && this.stepRecorder) {
+          this.stepRecorder.handleNoteOn(r.note, this.defaultVelocity);
+          setTimeout(() => {
+            this.stepRecorder?.handleNoteOff(r.note);
+          }, 35);
+        }
       });
 
       keyCol.appendChild(rowLabel);
@@ -631,6 +861,20 @@ export class SingleTrackEditor {
       `;
       timeRuler.appendChild(barCell);
     }
+
+    // 點擊時間標尺移動步進錄音游標
+    timeRuler.addEventListener('click', (e) => {
+      if (!this.isStepRecording || !this.stepRecorder) return;
+      const rect = timeRuler.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const progress = Math.max(0, Math.min(1.0, clickX / totalWidthPx));
+      const rawTick = Math.round(progress * this.totalTicks);
+      const stepTicks = this.stepRecorder.getStepTicks();
+      const snapTick = Math.min(this.totalTicks, Math.round(rawTick / stepTicks) * stepTicks);
+      this.stepRecorder.seekToTick(snapTick);
+      this.updateStepCursor();
+    });
+
     canvasWrap.appendChild(timeRuler);
 
     // 網格底層與音符層
@@ -861,7 +1105,12 @@ export class SingleTrackEditor {
               return;
             }
 
-            // 新增音符
+            // 新增音符 (若該聲部未啟用，自動觸發啟用引導)
+            if (!this.isChannelActive) {
+              this.isChannelActive = true;
+              this.onRequestActivate?.(this.channel);
+            }
+
             const beforeSnapshot = this.events.map(e => ({ ...e }));
             const newNote: PlaybackNoteEvent = {
               channel: this.channel,
@@ -898,11 +1147,24 @@ export class SingleTrackEditor {
     this.playheadEl = playhead;
     canvasWrap.appendChild(playhead);
 
+    // 步進錄音游標線 (GPU 加速)
+    const stepCursor = document.createElement('div');
+    stepCursor.className = 'editor-step-cursor';
+    stepCursor.innerHTML = `<div class="step-cursor-cap">📍 REC</div>`;
+    stepCursor.style.height = `${this.rows.length * this.rowHeight + 36}px`;
+    stepCursor.style.transform = `translate3d(0px, 0, 0)`;
+    stepCursor.style.display = this.isStepRecording ? 'block' : 'none';
+    this.stepCursorEl = stepCursor;
+    canvasWrap.appendChild(stepCursor);
+
     canvasWrap.appendChild(gridContent);
     scrollWrap.appendChild(canvasWrap);
     this.container.appendChild(scrollWrap);
 
-    // 3. 綁定力度控制項、模式切換、快速微調按鈕、量化、縮放與選取事件
+    // 3. 建立 CC 控制器自動化控制線 (Automation Lane)
+    this.renderAutomationLane(totalWidthPx);
+
+    // 4. 綁定力度控制項、模式切換、快速微調按鈕、量化、縮放與選取事件
     this.bindControls();
 
     // 恢復選取高亮與狀態
@@ -1375,7 +1637,11 @@ export class SingleTrackEditor {
         this.velInput.value = ev.velocity.toString();
       }
       if (previewSound) {
-        styPlaybackEngine.previewNote(this.channel, ev.noteNumber, ev.velocity, 220);
+        try {
+          styPlaybackEngine.previewNote(this.channel, ev.noteNumber, ev.velocity, 220);
+        } catch {
+          // 略過無音訊硬體環境
+        }
       }
     } else {
       // 多選狀態
@@ -1388,8 +1654,12 @@ export class SingleTrackEditor {
         this.velInput.value = this.baselineAverageVelocity.toString();
       }
       if (previewSound) {
-        const highest = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
-        styPlaybackEngine.previewNote(this.channel, highest.noteNumber, highest.velocity, 220);
+        try {
+          const highest = [...this.selectedEvents].sort((a, b) => b.noteNumber - a.noteNumber)[0];
+          styPlaybackEngine.previewNote(this.channel, highest.noteNumber, highest.velocity, 220);
+        } catch {
+          // 略過無音訊硬體環境
+        }
       }
     }
   }
@@ -1475,6 +1745,14 @@ export class SingleTrackEditor {
       }
     });
 
+    // 點擊「➕ 點此啟用聲部」標籤
+    const pillActivate = this.container.querySelector('#ed-pill-activate');
+    pillActivate?.addEventListener('click', () => {
+      if (this.onOpenVoicePicker) {
+        this.onOpenVoicePicker(this.channel);
+      }
+    });
+
     // 量化解析度下拉選單 (Tier 2-2)
     const quantizeSelect = this.container.querySelector('#ed-quantize-select') as HTMLSelectElement;
     quantizeSelect?.addEventListener('change', () => {
@@ -1553,6 +1831,24 @@ export class SingleTrackEditor {
       }
     });
 
+    // 🎛️ CC 控制線展開/隱藏切換
+    const btnToggleLane = this.container.querySelector('#ed-btn-toggle-lane');
+    btnToggleLane?.addEventListener('click', () => {
+      this.isLaneVisible = !this.isLaneVisible;
+      btnToggleLane.classList.toggle('active', this.isLaneVisible);
+      const laneWrap = this.container.querySelector('#ed-automation-lane-wrap') as HTMLElement | null;
+      if (laneWrap) {
+        laneWrap.style.display = this.isLaneVisible ? 'flex' : 'none';
+      }
+      if (this.isLaneVisible) {
+        const totalWidthPx = this.totalBars * this.pixelsPerBar;
+        this.drawAutomationLaneSVG(totalWidthPx);
+        if (this.laneScrollEl && this.gridScrollEl) {
+          this.laneScrollEl.scrollLeft = this.gridScrollEl.scrollLeft;
+        }
+      }
+    });
+
     // 縮放按鈕
     const btnFit4 = this.container.querySelector('#ed-btn-fit-4');
     const btnFitAll = this.container.querySelector('#ed-btn-fit-all');
@@ -1584,6 +1880,54 @@ export class SingleTrackEditor {
       this.isUserZoomed = true;
       this.render();
     });
+
+    // 🔴 步進錄音控制項綁定
+    const btnStepRec = this.container.querySelector('#ed-btn-step-rec');
+    btnStepRec?.addEventListener('click', () => {
+      this.toggleStepRecording();
+    });
+
+    const stepResSelect = this.container.querySelector('#ed-step-res-select') as HTMLSelectElement | null;
+    stepResSelect?.addEventListener('change', () => {
+      if (stepResSelect.value) {
+        this.stepResolution = stepResSelect.value as StepResolution;
+        if (this.stepRecorder) {
+          this.stepRecorder.setResolution(this.stepResolution);
+        }
+        if (this.velStatus) {
+          this.velStatus.textContent = `步進解析度已設為 ${this.stepResolution}`;
+        }
+        this.updateStepCursor();
+      }
+    });
+
+    const stepVelModeSelect = this.container.querySelector('#ed-step-vel-mode') as HTMLSelectElement | null;
+    stepVelModeSelect?.addEventListener('change', () => {
+      if (stepVelModeSelect.value) {
+        this.stepVelocityMode = stepVelModeSelect.value as 'as-played' | 'fixed';
+        if (this.stepRecorder) {
+          this.stepRecorder.configure({ velocityMode: this.stepVelocityMode });
+        }
+      }
+    });
+
+    this.container.querySelector('#ed-btn-step-rest')?.addEventListener('click', () => {
+      this.insertRest();
+    });
+
+    this.container.querySelector('#ed-btn-step-tie')?.addEventListener('click', () => {
+      this.tiePreviousNote();
+    });
+
+    this.container.querySelector('#ed-btn-step-back')?.addEventListener('click', () => {
+      this.stepBack();
+    });
+
+    this.container.querySelector('#ed-btn-step-rewind')?.addEventListener('click', () => {
+      this.rewindStepCursor();
+    });
+
+    this.updateStepCursor();
   }
 
   /**
@@ -1656,6 +2000,9 @@ export class SingleTrackEditor {
     const xPx = progress * totalWidthPx;
 
     this.playheadEl.style.transform = `translate3d(${xPx}px, 0, 0)`;
+    if (this.lanePlayheadEl) {
+      this.lanePlayheadEl.style.transform = `translate3d(${xPx}px, 0, 0)`;
+    }
 
     // 播放時游標若超出可視區則自動平滑跟隨捲動
     if (this.gridScrollEl && currentTick > 0) {
@@ -1833,6 +2180,815 @@ export class SingleTrackEditor {
     }
 
     return true;
+  }
+
+  // ==========================================================================
+  // 🔴 PSR-SX920 實體琴鍵連線步進錄音 (Web MIDI Step Input) 核心模組
+  // ==========================================================================
+
+  /**
+   * 初始化步進錄音核心
+   */
+  private initStepRecorder() {
+    this.stepRecorder = new StepRecorder({
+      ppq: this.division,
+      timeSignature: this.timeSignature,
+      resolution: this.stepResolution,
+      maxBars: this.totalBars,
+      velocityMode: this.stepVelocityMode,
+      fixedVelocity: this.defaultVelocity,
+      onStepChange: (entry, currentTick) => this.handleStepRecorded(entry, currentTick),
+      onPositionChange: (pos) => this.updateStepPositionUI(pos),
+    });
+  }
+
+  /**
+   * 切換步進錄音工作台啟用狀態
+   */
+  public toggleStepRecording(force?: boolean) {
+    this.isStepRecording = force !== undefined ? force : !this.isStepRecording;
+    if (!this.stepRecorder) this.initStepRecorder();
+
+    if (this.isStepRecording && !this.isChannelActive) {
+      this.isChannelActive = true;
+      this.onRequestActivate?.(this.channel);
+    }
+
+    const btn = this.container.querySelector('#ed-btn-step-rec');
+    const bar = this.container.querySelector('#ed-step-bar') as HTMLElement | null;
+
+    btn?.classList.toggle('recording', this.isStepRecording);
+    if (bar) {
+      bar.style.display = this.isStepRecording ? 'flex' : 'none';
+    }
+    if (this.stepCursorEl) {
+      this.stepCursorEl.style.display = this.isStepRecording ? 'block' : 'none';
+    }
+
+    const hint = this.container.querySelector('.editor-hint-bar');
+    if (hint) {
+      if (this.isStepRecording) {
+        hint.innerHTML = `<span>🔴 <b>步進錄音進行中:</b> 在 PSR-SX920 彈奏和弦或旋律，放開琴鍵即寫入 ｜ <b>空白鍵 (Space)</b> 插入休止 ｜ <b>T 鍵</b> 延音 ｜ <b>Backspace</b> 退步 ｜ 點擊標尺直接跳轉游標</span>`;
+      } else {
+        hint.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b> ｜ <b>Alt+↑/↓ 移調 (Shift+Alt+↑/↓ 八度)</b></span>`;
+      }
+    }
+
+    this.updateStepCursor();
+
+    if (this.velStatus) {
+      this.velStatus.textContent = this.isStepRecording
+        ? '🔴 步進錄音已開啟：請在 PSR-SX920 琴鍵上彈奏'
+        : '⚪ 步進錄音已關閉';
+    }
+  }
+
+  public isRecording(): boolean {
+    return this.isStepRecording;
+  }
+
+  public setStepResolution(res: StepResolution): void {
+    this.stepResolution = res;
+    if (this.stepRecorder) {
+      this.stepRecorder.setResolution(res);
+    }
+    this.updateStepCursor();
+  }
+
+  public getStepResolution(): StepResolution {
+    return this.stepResolution;
+  }
+
+  public getStepRecorder(): StepRecorder | null {
+    return this.stepRecorder;
+  }
+
+  /**
+   * 插入休止符 (Rest)：游標向前跳躍 1 步時值
+   */
+  public insertRest(): void {
+    if (!this.stepRecorder) this.initStepRecorder();
+    this.stepRecorder!.insertRest();
+    this.updateStepCursor();
+    if (this.velStatus) {
+      this.velStatus.textContent = `⏭ 插入休止符 (${this.stepResolution})`;
+    }
+  }
+
+  /**
+   * 延音 (Tie)：延長前一個錄入的音符或和弦時值 1 步
+   */
+  public tiePreviousNote(): boolean {
+    if (!this.stepRecorder) return false;
+    const hist = this.stepRecorder.getHistory();
+    const lastNoteEntry = [...hist].reverse().find(h => h.type === 'notes' && h.notes.length > 0);
+    if (!lastNoteEntry) {
+      if (this.velStatus) this.velStatus.textContent = '⚠️ 前方無音符可供延音';
+      return false;
+    }
+
+    const ok = this.stepRecorder.tiePreviousNote();
+    if (!ok) return false;
+
+    if (this.velStatus) {
+      this.velStatus.textContent = `🔗 已延長前音時值 (+${this.stepResolution})`;
+    }
+    return true;
+  }
+
+  /**
+   * 後退上一步 (Step Back / Undo)：撤銷上一次錄入並倒退游標
+   */
+  public stepBack(): boolean {
+    if (!this.stepRecorder) return false;
+    const hist = this.stepRecorder.getHistory();
+    if (hist.length === 0) {
+      if (this.stepRecorder.getCurrentTick() > 0) {
+        const stepTicks = this.stepRecorder.getStepTicks();
+        this.stepRecorder.seekToTick(Math.max(0, this.stepRecorder.getCurrentTick() - stepTicks));
+        this.updateStepCursor();
+        return true;
+      }
+      return false;
+    }
+
+    const last = hist[hist.length - 1];
+    const beforeSnapshot = this.events.map(e => ({ ...e }));
+
+    this.stepRecorder.stepBack();
+
+    if (last.type === 'notes') {
+      const removedPitches = new Set(last.notes.map(n => n.note));
+      this.events = this.events.filter(e => !(e.relTick === last.startTick && removedPitches.has(e.noteNumber)));
+      this.notifyEventsChanged();
+      this.pushHistory('步進退回 (Step Back)', beforeSnapshot, this.events);
+      this.selectedEvents.clear();
+      this.render();
+      this.updateSelectionUI(false);
+    }
+
+    this.updateStepCursor();
+    if (this.velStatus) {
+      this.velStatus.textContent = `⏮ 已退回上一步 (至 Tick ${this.stepRecorder.getCurrentTick()})`;
+    }
+    return true;
+  }
+
+  /**
+   * 游標重設回到小節起點 (Tick 0)
+   */
+  public rewindStepCursor(): void {
+    if (!this.stepRecorder) return;
+    this.stepRecorder.seekToTick(0);
+    this.updateStepCursor();
+    if (this.velStatus) {
+      this.velStatus.textContent = '⏮ 步進游標已回起點 (Tick 0)';
+    }
+  }
+
+  /**
+   * 更新步進游標之視覺位置與小節拍數資訊
+   */
+  public updateStepCursor(): void {
+    if (!this.stepRecorder) return;
+    const currentTick = this.stepRecorder.getCurrentTick();
+    const totalWidthPx = this.totalBars * this.pixelsPerBar;
+    const progress = Math.max(0, Math.min(1.0, currentTick / this.totalTicks));
+    const xPx = progress * totalWidthPx;
+
+    if (this.stepCursorEl) {
+      this.stepCursorEl.style.transform = `translate3d(${xPx}px, 0, 0)`;
+    }
+
+    const pos = this.stepRecorder.getPosition(currentTick);
+    const posBadge = this.container.querySelector('#ed-step-pos-badge');
+    if (posBadge) {
+      posBadge.textContent = `📍 ${pos.label} (Tick ${currentTick})`;
+    }
+
+    if (this.gridScrollEl && this.isStepRecording) {
+      const scrollLeft = this.gridScrollEl.scrollLeft;
+      const clientWidth = this.gridScrollEl.clientWidth;
+      if (xPx > scrollLeft + clientWidth - 120) {
+        this.gridScrollEl.scrollLeft = xPx - 150;
+      } else if (xPx < scrollLeft) {
+        this.gridScrollEl.scrollLeft = Math.max(0, xPx - 50);
+      }
+    }
+  }
+
+  /**
+   * 處理來自 StepRecorder 提交之新音符或休止符
+   */
+  private handleStepRecorded(entry: StepRecordEntry, _currentTick: number): void {
+    if (entry.type === 'notes') {
+      if (entry.startTick >= this.totalTicks) {
+        if (this.velStatus) {
+          this.velStatus.textContent = `⚠️ 已達段落終點 (${this.totalBars} 小節)，請回起點或增加小節數`;
+        }
+        return;
+      }
+
+      const beforeSnapshot = this.events.map(e => ({ ...e }));
+      const newPlaybackEvents: PlaybackNoteEvent[] = [];
+
+      for (const n of entry.notes) {
+        const dur = Math.min(n.durationTick, this.totalTicks - entry.startTick);
+        const pbEvent: PlaybackNoteEvent = {
+          channel: this.channel,
+          sourceChannel: this.channel,
+          relTick: entry.startTick,
+          durationTicks: dur,
+          noteNumber: n.note,
+          velocity: n.velocity,
+          durationMs: 0,
+        };
+        newPlaybackEvents.push(pbEvent);
+      }
+
+      // 移除在同一個起始 Tick 上音高重複的舊音符，避免重疊觸發
+      const newPitches = new Set(newPlaybackEvents.map(e => e.noteNumber));
+      this.events = this.events.filter(e => !(e.relTick === entry.startTick && newPitches.has(e.noteNumber)));
+
+      // 加入新音符並排序
+      this.events.push(...newPlaybackEvents);
+      this.events.sort((a, b) => a.relTick - b.relTick);
+
+      const chordLabel = entry.chordName || (entry.notes.length > 1 ? '和弦' : '單音');
+      this.pushHistory(`步進錄入: ${chordLabel}`, beforeSnapshot, this.events);
+      this.notifyEventsChanged();
+
+      // 選取新錄入的音符
+      this.selectedEvents.clear();
+      newPlaybackEvents.forEach(e => this.selectedEvents.add(e));
+
+      this.render();
+      this.updateSelectionUI(true);
+
+      const badge = this.container.querySelector('#ed-step-chord-badge');
+      if (badge) {
+        badge.textContent = `✅ 已寫入: ${chordLabel}`;
+      }
+      if (this.velStatus) {
+        this.velStatus.textContent = `✅ 步進錄入成功: ${chordLabel}`;
+      }
+    } else if (entry.type === 'rest') {
+      if (this.velStatus) {
+        this.velStatus.textContent = `⏭ 插入休止符 (${this.stepResolution})`;
+      }
+    }
+
+    this.updateStepCursor();
+  }
+
+  /**
+   * 處理實體鍵盤 (PSR-SX920 Web MIDI) 輸入事件
+   */
+  private handleMidiNoteInput(type: 'noteon' | 'noteoff', pitch: number, velocity: number, _ch: number): void {
+    if (!this.isStepRecording) return;
+    if (!this.stepRecorder) this.initStepRecorder();
+
+    if (!this.isChannelActive) {
+      this.isChannelActive = true;
+      this.onRequestActivate?.(this.channel);
+    }
+
+    if (type === 'noteon') {
+      // 1. 即時發聲試聽：依當前聲部發出聲音 (WebAudio 或 Web MIDI)
+      try {
+        if (styPlaybackEngine.getOutputMode() === 'midi') {
+          midiManager.sendNoteOn(this.channel, pitch, velocity);
+        } else {
+          styPlaybackEngine.previewNote(this.channel, pitch, velocity, 300);
+        }
+      } catch {
+        // 略過無 AudioContext / headless 環境
+      }
+
+      this.heldPitches.add(pitch);
+      this.updateLiveChordDisplay();
+
+      const vel = this.stepVelocityMode === 'fixed' ? this.defaultVelocity : velocity;
+      this.stepRecorder!.handleNoteOn(pitch, vel);
+    } else {
+      try {
+        if (styPlaybackEngine.getOutputMode() === 'midi') {
+          midiManager.sendNoteOff(this.channel, pitch);
+        }
+      } catch {
+        // 略過 headless 環境
+      }
+
+      this.heldPitches.delete(pitch);
+      this.updateLiveChordDisplay();
+
+      this.stepRecorder!.handleNoteOff(pitch);
+    }
+  }
+
+  /**
+   * 即時更新琴鍵彈奏中的和弦/單音名稱顯示
+   */
+  private updateLiveChordDisplay(): void {
+    const chordBadge = this.container.querySelector('#ed-step-chord-badge');
+    if (!chordBadge) return;
+
+    if (this.heldPitches.size === 0) {
+      chordBadge.textContent = '🎹 等待琴鍵輸入...';
+      return;
+    }
+
+    const pitches = Array.from(this.heldPitches).sort((a, b) => a - b);
+    if (pitches.length === 1) {
+      const p = pitches[0];
+      const row = this.rows.find(r => r.note === p);
+      chordBadge.textContent = `🎹 單音: ${row?.label || p}`;
+    } else {
+      const chordName = StepRecorder.detectChordName(pitches);
+      const noteNames = pitches.map(p => this.rows.find(r => r.note === p)?.label || p).join('-');
+      chordBadge.textContent = `🎹 和弦: ${chordName} (${noteNames})`;
+    }
+  }
+
+  /**
+   * 步進游標位置變更時回呼
+   */
+  private updateStepPositionUI(pos: { bar: number; beat: number; subBeat: number; tick: number; label: string }): void {
+    const posBadge = this.container.querySelector('#ed-step-pos-badge');
+    if (posBadge) {
+      posBadge.textContent = `📍 ${pos.label} (Tick ${pos.tick})`;
+    }
+  }
+
+  // =========================================================================
+  // 🎛️ 計畫 B: CC 自動化控制線 (Automation Lanes) 渲染與互動邏輯
+  // =========================================================================
+
+  private createSvgElement<T extends SVGElement = SVGElement>(tag: string): T {
+    let el: any;
+    if (typeof document !== 'undefined' && typeof document.createElementNS === 'function') {
+      el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    } else if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+      el = document.createElement(tag);
+    } else {
+      el = { tagName: tag };
+    }
+    if (el && typeof el.setAttribute !== 'function') {
+      el.setAttribute = (name: string, val: string) => { el[name] = val; };
+      el.getAttribute = (name: string) => el[name];
+    }
+    return el as T;
+  }
+
+  private valToY(val: number): number {
+    const clamped = Math.max(0, Math.min(127, val));
+    const pad = 10;
+    const usableH = this.laneHeight - (pad * 2);
+    return (this.laneHeight - pad) - (clamped / 127) * usableH;
+  }
+
+  private yToVal(y: number): number {
+    const pad = 10;
+    const usableH = this.laneHeight - (pad * 2);
+    const ratio = ((this.laneHeight - pad) - y) / usableH;
+    return Math.max(0, Math.min(127, Math.round(ratio * 127)));
+  }
+
+  /**
+   * 渲染 CC 控制器自動化控制線 (Automation Lane)
+   */
+  private renderAutomationLane(totalWidthPx: number): void {
+    const laneWrap = document.createElement('div');
+    laneWrap.id = 'ed-automation-lane-wrap';
+    laneWrap.className = 'editor-automation-lane-wrap';
+    laneWrap.style.display = this.isLaneVisible ? 'flex' : 'none';
+
+    // 左側控制欄 (與上方琴鍵列 135px 寬度完全一致)
+    const ctrlCol = document.createElement('div');
+    ctrlCol.className = 'editor-lane-ctrl-col';
+    ctrlCol.innerHTML = `
+      <div class="lane-ctrl-top">
+        <span class="lane-title">🎛️ CC 控制線</span>
+        <span id="ed-lane-val-readout" class="lane-val-badge">--</span>
+      </div>
+      <select id="ed-lane-cc-select" class="lane-cc-select" title="選擇欲編輯的 CC 控制器">
+        <option value="11" ${this.activeController === 11 ? 'selected' : ''}>CC 11 Expression (表情動態)</option>
+        <option value="7" ${this.activeController === 7 ? 'selected' : ''}>CC 7 Volume (聲部音量)</option>
+        <option value="10" ${this.activeController === 10 ? 'selected' : ''}>CC 10 Pan (聲像平衡)</option>
+        <option value="1" ${this.activeController === 1 ? 'selected' : ''}>CC 1 Modulation (顫音)</option>
+        <option value="64" ${this.activeController === 64 ? 'selected' : ''}>CC 64 Sustain (延音踏板)</option>
+      </select>
+      <div class="lane-quick-tools">
+        <button id="ed-lane-btn-crescendo" class="lane-tool-btn" title="📈 建立 40 -> 127 漸強曲線">📈 漸強</button>
+        <button id="ed-lane-btn-decrescendo" class="lane-tool-btn" title="📉 建立 127 -> 35 漸弱曲線">📉 漸弱</button>
+        <button id="ed-lane-btn-smooth" class="lane-tool-btn" title="〰️ 平滑化當前曲線 (三點移動平均)">〰️ 平滑</button>
+        <button id="ed-lane-btn-reset" class="lane-tool-btn" title="🔄 重設為原廠平直數值">🔄 重設</button>
+      </div>
+      <div class="lane-tip-text">點擊空白加點 ｜ 拖曳調值<br>右鍵刪點 ｜ 零延遲試聽</div>
+    `;
+    laneWrap.appendChild(ctrlCol);
+
+    // 右側可水平捲動的軌道區域
+    const laneScroll = document.createElement('div');
+    laneScroll.id = 'ed-lane-scroll';
+    laneScroll.className = 'editor-lane-scroll';
+    this.laneScrollEl = laneScroll;
+
+    const laneCanvas = document.createElement('div');
+    laneCanvas.className = 'editor-lane-canvas';
+    laneCanvas.style.width = `${totalWidthPx}px`;
+    laneCanvas.style.height = `${this.laneHeight}px`;
+
+    // 播放游標
+    const playhead = document.createElement('div');
+    playhead.id = 'ed-lane-playhead';
+    playhead.className = 'lane-playhead';
+    playhead.style.height = `${this.laneHeight}px`;
+    playhead.style.transform = this.playheadEl?.style.transform || 'translate3d(0px, 0, 0)';
+    this.lanePlayheadEl = playhead;
+    laneCanvas.appendChild(playhead);
+
+    // SVG 畫布
+    const svg = this.createSvgElement<SVGSVGElement>('svg');
+    svg.setAttribute('class', 'lane-svg');
+    svg.setAttribute('width', `${totalWidthPx}`);
+    svg.setAttribute('height', `${this.laneHeight}`);
+    svg.setAttribute('viewBox', `0 0 ${totalWidthPx} ${this.laneHeight}`);
+    this.laneSvgEl = svg;
+    laneCanvas.appendChild(svg);
+
+    laneScroll.appendChild(laneCanvas);
+    laneWrap.appendChild(laneScroll);
+    this.container.appendChild(laneWrap);
+
+    this.laneValReadoutEl = ctrlCol.querySelector('#ed-lane-val-readout');
+
+    // 綁定控制項事件與預設曲線按鈕
+    this.bindAutomationLaneEvents(totalWidthPx);
+
+    // 繪製 SVG 曲線與控制點
+    this.drawAutomationLaneSVG(totalWidthPx);
+
+    // 雙向水平捲動同步
+    this.setupScrollSync();
+  }
+
+  /**
+   * 雙向水平捲動互鎖同步 (確保鋼琴捲軸與自動化控制線 100% 對齊)
+   */
+  private isSyncingScroll: boolean = false;
+  private setupScrollSync(): void {
+    if (!this.gridScrollEl || !this.laneScrollEl) return;
+
+    this.gridScrollEl.addEventListener('scroll', () => {
+      if (this.isSyncingScroll) return;
+      this.isSyncingScroll = true;
+      if (this.laneScrollEl) {
+        this.laneScrollEl.scrollLeft = this.gridScrollEl!.scrollLeft;
+      }
+      this.isSyncingScroll = false;
+    });
+
+    this.laneScrollEl.addEventListener('scroll', () => {
+      if (this.isSyncingScroll) return;
+      this.isSyncingScroll = true;
+      if (this.gridScrollEl) {
+        this.gridScrollEl.scrollLeft = this.laneScrollEl!.scrollLeft;
+      }
+      this.isSyncingScroll = false;
+    });
+  }
+
+  /**
+   * 綁定自動化控制線左側下拉選單與曲線快捷預設按鈕
+   */
+  private bindAutomationLaneEvents(totalWidthPx: number): void {
+    // CC 下拉選單切換
+    const ccSelect = this.container.querySelector('#ed-lane-cc-select') as HTMLSelectElement | null;
+    ccSelect?.addEventListener('change', () => {
+      this.activeController = parseInt(ccSelect.value, 10);
+      let events = this.ccEventsMap.get(this.activeController);
+      if (!events || events.length === 0) {
+        const defVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : 0));
+        this.ensureDefaultCCPoint(this.activeController, defVal);
+      }
+      this.drawAutomationLaneSVG(totalWidthPx);
+    });
+
+    // 📈 漸強快捷預設 (40 -> 127)
+    this.container.querySelector('#ed-lane-btn-crescendo')?.addEventListener('click', () => {
+      const before = (this.ccEventsMap.get(this.activeController) || []).map(c => ({ ...c }));
+      const steps = Math.min(16, Math.max(4, this.totalBars * 4));
+      const newEvents: PlaybackCCEvent[] = [];
+      for (let i = 0; i <= steps; i++) {
+        const relTick = Math.round((i / steps) * this.totalTicks);
+        const val = Math.round(40 + (i / steps) * 87);
+        newEvents.push({ channel: this.channel, controller: this.activeController, value: val, relTick });
+      }
+      this.ccEventsMap.set(this.activeController, newEvents);
+      this.pushCCHistory(`CC ${this.activeController} 漸強曲線`, this.activeController, before, newEvents);
+      this.notifyCCEventsChanged(this.activeController);
+      this.drawAutomationLaneSVG(totalWidthPx);
+    });
+
+    // 📉 漸弱快捷預設 (127 -> 35)
+    this.container.querySelector('#ed-lane-btn-decrescendo')?.addEventListener('click', () => {
+      const before = (this.ccEventsMap.get(this.activeController) || []).map(c => ({ ...c }));
+      const steps = Math.min(16, Math.max(4, this.totalBars * 4));
+      const newEvents: PlaybackCCEvent[] = [];
+      for (let i = 0; i <= steps; i++) {
+        const relTick = Math.round((i / steps) * this.totalTicks);
+        const val = Math.round(127 - (i / steps) * 92);
+        newEvents.push({ channel: this.channel, controller: this.activeController, value: val, relTick });
+      }
+      this.ccEventsMap.set(this.activeController, newEvents);
+      this.pushCCHistory(`CC ${this.activeController} 漸弱曲線`, this.activeController, before, newEvents);
+      this.notifyCCEventsChanged(this.activeController);
+      this.drawAutomationLaneSVG(totalWidthPx);
+    });
+
+    // 〰️ 平滑快捷預設 (三點移動平均)
+    this.container.querySelector('#ed-lane-btn-smooth')?.addEventListener('click', () => {
+      const list = this.ccEventsMap.get(this.activeController) || [];
+      if (list.length >= 3) {
+        const before = list.map(c => ({ ...c }));
+        const smoothed = list.map((item, idx) => {
+          if (idx === 0 || idx === list.length - 1) return { ...item };
+          const avg = Math.round((list[idx - 1].value + item.value + list[idx + 1].value) / 3);
+          return { ...item, value: avg };
+        });
+        this.ccEventsMap.set(this.activeController, smoothed);
+        this.pushCCHistory(`CC ${this.activeController} 平滑曲線`, this.activeController, before, smoothed);
+        this.notifyCCEventsChanged(this.activeController);
+        this.drawAutomationLaneSVG(totalWidthPx);
+      }
+    });
+
+    // 🔄 重設快捷預設 (原廠平直基準值)
+    this.container.querySelector('#ed-lane-btn-reset')?.addEventListener('click', () => {
+      const before = (this.ccEventsMap.get(this.activeController) || []).map(c => ({ ...c }));
+      const defaultVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : 0));
+      const newEvents: PlaybackCCEvent[] = [
+        {
+          channel: this.channel,
+          controller: this.activeController,
+          value: defaultVal,
+          relTick: 0,
+        },
+      ];
+      this.ccEventsMap.set(this.activeController, newEvents);
+      this.pushCCHistory(`重設 CC ${this.activeController}`, this.activeController, before, newEvents);
+      this.notifyCCEventsChanged(this.activeController);
+      this.drawAutomationLaneSVG(totalWidthPx);
+    });
+  }
+
+  /**
+   * 繪製自動化控制線 SVG 元素 (底層格線、漸層填充、霓虹折線、互動節點)
+   */
+  private drawAutomationLaneSVG(totalWidthPx: number): void {
+    const svg = this.laneSvgEl;
+    if (!svg) return;
+    svg.innerHTML = '';
+
+    // 1. 定義局部漸層色
+    const gradId = `lane-grad-${this.activeController}`;
+    const defs = this.createSvgElement('defs');
+    defs.innerHTML = `
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${this.partAccentColor}" stop-opacity="0.35" />
+        <stop offset="100%" stop-color="${this.partAccentColor}" stop-opacity="0.03" />
+      </linearGradient>
+    `;
+    svg.appendChild(defs);
+
+    // 2. 水平數值基準線 (127, 96, 64, 32, 0)
+    const guidelines = [127, 96, 64, 32, 0];
+    guidelines.forEach((gVal) => {
+      const y = this.valToY(gVal);
+      const line = this.createSvgElement('line');
+      line.setAttribute('x1', '0');
+      line.setAttribute('y1', `${y}`);
+      line.setAttribute('x2', `${totalWidthPx}`);
+      line.setAttribute('y2', `${y}`);
+      line.setAttribute('stroke', gVal === 64 || gVal === 127 ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.05)');
+      if (gVal === 64) {
+        line.setAttribute('stroke-dasharray', '4,4');
+      }
+      svg.appendChild(line);
+
+      const label = this.createSvgElement('text');
+      label.setAttribute('x', '6');
+      label.setAttribute('y', `${y - 2}`);
+      label.setAttribute('fill', 'rgba(255, 255, 255, 0.35)');
+      label.setAttribute('font-size', '8');
+      label.setAttribute('font-family', 'monospace');
+      label.textContent = `${gVal}`;
+      svg.appendChild(label);
+    });
+
+    // 3. 垂直小節線與拍子格線
+    const beatsPerBar = this.timeSignature.numerator || 4;
+    for (let bar = 0; bar < this.totalBars; bar++) {
+      const barX = bar * this.pixelsPerBar;
+      const bLine = this.createSvgElement('line');
+      bLine.setAttribute('x1', `${barX}`);
+      bLine.setAttribute('y1', '0');
+      bLine.setAttribute('x2', `${barX}`);
+      bLine.setAttribute('y2', `${this.laneHeight}`);
+      bLine.setAttribute('stroke', 'rgba(255, 255, 255, 0.12)');
+      svg.appendChild(bLine);
+
+      for (let b = 1; b < beatsPerBar; b++) {
+        const beatX = barX + (b * (this.pixelsPerBar / beatsPerBar));
+        const beatLine = this.createSvgElement('line');
+        beatLine.setAttribute('x1', `${beatX}`);
+        beatLine.setAttribute('y1', '0');
+        beatLine.setAttribute('x2', `${beatX}`);
+        beatLine.setAttribute('y2', `${this.laneHeight}`);
+        beatLine.setAttribute('stroke', 'rgba(255, 255, 255, 0.04)');
+        svg.appendChild(beatLine);
+      }
+    }
+
+    // 4. 取得當前 CC 事件列表並計算座標
+    let currentEvents = this.ccEventsMap.get(this.activeController) || [];
+    currentEvents.sort((a, b) => a.relTick - b.relTick);
+    if (currentEvents.length === 0) {
+      const defVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : 0));
+      this.ensureDefaultCCPoint(this.activeController, defVal);
+      currentEvents = this.ccEventsMap.get(this.activeController) || [];
+    }
+
+    const pts = currentEvents.map((ev, i) => ({
+      x: (ev.relTick / this.totalTicks) * totalWidthPx,
+      y: this.valToY(ev.value),
+      ev,
+      index: i,
+    }));
+
+    // 5. 繪製曲線與漸層封閉填色區域
+    if (pts.length > 0) {
+      const firstY = pts[0].y;
+      const lastY = pts[pts.length - 1].y;
+
+      let lineD = `M 0,${firstY}`;
+      if (pts[0].x > 0) {
+        lineD += ` L ${pts[0].x},${pts[0].y}`;
+      }
+      for (let i = 0; i < pts.length; i++) {
+        lineD += ` L ${pts[i].x},${pts[i].y}`;
+      }
+      if (pts[pts.length - 1].x < totalWidthPx) {
+        lineD += ` L ${totalWidthPx},${lastY}`;
+      }
+
+      // 漸層填充路徑 (閉合至底部)
+      const fillD = `${lineD} L ${totalWidthPx},${this.laneHeight} L 0,${this.laneHeight} Z`;
+
+      const fillPath = this.createSvgElement('path');
+      fillPath.setAttribute('d', fillD);
+      fillPath.setAttribute('fill', `url(#${gradId})`);
+      svg.appendChild(fillPath);
+
+      // 控制線本體
+      const linePath = this.createSvgElement('path');
+      linePath.setAttribute('d', lineD);
+      linePath.setAttribute('stroke', this.partAccentColor);
+      linePath.setAttribute('stroke-width', '2.5');
+      linePath.setAttribute('fill', 'none');
+      linePath.setAttribute('stroke-linecap', 'round');
+      linePath.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(linePath);
+    }
+
+    // 6. 繪製互動圓形節點 (Draggable Circles)
+    pts.forEach((p) => {
+      const circle = this.createSvgElement('circle');
+      circle.setAttribute('cx', `${p.x}`);
+      circle.setAttribute('cy', `${p.y}`);
+      circle.setAttribute('r', '5');
+      circle.setAttribute('class', 'lane-node');
+      circle.setAttribute('fill', '#ffffff');
+      circle.setAttribute('stroke', this.partAccentColor);
+      circle.setAttribute('stroke-width', '2.5');
+      circle.setAttribute('data-index', `${p.index}`);
+
+      const title = this.createSvgElement('title');
+      title.textContent = `CC ${this.activeController} | Tick: ${p.ev.relTick} | 數值: ${p.ev.value}`;
+      circle.appendChild(title);
+
+      circle.addEventListener('mouseenter', () => {
+        if (this.laneValReadoutEl) {
+          this.laneValReadoutEl.textContent = `${p.ev.value}`;
+        }
+      });
+
+      // 右鍵刪除節點
+      circle.addEventListener('contextmenu', (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const list = this.ccEventsMap.get(this.activeController) || [];
+        if (list.length <= 1) return; // 至少保留 1 個基準節點
+        const before = list.map((c) => ({ ...c }));
+        list.splice(p.index, 1);
+        this.pushCCHistory(`刪除 CC ${this.activeController} 節點`, this.activeController, before, list);
+        this.notifyCCEventsChanged(this.activeController);
+        this.drawAutomationLaneSVG(totalWidthPx);
+      });
+
+      // 拖曳調整數值與位置
+      circle.addEventListener('mousedown', (e: MouseEvent) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const list = this.ccEventsMap.get(this.activeController) || [];
+        const before = list.map((c) => ({ ...c }));
+        const targetEv = list[p.index];
+        const svgRect = svg.getBoundingClientRect();
+        circle.classList.add('is-dragging');
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+          const curX = moveEvent.clientX - svgRect.left;
+          const curY = moveEvent.clientY - svgRect.top;
+
+          const rawTick = (curX / totalWidthPx) * this.totalTicks;
+          const newTick = Math.min(this.totalTicks, Math.max(0, Math.round(rawTick)));
+          const newVal = this.yToVal(curY);
+
+          targetEv.relTick = newTick;
+          targetEv.value = newVal;
+
+          if (this.laneValReadoutEl) {
+            this.laneValReadoutEl.textContent = `${newVal}`;
+          }
+
+          styPlaybackEngine.applyLiveControlChange(this.channel, this.activeController, newVal);
+          this.drawAutomationLaneSVG(totalWidthPx);
+        };
+
+        const onMouseUp = () => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+          circle.classList.remove('is-dragging');
+
+          list.sort((a, b) => a.relTick - b.relTick);
+          this.pushCCHistory(`移動 CC ${this.activeController} 節點`, this.activeController, before, list);
+          this.notifyCCEventsChanged(this.activeController);
+          this.drawAutomationLaneSVG(totalWidthPx);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
+
+      svg.appendChild(circle);
+    });
+
+    // 7. 點擊空白處新增/覆寫節點
+    svg.onmousedown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      if ((e.target as Element).tagName.toLowerCase() === 'circle') return;
+
+      const rect = svg.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      const rawTick = (clickX / totalWidthPx) * this.totalTicks;
+      const stepTicks = this.getStepTicks();
+      const snapTick = Math.min(this.totalTicks, Math.max(0, Math.round(rawTick / stepTicks) * stepTicks));
+      const snapVal = this.yToVal(clickY);
+
+      const list = this.ccEventsMap.get(this.activeController) || [];
+      const before = list.map((c) => ({ ...c }));
+
+      const existingIdx = list.findIndex((c) => Math.abs(c.relTick - snapTick) < (stepTicks / 2));
+      if (existingIdx !== -1) {
+        list[existingIdx].value = snapVal;
+      } else {
+        list.push({
+          channel: this.channel,
+          controller: this.activeController,
+          value: snapVal,
+          relTick: snapTick,
+        });
+      }
+      list.sort((a, b) => a.relTick - b.relTick);
+
+      if (this.laneValReadoutEl) {
+        this.laneValReadoutEl.textContent = `${snapVal}`;
+      }
+
+      styPlaybackEngine.applyLiveControlChange(this.channel, this.activeController, snapVal);
+      this.pushCCHistory(`新增 CC ${this.activeController} 節点`, this.activeController, before, list);
+      this.notifyCCEventsChanged(this.activeController);
+      this.drawAutomationLaneSVG(totalWidthPx);
+    };
+
+    if (this.laneValReadoutEl && pts.length > 0) {
+      this.laneValReadoutEl.textContent = `${pts[0].ev.value}`;
+    }
   }
 
 }

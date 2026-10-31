@@ -8,6 +8,9 @@ import { YamahaPadModifier } from './pad-modifier';
 import { StyleRemixer } from './style-remixer';
 import { PadRecorder, type QuantizeGrid } from './pad-recorder';
 import { DEFAULT_STYLE_PARTS, type SectionPartMuteMap, type SectionPartMatrixCell, type SectionPartMatrixRow, type StylePartId } from '../models/style-types';
+import { CasmModifier, type NttRule, type NtrRule, type CasmPartRule } from './casm-modifier';
+import { YamahaParser } from '../parser/yamaha-parser';
+import type { YamahaVoice } from '../data/yamaha-voices';
 import type {
   YamahaFileParsed,
   MidiTrack,
@@ -667,16 +670,32 @@ export class YamahaStyleModifier {
     const loopCount = targetDur > srcDur ? Math.ceil(targetDur / srcDur) : 1;
 
     for (const ch of channelsToCopy) {
-      const srcNotes = StyleRemixer.extractSectionChannelNotes(parsed, srcRange.startTick, srcRange.endTick, ch);
+      // 依 CASM 路由解析來源段落中的真實 MIDI 通道 (全面相容 SFF1 與 SFF2)
+      let srcMidiCh = ch;
+      const srcSecLower = srcSec.trim().toLowerCase();
+      const srcCasmMap = parsed.casmMappings?.[srcSecLower]
+        || parsed.casmMappings?.[srcSecLower.replace(/\s+/g, '')];
+      if (srcCasmMap) {
+        for (const [srcStr, dst] of Object.entries(srcCasmMap)) {
+          if (dst === ch) {
+            srcMidiCh = parseInt(srcStr, 10);
+            break;
+          }
+        }
+      }
+      let srcNotes = StyleRemixer.extractSectionChannelNotes(parsed, srcRange.startTick, srcRange.endTick, srcMidiCh);
+      if (srcNotes.length === 0 && srcMidiCh !== ch) {
+        srcNotes = StyleRemixer.extractSectionChannelNotes(parsed, srcRange.startTick, srcRange.endTick, ch);
+      }
 
       if (srcNotes.length === 0) {
         if (overwrite) {
-          this.clearSectionNotes(parsed, targetSec, ch);
+          this.clearSectionNotes(parsed, targetSec, srcMidiCh);
         }
         continue;
       }
 
-      const combinedNotes: Array<{ noteNumber: number; relTick: number; durationTicks: number; velocity: number }> = [];
+      const combinedNotes: Array<{ noteNumber: number; relTick: number; durationTicks: number; velocity: number; sourceChannel?: number }> = [];
       for (let loop = 0; loop < loopCount; loop++) {
         const loopOffset = loop * srcDur;
         for (const n of srcNotes) {
@@ -687,6 +706,7 @@ export class YamahaStyleModifier {
               relTick: start,
               durationTicks: Math.min(n.durationTick, targetDur - start),
               velocity: n.velocity,
+              sourceChannel: srcMidiCh,
             });
           }
         }
@@ -1445,15 +1465,38 @@ export class YamahaStyleModifier {
     const track0 = parsed.tracks[0];
     if (!track0 || !track0.events) return false;
 
-    // 決定寫入 MIDI Track 之通道
-    const targetMidiChannel = targetChannelOverride !== undefined
-      ? targetChannelOverride
-      : (notes.length > 0 && notes[0].sourceChannel !== undefined ? notes[0].sourceChannel : channel);
+    // 決定寫入 MIDI Track 之通道 (精確支援 CASM 路由與 SFF1/SFF2 來源通道)
+    let targetMidiChannel = targetChannelOverride;
+    if (targetMidiChannel === undefined) {
+      if (notes.length > 0 && notes[0].sourceChannel !== undefined) {
+        targetMidiChannel = notes[0].sourceChannel;
+      } else {
+        const secNameLower = sectionName.toLowerCase();
+        const casmSecMap = parsed.casmMappings?.[secNameLower]
+          || parsed.casmMappings?.[secNameLower.replace(/\s+/g, '')];
+        if (casmSecMap) {
+          for (const [srcStr, dst] of Object.entries(casmSecMap)) {
+            if (dst === channel) {
+              targetMidiChannel = parseInt(srcStr, 10);
+              break;
+            }
+          }
+          // 若此段落有 CASM 設定，但此聲部未分配任何來源軌道，且 notes 為空：
+          // 代表該聲部在該段落中原本就不存在，無須且不應清除任何音軌！
+          if (targetMidiChannel === undefined && notes.length === 0) {
+            return true;
+          }
+        }
+        if (targetMidiChannel === undefined) {
+          // 若無 CASM 路由，查核 SFF1 傳統通道反推
+          const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 8, 9: 9 };
+          targetMidiChannel = sff1FallbackMap[channel] ?? channel;
+        }
+      }
+    }
 
-    // 需自段落中清除的舊音符通道集合 (包含目標通道與其 SFF1/SFF2 鏡像通道)
-    const clearChannels = new Set<number>([targetMidiChannel, channel]);
-    if (channel >= 8) clearChannels.add(channel - 8);
-    if (channel < 8) clearChannels.add(channel + 8);
+    // 需自段落中清除的舊音符通道集合 (僅清除實際寫入之通道與音符原本所屬的來源通道，絕不盲目增減 8，避免誤刪相鄰聲部！)
+    const clearChannels = new Set<number>([targetMidiChannel]);
     notes.forEach(n => {
       if (n.sourceChannel !== undefined) clearChannels.add(n.sourceChannel);
     });
@@ -1513,6 +1556,110 @@ export class YamahaStyleModifier {
     });
 
     YamahaPadModifier.sanitizeTrackDuplicateNotes(track0);
+    YamahaPadModifier.rebuildTrackRawChunk(track0);
+    return true;
+  }
+
+  /**
+   * 步驟 2.6 (計畫 B): 替換或寫入指定伴奏段落中特定聲部的 CC 控制器自動化事件 (Automation Lanes)
+   * 支援 CC 11 表情 (Expression)、CC 7 音量 (Volume)、CC 10 聲相 (Pan)、CC 1 顫音 (Modulation)、CC 64 延音踏板等
+   *
+   * @param parsed STY 解析物件
+   * @param sectionName 段落名稱 (例如 'Main A', 'Intro A')
+   * @param channel 目標伴奏聲部通道 (8~15)
+   * @param controller 控制器編號 (如 11, 7, 10, 1, 64)
+   * @param ccEvents 欲寫入之 CC 事件列表 (relTick, value, sourceChannel)
+   */
+  public static replaceSectionChannelCCEvents(
+    parsed: YamahaFileParsed,
+    sectionName: string,
+    channel: number,
+    controller: number,
+    ccEvents: Array<{ relTick: number; value: number; sourceChannel?: number }>,
+    targetChannelOverride?: number
+  ): boolean {
+    const range = StyleRemixer.getSectionTickRange(parsed, sectionName);
+    if (!range) return false;
+    const track0 = parsed.tracks[0];
+    if (!track0 || !track0.events) return false;
+
+    // 決定寫入 MIDI Track 之通道 (精確支援 CASM 路由與 SFF1/SFF2 來源通道)
+    let targetMidiChannel = targetChannelOverride;
+    if (targetMidiChannel === undefined) {
+      if (ccEvents.length > 0 && ccEvents[0].sourceChannel !== undefined) {
+        targetMidiChannel = ccEvents[0].sourceChannel;
+      } else {
+        const secNameLower = sectionName.toLowerCase();
+        const casmSecMap = parsed.casmMappings?.[secNameLower]
+          || parsed.casmMappings?.[secNameLower.replace(/\s+/g, '')];
+        if (casmSecMap) {
+          for (const [srcStr, dst] of Object.entries(casmSecMap)) {
+            if (dst === channel) {
+              targetMidiChannel = parseInt(srcStr, 10);
+              break;
+            }
+          }
+        }
+        if (targetMidiChannel === undefined) {
+          const sff1FallbackMap: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 8, 9: 9 };
+          targetMidiChannel = sff1FallbackMap[channel] ?? channel;
+        }
+      }
+    }
+
+    const clearChannels = new Set<number>([targetMidiChannel]);
+    ccEvents.forEach((c) => {
+      if (c.sourceChannel !== undefined) clearChannels.add(c.sourceChannel);
+    });
+
+    // 標註所有現有事件的絕對 Tick，並清除該段落該通道中同類別的舊 CC 事件
+    let curTick = 0;
+    const keptEvents: Array<{ ev: MidiEvent; absTick: number; index: number }> = [];
+    track0.events.forEach((ev, idx) => {
+      curTick += ev.delta;
+      const isTargetCC =
+        ev.type === 'controlChange' &&
+        ev.controller === controller &&
+        ev.channel !== undefined &&
+        clearChannels.has(ev.channel);
+      const inRange = curTick >= range.startTick && curTick < range.endTick;
+
+      if (isTargetCC && inRange) {
+        // 清除舊的同控制器事件
+        return;
+      }
+      keptEvents.push({ ev: { ...ev }, absTick: curTick, index: idx });
+    });
+
+    // 加入新的 CC 控制器事件
+    let virtualIndex = 9500000;
+    for (const c of ccEvents) {
+      const absTick = range.startTick + Math.max(0, Math.round(c.relTick));
+      if (absTick > range.endTick) continue;
+      const val = Math.max(0, Math.min(127, Math.round(c.value)));
+      const ch = c.sourceChannel !== undefined ? c.sourceChannel : targetMidiChannel;
+
+      keptEvents.push({
+        ev: { delta: 0, type: 'controlChange', channel: ch, controller, value: val },
+        absTick,
+        index: virtualIndex++,
+      });
+    }
+
+    // 按時間排序
+    keptEvents.sort((a, b) => {
+      if (a.absTick !== b.absTick) return a.absTick - b.absTick;
+      return a.index - b.index;
+    });
+
+    // 重新計算 Delta-times
+    let prev = 0;
+    track0.events = keptEvents.map((item) => {
+      item.ev.delta = Math.max(0, item.absTick - prev);
+      prev = item.absTick;
+      return item.ev;
+    });
+
     YamahaPadModifier.rebuildTrackRawChunk(track0);
     return true;
   }
@@ -1925,6 +2072,229 @@ export class YamahaStyleModifier {
       }
     }
     return totalDeleted;
+  }
+
+  /**
+   * 檢查指定段落中的特定伴奏聲部 (8~15) 是否已啟用 (有音符、有音色設定或已有 CASM 轉調映射)
+   */
+  public static isSectionChannelActive(
+    parsed: YamahaFileParsed,
+    sectionName: string,
+    channel: number
+  ): boolean {
+    if (!parsed) return false;
+    const secNameLower = sectionName.trim().toLowerCase();
+    const range = StyleRemixer.getSectionTickRange(parsed, sectionName);
+
+    // 1. 檢查該段落內是否有實體演奏音符
+    if (range) {
+      for (const trk of parsed.tracks) {
+        let curTick = 0;
+        for (const ev of trk.events) {
+          curTick += ev.delta;
+          if (curTick >= range.startTick && curTick < range.endTick) {
+            if ((ev.type === 'noteOn' || ev.type === 'noteOff') && ev.channel === channel) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. 檢查段落 initialControllers 是否已指派 ProgramChange
+    const sec = parsed.sections.find((s) => s.name.trim().toLowerCase() === secNameLower);
+    if (sec?.initialControllers?.[channel]?.programChange !== undefined) {
+      return true;
+    }
+
+    // 3. 檢查 CASM 映射表是否已為該段落登記此聲部 (dst === channel)
+    const casmSecMap = parsed.casmMappings?.[secNameLower]
+      || parsed.casmMappings?.[secNameLower.replace(/\s+/g, '')];
+    if (casmSecMap) {
+      for (const dst of Object.values(casmSecMap)) {
+        if (dst === channel) return true;
+      }
+    }
+
+    // 4. 若全曲無 CASM (如 SFF1 傳統伴奏或純 MIDI)，降級查核全域 parsed.parts 是否已有此聲部音色
+    if (!parsed.hasCasm) {
+      const part = parsed.parts.find((p) => p.channel === channel);
+      if (part && part.programChange !== undefined) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * 啟用/新增一個伴奏聲部 (Activate / Provision an Unused Style Track)
+   * 1. 寫入或更新 parsed.parts 與 section.initialControllers 之音色 (Bank/PC) 與混音參數
+   * 2. 在 MIDI Track 0 該段落起始 Tick 寫入對應的 Bank Select, PC, CC 7 (Vol), CC 10 (Pan), CC 11 (Expr), CC 91 (Rev), CC 93 (Cho)
+   * 3. 智慧生成並注入合規的 Yamaha SFF2 CASM (CTAB) 轉調規則 (依樂器類別自動指派 Chord / Melody / Bass / Bypass)
+   * 4. 同步更新 parsed.casmMappings，確保軟體轉調與實體琴 CASM 伴奏晶片 100% 互通
+   */
+  public static activateSectionChannel(
+    parsed: YamahaFileParsed,
+    sectionName: string,
+    channel: number,
+    voice: YamahaVoice,
+    options?: {
+      volume?: number;
+      pan?: number;
+      reverb?: number;
+      chorus?: number;
+      ntt?: NttRule;
+      ntr?: NtrRule;
+    }
+  ): { success: boolean; message: string } {
+    if (!parsed) return { success: false, message: '無效的伴奏檔案結構' };
+    const secNameLower = sectionName.trim().toLowerCase();
+    const sec = parsed.sections.find((s) => s.name.trim().toLowerCase() === secNameLower);
+    if (!sec) return { success: false, message: `找不到段落: ${sectionName}` };
+
+    const vol = options?.volume ?? 100;
+    const pan = options?.pan ?? 64;
+    const rev = options?.reverb ?? 40;
+    const cho = options?.chorus ?? 0;
+
+    // 1. 更新全域 parsed.parts
+    const existingPart = parsed.parts.find((p) => p.channel === channel);
+    if (existingPart) {
+      existingPart.bankMsb = voice.msb;
+      existingPart.bankLsb = voice.lsb;
+      existingPart.programChange = voice.pc;
+      existingPart.volume = vol;
+      existingPart.pan = pan;
+      existingPart.reverb = rev;
+      existingPart.chorus = cho;
+    } else {
+      parsed.parts.push({
+        trackIndex: 0,
+        channel,
+        partName: `Part ${channel + 1}`,
+        bankMsb: voice.msb,
+        bankLsb: voice.lsb,
+        programChange: voice.pc,
+        volume: vol,
+        pan,
+        reverb: rev,
+        chorus: cho,
+      });
+    }
+
+    // 2. 僅更新目標段落 initialControllers (確保切換至該段落時有專屬音色與混音快照，且不污染其他段落)
+    if (!sec.initialControllers) sec.initialControllers = {};
+    sec.initialControllers[channel] = {
+      bankMsb: voice.msb,
+      bankLsb: voice.lsb,
+      programChange: voice.pc,
+      volume: vol,
+      pan,
+      reverb: rev,
+      chorus: cho,
+    };
+
+    // 3. 在 Track 0 當前段落起始位置寫入完整的音色與 CC 7 / 10 / 11 / 91 / 93 初始化事件
+    this.setPartMixing(
+      parsed,
+      channel,
+      {
+        bankMsb: voice.msb,
+        bankLsb: voice.lsb,
+        programChange: voice.pc,
+        volume: vol,
+        pan,
+        reverb: rev,
+        chorus: cho,
+      },
+      { targetSection: sectionName }
+    );
+
+    // 確保起始 Expression (CC 11) 為 127
+    const range = StyleRemixer.getSectionTickRange(parsed, sectionName);
+    if (range && parsed.tracks[0]?.events) {
+      const track0 = parsed.tracks[0];
+      let cur = 0;
+      let inserted = false;
+      const newEvents: MidiEvent[] = [];
+      for (const ev of track0.events) {
+        cur += ev.delta;
+        if (!inserted && cur >= range.startTick) {
+          newEvents.push({
+            delta: 0,
+            type: 'controlChange',
+            channel,
+            controller: 11,
+            value: 127,
+          });
+          inserted = true;
+        }
+        newEvents.push(ev);
+      }
+      if (!inserted) {
+        newEvents.push({
+          delta: 0,
+          type: 'controlChange',
+          channel,
+          controller: 11,
+          value: 127,
+        });
+      }
+      track0.events = newEvents;
+    }
+
+    // 4. 智慧增量注入或更新 Yamaha SFF2 CASM 轉調規則 (100% 保持既有 CASM 結構與所有段落聲部之原始映射)
+    const isDrum = voice.category === 'Drums' || voice.msb === 127 || channel === 8 || channel === 9;
+    const isBass = voice.category === 'Bass' || channel === 10;
+    const isPhrase = channel === 14 || channel === 15;
+
+    const ntr: NtrRule = options?.ntr ?? (isDrum ? 'Root Fixed' : 'Root Transpose');
+    const ntt: NttRule = options?.ntt ?? (isDrum ? 'Bypass' : isBass ? 'Bass' : isPhrase ? 'Melody' : 'Chord');
+    const lowLim = isDrum ? 0 : isBass ? 28 : isPhrase ? 36 : 36;
+    const highLim = isDrum ? 127 : isBass ? 55 : isPhrase ? 96 : 84;
+    const rtr = isDrum ? 'Stop' : isPhrase ? 'Pitch Shift' : 'Retrigger';
+
+    const partOrder: StylePartId[] = ['Rhythm1', 'Rhythm2', 'Bass', 'Chord1', 'Chord2', 'Pad', 'Phrase1', 'Phrase2'];
+    const partId = partOrder[channel - 8] || 'Chord2';
+    let tag = 'PartMain';
+    if (channel === 8) tag = 'Rhy1Main';
+    else if (channel === 9) tag = 'Drum4cc ';
+    else if (channel === 10) tag = 'BassMain';
+    else if (channel === 11) tag = 'Chd1Main';
+    else if (channel === 12) tag = 'Chd2Main';
+    else if (channel === 13) tag = 'Pad Main';
+    else if (channel === 14) tag = 'Phr1Main';
+    else if (channel === 15) tag = 'Phr2Main';
+
+    const rule: CasmPartRule = {
+      channel,
+      partId,
+      partName: tag,
+      ntr,
+      ntt,
+      noteLowLimit: lowLim,
+      noteHighLimit: highLim,
+      retriggerRule: rtr,
+      isDrum,
+    };
+
+    CasmModifier.injectOrUpdateSectionCasmRule(parsed, sectionName, channel, rule);
+
+    // 5. 重新同步 parsed.casmMappings
+    const casmChunk = parsed.customChunks.find((c) => c.id === 'CASM');
+    if (casmChunk) {
+      parsed.casmMappings = YamahaParser.parseCasmMappings(casmChunk.data);
+    }
+    if (!parsed.casmMappings) parsed.casmMappings = {};
+    if (!parsed.casmMappings[secNameLower]) parsed.casmMappings[secNameLower] = {};
+    parsed.casmMappings[secNameLower][channel] = channel;
+    parsed.hasCasm = true;
+
+    return {
+      success: true,
+      message: `成功啟用聲部 CH ${channel + 1} (${voice.name})，已建立 CASM 轉調規則 (NTT: ${ntt}, NTR: ${ntr})`,
+    };
   }
 }
 

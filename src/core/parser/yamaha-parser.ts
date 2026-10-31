@@ -22,7 +22,7 @@ const CHANNEL_TO_PART_NAME: Record<number, string> = {
 
 // Yamaha SFF1 傳統伴奏聲部映射 (MIDI Channel 1~8，即 0-indexed 0~7)
 const SFF1_CHANNEL_TO_PART_NAME: Record<number, string> = {
-  0: 'Sub Rhythm (Rhythm 1)',
+  0: 'Extra Part 1',
   1: 'Bass',
   2: 'Chord 1',
   3: 'Chord 2',
@@ -102,6 +102,7 @@ export class YamahaParser {
       let trackName: string | undefined;
       let runningStatus: number | undefined;
       let currentTick = 0;
+      let isInitialRegion = true;
 
       while (reader.position < trackDataStart + chunkLength && reader.hasMore()) {
         const delta = reader.readVarInt();
@@ -181,6 +182,9 @@ export class YamahaParser {
                 name: trimmed,
                 startTick: currentTick,
               });
+              if (!['SFF1', 'SFF2', 'SInt'].includes(trimmed)) {
+                isInitialRegion = false;
+              }
             }
           }
 
@@ -231,6 +235,9 @@ export class YamahaParser {
           if (eventType === 0x90 || eventType === 0x80) {
             const noteNumber = reader.readUint8();
             const velocity = reader.readUint8();
+            if (eventType === 0x90 && velocity > 0) {
+              isInitialRegion = false;
+            }
             events.push({
               delta,
               type: eventType === 0x90 && velocity > 0 ? 'noteOn' : 'noteOff',
@@ -242,12 +249,24 @@ export class YamahaParser {
             const controller = reader.readUint8();
             const value = reader.readUint8();
 
-            if (controller === 0) partInfo.bankMsb = value;
-            if (controller === 32) partInfo.bankLsb = value;
-            if (controller === 7) partInfo.volume = value;
-            if (controller === 10) partInfo.pan = value;
-            if (controller === 91) partInfo.reverb = value;
-            if (controller === 93) partInfo.chorus = value;
+            if (controller === 0) {
+              if (isInitialRegion || partInfo.bankMsb === undefined) partInfo.bankMsb = value;
+            }
+            if (controller === 32) {
+              if (isInitialRegion || partInfo.bankLsb === undefined) partInfo.bankLsb = value;
+            }
+            if (controller === 7) {
+              if (isInitialRegion || partInfo.volume === undefined) partInfo.volume = value;
+            }
+            if (controller === 10) {
+              if (isInitialRegion || partInfo.pan === undefined) partInfo.pan = value;
+            }
+            if (controller === 91) {
+              if (isInitialRegion || partInfo.reverb === undefined) partInfo.reverb = value;
+            }
+            if (controller === 93) {
+              if (isInitialRegion || partInfo.chorus === undefined) partInfo.chorus = value;
+            }
 
             events.push({
               delta,
@@ -258,7 +277,9 @@ export class YamahaParser {
             });
           } else if (eventType === 0xc0) {
             const program = reader.readUint8();
-            partInfo.programChange = program;
+            if (isInitialRegion || partInfo.programChange === undefined) {
+              partInfo.programChange = program;
+            }
             events.push({
               delta,
               type: 'programChange',
@@ -315,6 +336,31 @@ export class YamahaParser {
       sections[i].endTick = nextTick;
       if (nextTick !== undefined) {
         sections[i].measureCount = Math.round((nextTick - sections[i].startTick) / ticksPerMeasure);
+      }
+    }
+
+    // 為每個正式段落提取其起始小節 (startTick) 的 Controller / Program 快照
+    if (tracks[0] && tracks[0].events) {
+      let trkTick = 0;
+      for (const ev of tracks[0].events) {
+        trkTick += ev.delta;
+        for (const sec of sections) {
+          if (trkTick === sec.startTick && ev.channel !== undefined) {
+            if (!sec.initialControllers) sec.initialControllers = {};
+            const c = ev.channel;
+            if (!sec.initialControllers[c]) sec.initialControllers[c] = {};
+            if (ev.type === 'controlChange' && ev.controller !== undefined && ev.value !== undefined) {
+              if (ev.controller === 0) sec.initialControllers[c].bankMsb = ev.value;
+              if (ev.controller === 32) sec.initialControllers[c].bankLsb = ev.value;
+              if (ev.controller === 7) sec.initialControllers[c].volume = ev.value;
+              if (ev.controller === 10) sec.initialControllers[c].pan = ev.value;
+              if (ev.controller === 91) sec.initialControllers[c].reverb = ev.value;
+              if (ev.controller === 93) sec.initialControllers[c].chorus = ev.value;
+            } else if (ev.type === 'programChange' && ev.program !== undefined) {
+              sec.initialControllers[c].programChange = ev.program;
+            }
+          }
+        }
       }
     }
 

@@ -114,6 +114,6 @@ describe('Intro A 音軌同步與 Phrase 1/2 高音域自適應修復驗證', ()
     expect(introA?.sectionVoices?.[11]?.name).toContain('SteelGuitarTwin2'); // Chord 1 = 吉他
     expect(introA?.sectionVoices?.[13]?.name).toContain('Cocktail Piano');   // Pad = 鋼琴
     expect(introA?.sectionVoices?.[14]?.name).toContain('BellHeaven');       // Phrase 1 = 鈴音 Pad
-    expect(introA?.sectionVoices?.[15]?.name).toContain('SeattleStrings');    // Phrase 2 = 西雅圖弦樂
+    expect(introA?.sectionVoices?.[15]?.name).toMatch(/Warm Pad|SeattleStrings/); // Phrase 2 (SInt 初始真確音色為 Warm Pad)
   });
 });

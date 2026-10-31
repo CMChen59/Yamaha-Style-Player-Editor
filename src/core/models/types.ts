@@ -24,11 +24,22 @@ export interface MidiTrack {
   rawChunk: Uint8Array;
 }
 
+export interface YamahaSectionControllers {
+  bankMsb?: number;
+  bankLsb?: number;
+  programChange?: number;
+  volume?: number;
+  pan?: number;
+  reverb?: number;
+  chorus?: number;
+}
+
 export interface YamahaSection {
   name: string;          // 如 'Main A', 'Intro A', 'Fill In AA'
   startTick: number;     // 區段起始 Tick
   endTick?: number;      // 區段結束 Tick
   measureCount?: number; // 小節數量
+  initialControllers?: Record<number, YamahaSectionControllers>; // 該段落起始小節對應通道之獨立 CC/PC 控制器快照
 }
 
 export interface YamahaTrackInfo {

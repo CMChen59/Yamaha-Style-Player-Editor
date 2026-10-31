@@ -6,10 +6,11 @@ import { getSharedAudioContext } from '../creator/shared-audio-context';
 import { SingleTrackEditor } from './single-track-editor';
 import { YamahaWriter } from '../core/writer/yamaha-writer';
 import { YamahaStyleModifier } from '../core/writer/style-modifier';
-import type { PlaybackNoteEvent } from './sty-playback-engine';
+import type { PlaybackNoteEvent, PlaybackCCEvent } from './sty-playback-engine';
 import { VoicePickerModal } from './voice-picker-modal';
 import { SectionCloneModal } from './section-clone-modal';
-import type { YamahaVoice } from '../core/data/yamaha-voices';
+import { ChordTransposer, POPULAR_AUDITION_CHORDS, type ChordDefinition, type ChordType } from '../core/writer/chord-transposer';
+import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
 
 // Yamaha 標準 8 伴奏聲部定義
 interface PartDef {
@@ -75,6 +76,7 @@ export class PlayerApp {
   private btnOutputMidi!: HTMLButtonElement;
   private midiDrawer!: HTMLElement;
   private selectMidiPort!: HTMLSelectElement;
+  private selectMidiInPort!: HTMLSelectElement;
   private btnRefreshMidi!: HTMLButtonElement;
   private btnTestPiano!: HTMLButtonElement;
   private outputCurrentStatus!: HTMLElement;
@@ -82,6 +84,14 @@ export class PlayerApp {
   private voicePicker!: VoicePickerModal;
   private sectionCloneModal!: SectionCloneModal;
   private btnOpenSectionClone!: HTMLButtonElement;
+  // 🎹 虛擬和弦轉調測試元件
+  private chordPillsContainer!: HTMLElement;
+  private labelCurrentChordName!: HTMLElement;
+  private labelCurrentChordDetail!: HTMLElement;
+  private selectChordRoot!: HTMLSelectElement;
+  private selectChordType!: HTMLSelectElement;
+  private btnApplyCustomChord!: HTMLButtonElement;
+  private btnResetChord!: HTMLButtonElement;
 
   constructor() {
     document.addEventListener('DOMContentLoaded', () => this.init());
@@ -91,6 +101,7 @@ export class PlayerApp {
     this.bindDomElements();
     this.setupEventListeners();
     this.setupEngineCallbacks();
+    this.setupChordAuditionBar();
     this.renderMixer();
 
     const editorEl = document.getElementById('single-track-editor')!;
@@ -99,11 +110,19 @@ export class PlayerApp {
       this.updateFocusedBanner();
       this.syncEditorEventsToParsed(channel, events);
     });
+    this.trackEditor.setOnCCEventsChanged((channel, controller, events) => {
+      this.syncEditorCCEventsToParsed(channel, controller, events);
+    });
     this.trackEditor.setOnRequestSwitchChannel((channel) => {
       this.setFocusedChannel(channel);
     });
     this.trackEditor.setOnOpenVoicePicker((channel) => {
       this.openVoicePickerForChannel(channel);
+    });
+    this.trackEditor.setOnRequestActivate((channel) => {
+      if (!this.isChannelActive(channel)) {
+        this.activateChannel(channel);
+      }
     });
 
     this.voicePicker = new VoicePickerModal();
@@ -153,9 +172,19 @@ export class PlayerApp {
     this.btnOutputMidi = document.getElementById('btn-output-midi') as HTMLButtonElement;
     this.midiDrawer = document.getElementById('midi-drawer')!;
     this.selectMidiPort = document.getElementById('select-midi-port') as HTMLSelectElement;
+    this.selectMidiInPort = document.getElementById('select-midi-in-port') as HTMLSelectElement;
     this.btnRefreshMidi = document.getElementById('btn-refresh-midi') as HTMLButtonElement;
     this.btnTestPiano = document.getElementById('btn-test-piano') as HTMLButtonElement;
     this.outputCurrentStatus = document.getElementById('output-current-status')!;
+
+    // 🎹 虛擬和弦轉調測試元件綁定
+    this.chordPillsContainer = document.getElementById('chord-pills-row')!;
+    this.labelCurrentChordName = document.getElementById('current-chord-name')!;
+    this.labelCurrentChordDetail = document.getElementById('current-chord-detail')!;
+    this.selectChordRoot = document.getElementById('select-chord-root') as HTMLSelectElement;
+    this.selectChordType = document.getElementById('select-chord-type') as HTMLSelectElement;
+    this.btnApplyCustomChord = document.getElementById('btn-apply-custom-chord') as HTMLButtonElement;
+    this.btnResetChord = document.getElementById('btn-reset-chord') as HTMLButtonElement;
   }
 
   private setupEventListeners() {
@@ -348,6 +377,12 @@ export class PlayerApp {
       }
     });
 
+    this.selectMidiInPort?.addEventListener('change', () => {
+      if (this.selectMidiInPort.value) {
+        midiManager.selectInput(this.selectMidiInPort.value);
+      }
+    });
+
     this.btnRefreshMidi.addEventListener('click', async () => {
       await this.refreshMidiPorts();
     });
@@ -412,6 +447,30 @@ export class PlayerApp {
       const name = selected?.name || ports[0].name;
       this.midiStatusPill.textContent = `🟢 已連線: ${name}`;
       this.midiStatusPill.classList.add('connected');
+    }
+
+    // 更新實體琴鍵 MIDI 輸入埠
+    if (this.selectMidiInPort) {
+      const inPorts = midiManager.getAvailableInputs();
+      this.selectMidiInPort.innerHTML = '';
+      if (inPorts.length === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = '無可用 MIDI 輸入設備';
+        opt.disabled = true;
+        opt.selected = true;
+        this.selectMidiInPort.appendChild(opt);
+      } else {
+        const selectedIn = midiManager.getSelectedInput();
+        inPorts.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.name + (p.isRecommended ? ' (推薦 Yamaha 琴鍵輸入)' : '');
+          if (selectedIn && selectedIn.id === p.id) {
+            opt.selected = true;
+          }
+          this.selectMidiInPort.appendChild(opt);
+        });
+      }
     }
   }
 
@@ -508,11 +567,11 @@ export class PlayerApp {
     this.sectionButtonsContainer.innerHTML = '';
     const sections = styPlaybackEngine.getSections();
 
-    // 依 Yamaha Arranger 邏輯分組排序
+    // 依 Yamaha Arranger 邏輯分組排序 (含 Break / Fill In BA)
     const orderPriority = [
       'intro a', 'intro b', 'intro c',
       'main a', 'main b', 'main c', 'main d',
-      'fill in aa', 'fill in bb', 'fill in cc', 'fill in dd', 'break',
+      'fill in aa', 'fill in bb', 'fill in cc', 'fill in dd', 'break', 'fill in ba',
       'ending a', 'ending b', 'ending c',
     ];
 
@@ -530,17 +589,24 @@ export class PlayerApp {
       btn.className = 'section-btn';
       btn.setAttribute('data-section', sec.name);
 
+      let displayName = sec.name;
+      if (sec.name.toLowerCase() === 'fill in ba') {
+        displayName = 'Break (Fill In BA)';
+      }
+
       const isMain = sec.name.toLowerCase().startsWith('main');
       const isIntro = sec.name.toLowerCase().startsWith('intro');
       const isEnding = sec.name.toLowerCase().startsWith('ending');
+      const isBreak = sec.name.toLowerCase() === 'fill in ba' || sec.name.toLowerCase() === 'break';
 
       let badgeClass = 'badge-other';
       if (isMain) badgeClass = 'badge-main';
       if (isIntro) badgeClass = 'badge-intro';
       if (isEnding) badgeClass = 'badge-ending';
+      if (isBreak) badgeClass = 'badge-break';
 
       btn.innerHTML = `
-        <span class="sec-badge ${badgeClass}">${sec.name}</span>
+        <span class="sec-badge ${badgeClass}">${displayName}</span>
         <span class="sec-bars">${sec.measureCount ?? 1} 小節</span>
       `;
 
@@ -579,6 +645,7 @@ export class PlayerApp {
     this.labelPosition.textContent = `小節 01 / ${totalBars.toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
 
     // 依段落同步混音台音量滑桿與數值
+    this.renderMixer();
     this.syncMixerVolumes();
     this.syncSectionResizeUI();
 
@@ -618,6 +685,8 @@ export class PlayerApp {
     const division = this.currentParsed?.division || 480;
     const timeSig = this.currentParsed?.timeSignature || { numerator: 4, denominator: 4 };
     const voiceInfo = styPlaybackEngine.getPartVoices().get(this.focusedChannel) || null;
+    const isActive = this.isChannelActive(this.focusedChannel);
+    const ccEvents = styPlaybackEngine.getChannelCCEvents(this.focusedChannel);
 
     this.trackEditor.loadTrack(
       this.focusedChannel,
@@ -628,7 +697,9 @@ export class PlayerApp {
       totalBars,
       division,
       timeSig,
-      voiceInfo
+      voiceInfo,
+      isActive,
+      ccEvents
     );
   }
 
@@ -636,11 +707,25 @@ export class PlayerApp {
     const part = YAMAHA_PARTS.find(p => p.channel === this.focusedChannel) || YAMAHA_PARTS[0];
     const voiceInfo = styPlaybackEngine.getPartVoices().get(part.channel);
     const noteCount = styPlaybackEngine.getChannelEvents(part.channel).length;
+    const isActive = this.isChannelActive(part.channel);
 
     this.focusedTrackBanner.style.setProperty('--part-accent', part.color);
-    this.focusedTrackTitle.textContent = `CH ${part.channel + 1} - ${part.label}`;
-    this.focusedTrackVoice.textContent = voiceInfo?.voiceName || part.defaultName;
-    this.focusedTrackMeta.textContent = `本段音符數: ${noteCount} 個 ｜ MIDI 通道: CH ${part.channel + 1} ｜ 類型: ${voiceInfo?.category || 'General'}`;
+
+    if (!isActive) {
+      this.focusedTrackTitle.innerHTML = `CH ${part.channel + 1} - ${part.label} <span class="banner-status-badge inactive">⚪ 未啟用 (空白聲部)</span>`;
+      this.focusedTrackVoice.innerHTML = `<button id="btn-banner-activate" class="banner-activate-btn" title="為此聲部挑選樂器音色並自動建立 CASM 伴奏轉調規則">➕ 立即啟用此聲部 (挑選樂器)</button>`;
+      this.focusedTrackMeta.textContent = `本段音符數: 0 個 ｜ 狀態: 尚未配置 Yamaha 音色與 CASM 轉調規則 ｜ 點擊「立即啟用」或開始錄音即可自動建立`;
+
+      const btnAct = this.focusedTrackVoice.querySelector('#btn-banner-activate');
+      btnAct?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openVoicePickerForChannel(part.channel);
+      });
+    } else {
+      this.focusedTrackTitle.innerHTML = `CH ${part.channel + 1} - ${part.label} <span class="banner-status-badge active">✅ 已啟用</span>`;
+      this.focusedTrackVoice.textContent = voiceInfo?.voiceName || part.defaultName;
+      this.focusedTrackMeta.textContent = `本段音符數: ${noteCount} 個 ｜ MIDI 通道: CH ${part.channel + 1} ｜ 類型: ${voiceInfo?.category || 'General'}`;
+    }
 
     // 更新橫幅上的獨奏與靜音按鈕狀態
     const isMuted = styPlaybackEngine.isChannelMuted(part.channel);
@@ -661,25 +746,116 @@ export class PlayerApp {
     this.updateFocusedBanner();
   }
 
+  /**
+   * 🎹 初始化虛擬左手和弦轉調測試條 (Virtual Chord Audition Bar)
+   */
+  private setupChordAuditionBar() {
+    if (!this.chordPillsContainer) return;
+
+    // 1. 動態渲染常用流行和弦快捷按鈕
+    this.chordPillsContainer.innerHTML = '';
+    const currentChord = styPlaybackEngine.getAuditionChord();
+
+    POPULAR_AUDITION_CHORDS.forEach((chord) => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'chord-pill';
+      pill.dataset.chordName = chord.displayName;
+      pill.textContent = chord.displayName;
+      if (chord.displayName === currentChord.displayName) {
+        pill.classList.add('is-active-chord');
+      }
+
+      pill.addEventListener('click', () => {
+        styPlaybackEngine.setAuditionChord(chord);
+        styPlaybackEngine.previewChord(chord);
+      });
+
+      this.chordPillsContainer.appendChild(pill);
+    });
+
+    // 2. 自由組合和弦套用
+    if (this.btnApplyCustomChord) {
+      this.btnApplyCustomChord.addEventListener('click', () => {
+        const root = this.selectChordRoot?.value || 'C';
+        const type = (this.selectChordType?.value || 'maj') as ChordType;
+        const customChord = ChordTransposer.buildChord(root, type);
+        styPlaybackEngine.setAuditionChord(customChord);
+        styPlaybackEngine.previewChord(customChord);
+      });
+    }
+
+    // 3. 一鍵重設回 C 原調
+    if (this.btnResetChord) {
+      this.btnResetChord.addEventListener('click', () => {
+        styPlaybackEngine.resetAuditionChord();
+      });
+    }
+
+    // 4. 監聽播放引擎和弦切換事件，自動同步更新 UI
+    styPlaybackEngine.onChordChange((chord) => {
+      this.updateChordAuditionUI(chord);
+    });
+
+    // 初始化當前顯示
+    this.updateChordAuditionUI(currentChord);
+  }
+
+  /**
+   * 同步更新虛擬和弦測試條介面顯示
+   */
+  private updateChordAuditionUI(chord: ChordDefinition) {
+    if (this.labelCurrentChordName) {
+      this.labelCurrentChordName.textContent = chord.displayName;
+    }
+    if (this.labelCurrentChordDetail) {
+      this.labelCurrentChordDetail.textContent = ChordTransposer.getChordDescription(chord);
+    }
+
+    // 同步更新所有和弦膠囊按鈕狀態
+    const pills = this.chordPillsContainer?.querySelectorAll('.chord-pill');
+    if (pills) {
+      pills.forEach((p) => {
+        const pillEl = p as HTMLElement;
+        const isActive = pillEl.dataset.chordName === chord.displayName;
+        pillEl.classList.toggle('is-active-chord', isActive);
+      });
+    }
+
+    // 同步下拉選單數值
+    if (this.selectChordRoot) {
+      this.selectChordRoot.value = chord.root;
+    }
+    if (this.selectChordType) {
+      this.selectChordType.value = chord.type;
+    }
+  }
+
   private renderMixer() {
     this.mixerContainer.innerHTML = '';
     YAMAHA_PARTS.forEach((part) => {
+      const isActive = this.isChannelActive(part.channel);
       const card = document.createElement('div');
       card.id = `card-ch-${part.channel}`;
-      card.className = 'mixer-card';
-      if (part.channel === this.focusedChannel) {
-        card.classList.add('is-focused');
-      }
+      card.className = `mixer-card ${part.channel === this.focusedChannel ? 'is-focused' : ''} ${!isActive ? 'is-inactive' : ''}`;
       card.style.setProperty('--part-accent', part.color);
+
+      const voiceInfo = styPlaybackEngine.getPartVoices().get(part.channel);
+      const voiceDisplayHtml = isActive
+        ? `<div id="part-voice-${part.channel}" class="part-voice clickable-voice" title="點擊開啟 Yamaha 原廠音色庫更換音色">${voiceInfo?.voiceName || part.defaultName} ✏️</div>`
+        : `<div id="part-voice-${part.channel}" class="part-voice clickable-voice voice-inactive" title="此聲部尚未啟用，點擊挑選樂器音色並自動建立 CASM 伴奏規則">
+             <span class="btn-activate-badge">➕ 啟用聲部 (選音色)</span>
+           </div>`;
 
       card.innerHTML = `
         <div class="part-top-bar">
           <span class="channel-pill">CH ${part.channel + 1}</span>
           <span class="focus-badge">🎯 焦點</span>
+          ${!isActive ? '<span class="inactive-pill">未啟用</span>' : ''}
           <div id="led-ch-${part.channel}" class="activity-led"></div>
         </div>
         <div class="part-title">${part.label}</div>
-        <div id="part-voice-${part.channel}" class="part-voice clickable-voice" title="點擊開啟 Yamaha 原廠音色庫更換音色">${part.defaultName} ✏️</div>
+        ${voiceDisplayHtml}
         <div class="part-controls">
           <button id="btn-mute-${part.channel}" class="mixer-btn btn-mute">Mute</button>
           <button id="btn-solo-${part.channel}" class="mixer-btn btn-solo">Solo</button>
@@ -818,13 +994,18 @@ export class PlayerApp {
 
     try {
       await midiManager.requestAccess();
+      await this.refreshMidiPorts();
       const selectedOut = midiManager.getSelectedOutput();
-      if (selectedOut) {
-        const name = selectedOut.name || 'MIDI Output';
-        this.midiStatusPill.textContent = `🟢 已連線: ${name}`;
+      const selectedIn = midiManager.getSelectedInput();
+      if (selectedOut || selectedIn) {
+        const outName = selectedOut?.name || '無輸出';
+        const inName = selectedIn?.name || '無輸入';
+        this.midiStatusPill.textContent = selectedOut
+          ? `🟢 已連線: ${outName}`
+          : `🟡 輸入已就緒: ${inName}`;
         this.midiStatusPill.classList.add('connected');
       } else {
-        this.midiStatusPill.textContent = '⚪ 未偵測到 MIDI 輸出埠';
+        this.midiStatusPill.textContent = '⚪ 未偵測到 MIDI 設備';
       }
     } catch {
       this.midiStatusPill.textContent = '⚪ MIDI 權限未開啟';
@@ -842,6 +1023,22 @@ export class PlayerApp {
       this.currentParsed,
       currentSec,
       channel,
+      events
+    );
+  }
+
+  /**
+   * 將單軌編輯器 CC 控制器自動化曲線即時同步回記憶體中的 STY 結構 (parsed SMF Track 0)
+   */
+  private syncEditorCCEventsToParsed(channel: number, controller: number, events: PlaybackCCEvent[]) {
+    if (!this.currentParsed) return;
+    const currentSec = styPlaybackEngine.getCurrentSection()?.name;
+    if (!currentSec) return;
+    YamahaStyleModifier.replaceSectionChannelCCEvents(
+      this.currentParsed,
+      currentSec,
+      channel,
+      controller,
       events
     );
   }
@@ -933,6 +1130,98 @@ export class PlayerApp {
   }
 
   /**
+   * 檢查特定聲部在當前段落中是否已啟用
+   */
+  public isChannelActive(channel: number): boolean {
+    if (!this.currentParsed || !this.activeSectionName) return false;
+    return YamahaStyleModifier.isSectionChannelActive(this.currentParsed, this.activeSectionName, channel);
+  }
+
+  /**
+   * 取得特定聲部的 Yamaha 官方推薦預設音色
+   */
+  public getDefaultVoiceForPart(channel: number): YamahaVoice {
+    switch (channel) {
+      case 8: // Rhythm 1
+        return findYamahaVoice(127, 0, 89) || findYamahaVoice(127, 0, 0) || {
+          id: 'pop_kit', name: 'Pop Drum Kit', chineseName: '現代流行電台打擊鼓組', category: 'Drums', msb: 127, lsb: 0, pc: 89, icon: 'S801'
+        };
+      case 9: // Rhythm 2
+        return findYamahaVoice(127, 0, 0) || {
+          id: 'std_kit', name: 'Standard Kit 1', chineseName: '標準原廠打擊鼓組', category: 'Drums', msb: 127, lsb: 0, pc: 0, icon: 'S801'
+        };
+      case 10: // Bass
+        return findYamahaVoice(104, 2, 33) || findYamahaVoice(0, 112, 33) || {
+          id: 'finger_bass', name: 'Finger Bass', chineseName: '指彈爵士電貝斯', category: 'Bass', msb: 104, lsb: 2, pc: 33, icon: 'S809'
+        };
+      case 11: // Chord 1
+        return findYamahaVoice(104, 1, 0) || findYamahaVoice(0, 112, 0) || {
+          id: 'cfx_grand', name: 'CFX Concert Grand', chineseName: 'CFX 音樂會旗艦三角鋼琴', category: 'Piano', msb: 104, lsb: 1, pc: 0, icon: 'S801'
+        };
+      case 12: // Chord 2
+        return findYamahaVoice(104, 1, 4) || findYamahaVoice(0, 112, 4) || {
+          id: 'suitcase_ep', name: 'Suitcase Clean EP', chineseName: '經典電鋼琴 (Suitcase)', category: 'E.Piano', msb: 104, lsb: 1, pc: 4, icon: 'S801'
+        };
+      case 13: // Pad
+        return findYamahaVoice(8, 33, 49) || findYamahaVoice(0, 112, 48) || {
+          id: 'live_strings', name: 'Live! Strings', chineseName: '動態現場弦樂團', category: 'Strings', msb: 8, lsb: 33, pc: 49, icon: 'S809'
+        };
+      case 14: // Phrase 1
+        return findYamahaVoice(104, 2, 64) || findYamahaVoice(0, 112, 64) || {
+          id: 'sweet_sax', name: 'Sweet! Soprano Sax', chineseName: '高音薩克斯風 (Sweet!)', category: 'Saxophone', msb: 104, lsb: 2, pc: 64, icon: 'S809'
+        };
+      case 15: // Phrase 2
+        return findYamahaVoice(8, 35, 49) || findYamahaVoice(0, 112, 73) || {
+          id: 'studio_strings', name: 'Studio Strings', chineseName: '錄音室精緻弦樂', category: 'Strings', msb: 8, lsb: 35, pc: 49, icon: 'S809'
+        };
+      default:
+        return findYamahaVoice(104, 1, 0) || {
+          id: 'piano', name: 'Piano', chineseName: '鋼琴', category: 'Piano', msb: 0, lsb: 112, pc: 0, icon: 'S801'
+        };
+    }
+  }
+
+  /**
+   * 啟用/新增一個空白未使用的伴奏聲部 (Plan A)
+   * 1. 寫入音色、控制器、CASM 伴奏規則
+   * 2. 同步播放引擎各項狀態
+   * 3. 重新渲染 Mixer 與 Banner
+   */
+  public activateChannel(channel: number, voice?: YamahaVoice): boolean {
+    if (!this.currentParsed || !this.activeSectionName) return false;
+
+    const targetVoice = voice || this.getDefaultVoiceForPart(channel);
+    const result = YamahaStyleModifier.activateSectionChannel(
+      this.currentParsed,
+      this.activeSectionName,
+      channel,
+      targetVoice
+    );
+
+    if (!result.success) return false;
+
+    // 1. 同步播放引擎各項狀態
+    styPlaybackEngine.setChannelVoice(channel, targetVoice);
+    styPlaybackEngine.setChannelVolume(channel, 100);
+    styPlaybackEngine.setChannelPan(channel, 64);
+    styPlaybackEngine.setChannelReverb(channel, 40);
+    styPlaybackEngine.setChannelChorus(channel, 0);
+
+    // 2. 重新選取當前段落以更新快照與 CASM 路由
+    styPlaybackEngine.selectSection(this.activeSectionName);
+
+    // 3. 更新 UI
+    this.renderMixer();
+    this.updateFocusedBanner();
+    this.refreshTrackEditor();
+
+    // 4. 試聽剛啟用的音色樂句
+    styPlaybackEngine.previewVoicePhrase(channel, targetVoice);
+
+    return true;
+  }
+
+  /**
    * 開啟指定 Channel 的 Yamaha 原廠音色搜尋與選擇視窗 (Voice Picker Modal)
    */
   public openVoicePickerForChannel(channel: number) {
@@ -951,6 +1240,12 @@ export class PlayerApp {
    * 4. 播放示範試聽樂句 (Audition Phrase)
    */
   public applyVoiceToChannel(channel: number, voice: YamahaVoice) {
+    // 若該聲部尚未啟用，自動走一鍵啟用流程 (自動建立 CASM 轉調規則與控制器快照)
+    if (!this.isChannelActive(channel)) {
+      this.activateChannel(channel, voice);
+      return;
+    }
+
     // 1. 更新播放引擎 (軟體合成器 or 實體 MIDI)
     styPlaybackEngine.setChannelVoice(channel, voice);
 
@@ -961,6 +1256,31 @@ export class PlayerApp {
         bankLsb: voice.lsb,
         programChange: voice.pc,
       });
+      // 同步更新當前段落 CASM 來源通道與首音符控制器快照 (例如 SFF1 Intro A: Src 2 -> Dest 14)
+      const currentSec = styPlaybackEngine.getCurrentSection();
+      if (currentSec) {
+        const secNameLower = currentSec.name.toLowerCase();
+        const casmSecMap = this.currentParsed.casmMappings?.[secNameLower]
+          || this.currentParsed.casmMappings?.[secNameLower.replace(/\s+/g, '')];
+
+        if (casmSecMap) {
+          for (const [srcStr, dst] of Object.entries(casmSecMap)) {
+            if (dst === channel) {
+              const srcCh = parseInt(srcStr, 10);
+              YamahaStyleModifier.setPartMixing(this.currentParsed, srcCh, {
+                bankMsb: voice.msb,
+                bankLsb: voice.lsb,
+                programChange: voice.pc,
+              });
+              if (currentSec.initialControllers?.[srcCh]) {
+                currentSec.initialControllers[srcCh].programChange = voice.pc;
+                currentSec.initialControllers[srcCh].bankMsb = voice.msb;
+                currentSec.initialControllers[srcCh].bankLsb = voice.lsb;
+              }
+            }
+          }
+        }
+      }
     }
 
     // 3. 更新伴奏小卡 UI
@@ -989,9 +1309,13 @@ export class PlayerApp {
     }
 
     try {
-      // 1. 同步當前段落所有聲部的即時事件與混音音量
+      // 1. 同步當前段落所有聲部的即時事件與混音音量 (含 CASM 來源通道同步)
       const currentSec = styPlaybackEngine.getCurrentSection()?.name;
       if (currentSec) {
+        const secNameLower = currentSec.toLowerCase();
+        const casmSecMap = this.currentParsed.casmMappings?.[secNameLower]
+          || this.currentParsed.casmMappings?.[secNameLower.replace(/\s+/g, '')];
+
         for (let ch = 8; ch <= 15; ch++) {
           const events = styPlaybackEngine.getChannelEvents(ch);
           YamahaStyleModifier.replaceSectionChannelNotes(
@@ -1002,6 +1326,15 @@ export class PlayerApp {
           );
           const vol = styPlaybackEngine.getChannelVolume(ch);
           YamahaStyleModifier.setPartMixing(this.currentParsed, ch, { volume: vol });
+
+          if (casmSecMap) {
+            for (const [srcStr, dst] of Object.entries(casmSecMap)) {
+              if (dst === ch) {
+                const srcCh = parseInt(srcStr, 10);
+                YamahaStyleModifier.setPartMixing(this.currentParsed, srcCh, { volume: vol });
+              }
+            }
+          }
         }
       }
 
