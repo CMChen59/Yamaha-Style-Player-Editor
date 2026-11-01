@@ -6,6 +6,7 @@ import type {
   YamahaSection,
   YamahaTrackInfo,
   YamahaCustomChunk,
+  CasmChannelEntry,
 } from '../models/types';
 
 // Yamaha 標準 8 個伴奏聲部映射 (MIDI Channel 9~16，即 0-indexed 8~15)
@@ -393,6 +394,7 @@ export class YamahaParser {
     const casmChunk = customChunks.find((c) => c.id === 'CASM');
     const hasCasm = !!casmChunk;
     const casmMappings = casmChunk ? YamahaParser.parseCasmMappings(casmChunk.data) : undefined;
+    const casmEntries = casmChunk ? YamahaParser.parseCasmEntries(casmChunk.data) : undefined;
     const hasOts = customChunks.some((c) => c.id.trim() === 'OTS' || c.id.trim() === 'OTSc' || c.id.startsWith('OTS'));
 
     return {
@@ -406,6 +408,7 @@ export class YamahaParser {
       parts: Array.from(partsMap.values()).sort((a, b) => a.channel - b.channel),
       customChunks,
       casmMappings,
+      casmEntries,
       hasCasm,
       hasOts,
       padConfig: fallbackFormat === 'PAD' ? padConfig : undefined,
@@ -460,5 +463,75 @@ export class YamahaParser {
     }
 
     return sectionMappings;
+  }
+
+  /**
+   * 解析 CASM / Ctb2 / CTAB 區塊，提取各段落完整 CASM 聲部條目 (含 Source Root, Chord Type, NTR, NTT)
+   * 用於精確的 Yamaha Multi-Track 和弦選擇與動態發聲仲裁
+   */
+  public static parseCasmEntries(casmData: Uint8Array): Record<string, CasmChannelEntry[]> {
+    const sectionEntries: Record<string, CasmChannelEntry[]> = {};
+    if (casmData.length < 8) return sectionEntries;
+    const view = new DataView(casmData.buffer, casmData.byteOffset, casmData.byteLength);
+    let pos = 0;
+
+    while (pos <= casmData.length - 8) {
+      const tag = String.fromCharCode(casmData[pos], casmData[pos + 1], casmData[pos + 2], casmData[pos + 3]);
+      const len = view.getUint32(pos + 4);
+      if (tag === 'CSEG') {
+        const csegEnd = Math.min(casmData.length, pos + 8 + len);
+        let csegPos = pos + 8;
+        const currentSections: string[] = [];
+        const entries: CasmChannelEntry[] = [];
+
+        while (csegPos <= csegEnd - 8) {
+          const subTag = String.fromCharCode(casmData[csegPos], casmData[csegPos + 1], casmData[csegPos + 2], casmData[csegPos + 3]);
+          const subLen = view.getUint32(csegPos + 4);
+          if (subTag === 'Sdec') {
+            let sdecStr = '';
+            for (let k = 0; k < subLen; k++) {
+              sdecStr += String.fromCharCode(casmData[csegPos + 8 + k]);
+            }
+            const names = sdecStr.split(/[\x00,]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+            currentSections.push(...names);
+          } else if (subTag === 'Ctb2' || subTag === 'CTAB') {
+            const data = casmData.subarray(csegPos + 8, csegPos + 8 + subLen);
+            const srcCh = data[0];
+            let partName = '';
+            for (let k = 1; k <= 8 && k < data.length; k++) {
+              if (data[k] >= 32 && data[k] <= 126) partName += String.fromCharCode(data[k]);
+            }
+            partName = partName.trim();
+            const destCh = data[9];
+            const chordRoot = data.length > 18 ? data[18] : 0;
+            const chordType = data.length > 19 ? data[19] : 0;
+            const ntr = data.length > 28 ? data[28] : (data.length > 20 ? data[20] : undefined);
+            const ntt = data.length > 29 ? data[29] : (data.length > 21 ? data[21] : undefined);
+
+            if (srcCh !== undefined && destCh !== undefined && destCh >= 8 && destCh <= 15) {
+              entries.push({
+                srcCh,
+                destCh,
+                partName,
+                chordRoot,
+                chordType,
+                ntr,
+                ntt,
+              });
+            }
+          }
+          csegPos += 8 + subLen;
+        }
+
+        for (const sec of currentSections) {
+          sectionEntries[sec] = [...(sectionEntries[sec] || []), ...entries];
+        }
+        pos = csegEnd;
+      } else {
+        pos += 8 + len;
+      }
+    }
+
+    return sectionEntries;
   }
 }

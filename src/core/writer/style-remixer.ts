@@ -140,8 +140,8 @@ export class StyleRemixer {
     startTick: number,
     endTick: number,
     channel: number
-  ): { pc?: number; bankMsb?: number; bankLsb?: number; volume?: number; pan?: number } {
-    const override: { pc?: number; bankMsb?: number; bankLsb?: number; volume?: number; pan?: number } = {};
+  ): { pc?: number; bankMsb?: number; bankLsb?: number; volume?: number; pan?: number; reverb?: number; chorus?: number } {
+    const override: { pc?: number; bankMsb?: number; bankLsb?: number; volume?: number; pan?: number; reverb?: number; chorus?: number } = {};
     const track0 = parsed.tracks[0];
     if (!track0) return override;
     let cur = 0;
@@ -156,6 +156,8 @@ export class StyleRemixer {
           if (ev.controller === 32) override.bankLsb = ev.value;
           if (ev.controller === 7) override.volume = ev.value;
           if (ev.controller === 10) override.pan = ev.value;
+          if (ev.controller === 91) override.reverb = ev.value;
+          if (ev.controller === 93) override.chorus = ev.value;
         }
       }
     }

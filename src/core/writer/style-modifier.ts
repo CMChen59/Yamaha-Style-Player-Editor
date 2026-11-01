@@ -34,6 +34,30 @@ export interface CloneSectionResult {
   message?: string;
 }
 
+export interface CrossStyleImportOptions {
+  targetSection?: string;                  // 目標段落名稱 (預設與來源段落相同)
+  channels?: number[];                     // 欲移植的目標 Arranger 通道 (8~15, 預設 [8, 9, 10, 11, 12, 13, 14, 15])
+  channelMapping?: Record<number, number>; // 自訂通道映射: { [targetCh: number]: sourceCh: number }
+  matchMeasures?: boolean;                 // 是否調整目標段落小節數以符合來源 (預設 true)
+  overwrite?: boolean;                     // 是否清空覆蓋目標段落中選取聲部的既有音符 (預設 true)
+  copyVoices?: boolean;                    // 是否將來源段落的音色/混音設定套用至目標 (預設 true)
+  copyCasm?: boolean;                      // 是否移植來源段落的 CASM 和弦轉調規則 (預設 true)
+}
+
+export interface CrossStyleImportResult {
+  success: boolean;
+  sourceSection: string;
+  targetSection: string;
+  copiedNotesCount: number;
+  copiedChannels: number[];
+  srcMeasureCount: number;
+  targetMeasureCount: number;
+  ppqScaled: boolean;
+  sourcePpq: number;
+  targetPpq: number;
+  message?: string;
+}
+
 export interface StylePartMixingParams {
   volume?: number;       // 0 ~ 127 (CC 7)
   pan?: number;          // 0 ~ 127 (CC 10, 64 is Center)
@@ -205,39 +229,59 @@ export class YamahaStyleModifier {
 
     // 若該段落內部尚未有專屬 PC 事件，且指定了 programChange，在段落起始點 (startTick) 插入專屬事件
     if (!foundPc && params.programChange !== undefined) {
-      let t = 0;
-      let insertIdx = track.events.length;
-      for (let i = 0; i < track.events.length; i++) {
-        t += track.events[i].delta;
-        if (t >= range.startTick) {
-          insertIdx = i;
-          break;
-        }
-      }
+      let cur = 0;
+      const annotated = track.events.map((ev, idx) => {
+        cur += ev.delta;
+        return { ev: { ...ev }, absTick: cur, index: idx };
+      });
 
+      let nextIndex = 9000000;
       if (part.bankMsb !== undefined && !foundMsb) {
-        track.events.splice(insertIdx++, 0, {
-          delta: 0,
-          type: 'controlChange',
-          channel,
-          controller: 0,
-          value: part.bankMsb,
+        annotated.push({
+          ev: { delta: 0, type: 'controlChange', channel, controller: 0, value: part.bankMsb },
+          absTick: range.startTick,
+          index: nextIndex++,
         });
       }
       if (part.bankLsb !== undefined && !foundLsb) {
-        track.events.splice(insertIdx++, 0, {
-          delta: 0,
-          type: 'controlChange',
-          channel,
-          controller: 32,
-          value: part.bankLsb ?? 0,
+        annotated.push({
+          ev: { delta: 0, type: 'controlChange', channel, controller: 32, value: part.bankLsb ?? 0 },
+          absTick: range.startTick,
+          index: nextIndex++,
         });
       }
-      track.events.splice(insertIdx, 0, {
-        delta: 0,
-        type: 'programChange',
-        channel,
-        program: params.programChange,
+      annotated.push({
+        ev: { delta: 0, type: 'programChange', channel, program: params.programChange },
+        absTick: range.startTick,
+        index: nextIndex++,
+      });
+      if (params.volume !== undefined) {
+        annotated.push({
+          ev: { delta: 0, type: 'controlChange', channel, controller: 7, value: params.volume },
+          absTick: range.startTick,
+          index: nextIndex++,
+        });
+      }
+      if (params.pan !== undefined) {
+        annotated.push({
+          ev: { delta: 0, type: 'controlChange', channel, controller: 10, value: params.pan },
+          absTick: range.startTick,
+          index: nextIndex++,
+        });
+      }
+
+      annotated.sort((a, b) => {
+        if (a.absTick !== b.absTick) return a.absTick - b.absTick;
+        if (a.ev.type === 'meta' && a.ev.metaType === 6) return -1;
+        if (b.ev.type === 'meta' && b.ev.metaType === 6) return 1;
+        return a.index - b.index;
+      });
+
+      let prev = 0;
+      track.events = annotated.map(item => {
+        item.ev.delta = Math.max(0, item.absTick - prev);
+        prev = item.absTick;
+        return item.ev;
       });
     }
   }
@@ -610,6 +654,31 @@ export class YamahaStyleModifier {
     });
 
     YamahaPadModifier.rebuildTrackRawChunk(track0);
+
+    // 自動為新段落配置標準 SFF2 CASM 伴奏規則 (CH 9~16 直通)
+    try {
+      const defaultRules = CasmModifier.getDefaultPartRules();
+      for (let ch = 8; ch <= 15; ch++) {
+        const rule = defaultRules.find(r => r.channel === ch);
+        if (rule) {
+          CasmModifier.injectOrUpdateSectionCasmRule(parsed, trimmed, ch, rule);
+        }
+      }
+      if (!parsed.casmMappings) parsed.casmMappings = {};
+      const secLower = trimmed.toLowerCase();
+      if (!parsed.casmMappings[secLower]) parsed.casmMappings[secLower] = {};
+      for (let ch = 8; ch <= 15; ch++) {
+        parsed.casmMappings[secLower][ch] = ch;
+      }
+      const noSpace = secLower.replace(/\s+/g, '');
+      if (!parsed.casmMappings[noSpace]) {
+        parsed.casmMappings[noSpace] = parsed.casmMappings[secLower];
+      }
+      parsed.hasCasm = true;
+    } catch {
+      // 容錯保護
+    }
+
     return true;
   }
 
@@ -749,6 +818,338 @@ export class YamahaStyleModifier {
       copiedChannels,
       srcMeasureCount: srcRange.measureCount,
       targetMeasureCount: targetRange.measureCount,
+    };
+  }
+
+  /**
+   * 【階段二】跨檔案 STY 段落移植核心引擎 (Cross-Style Section Remix Engine)
+   * 支援將另一份外部 STY 檔案中的指定段落 (如 Intro A 或 Main C) 移植至目前目標風格中，
+   * 全自動完成：
+   * 1. PPQ 解析度等比例時間縮放 (如 480 PPQ -> 1920 PPQ)
+   * 2. 聲部通道歸一化 (將舊型 SFF1 通道 0~7 映射至標準 Arranger 通道 8~15 / CH 9~16)
+   * 3. 小節長度自適應對齊 (若目標段落不存在則自動建立，長度不一時智慧延展或循環)
+   * 4. CASM 和弦轉換規則 (Ctb2) 智能同步與轉調註冊
+   * 5. 音色策略切換 (完整複製來源音色/混音 或 僅移植音符樂句 notesOnly)
+   */
+  public static importSectionFromExternalStyle(
+    targetParsed: YamahaFileParsed,
+    sourceParsed: YamahaFileParsed,
+    srcSec: string,
+    options?: CrossStyleImportOptions
+  ): CrossStyleImportResult {
+    if (!targetParsed || !sourceParsed) {
+      return {
+        success: false,
+        sourceSection: srcSec,
+        targetSection: srcSec,
+        copiedNotesCount: 0,
+        copiedChannels: [],
+        srcMeasureCount: 0,
+        targetMeasureCount: 0,
+        ppqScaled: false,
+        sourcePpq: 480,
+        targetPpq: 1920,
+        message: '無效的 STY 資料結構',
+      };
+    }
+
+    const srcRange = StyleRemixer.getSectionTickRange(sourceParsed, srcSec);
+    if (!srcRange) {
+      return {
+        success: false,
+        sourceSection: srcSec,
+        targetSection: srcSec,
+        copiedNotesCount: 0,
+        copiedChannels: [],
+        srcMeasureCount: 0,
+        targetMeasureCount: 0,
+        ppqScaled: false,
+        sourcePpq: sourceParsed.division || 480,
+        targetPpq: targetParsed.division || 1920,
+        message: `來源 STY 中查無伴奏段落 [${srcSec}]`,
+      };
+    }
+
+    const targetSec = (options?.targetSection || srcSec).trim();
+
+    // 1. 若目標段落不存在，自動在目標風格中建立該段落
+    let targetRange = StyleRemixer.getSectionTickRange(targetParsed, targetSec);
+    if (!targetRange) {
+      const created = this.createSection(targetParsed, targetSec, srcRange.measureCount);
+      if (!created) {
+        return {
+          success: false,
+          sourceSection: srcSec,
+          targetSection: targetSec,
+          copiedNotesCount: 0,
+          copiedChannels: [],
+          srcMeasureCount: srcRange.measureCount,
+          targetMeasureCount: 0,
+          ppqScaled: false,
+          sourcePpq: sourceParsed.division || 480,
+          targetPpq: targetParsed.division || 1920,
+          message: `無法在目標伴奏中建立新段落 [${targetSec}]`,
+        };
+      }
+      targetRange = StyleRemixer.getSectionTickRange(targetParsed, targetSec);
+      if (!targetRange) {
+        return {
+          success: false,
+          sourceSection: srcSec,
+          targetSection: targetSec,
+          copiedNotesCount: 0,
+          copiedChannels: [],
+          srcMeasureCount: srcRange.measureCount,
+          targetMeasureCount: 0,
+          ppqScaled: false,
+          sourcePpq: sourceParsed.division || 480,
+          targetPpq: targetParsed.division || 1920,
+          message: `無法定位新建立的目標段落 [${targetSec}]`,
+        };
+      }
+    }
+
+    // 2. PPQ 解析度時間縮放比例計算
+    const srcPpq = sourceParsed.division || 480;
+    const targetPpq = targetParsed.division || 1920;
+    const ppqScale = targetPpq / srcPpq;
+    const ppqScaled = Math.abs(ppqScale - 1.0) > 0.0001;
+
+    // 3. 小節長度對齊 (預設 matchMeasures = true)
+    const matchMeasures = options?.matchMeasures !== false;
+    if (matchMeasures && targetRange.measureCount !== srcRange.measureCount) {
+      this.resizeSectionMeasures(targetParsed, targetSec, srcRange.measureCount);
+      targetRange = StyleRemixer.getSectionTickRange(targetParsed, targetSec)!;
+    }
+
+    // 4. 決定欲移植之目標 Arranger 聲部通道 (預設 8~15，即 CH 9~16)
+    const channelsToCopy = options?.channels && options.channels.length > 0
+      ? options.channels
+      : [8, 9, 10, 11, 12, 13, 14, 15];
+
+    const overwrite = options?.overwrite !== false;
+    let copiedNotesCount = 0;
+    const copiedChannels: number[] = [];
+
+    const srcDur = srcRange.endTick - srcRange.startTick;
+    const scaledSrcDur = Math.round(srcDur * ppqScale);
+    const targetDur = targetRange.endTick - targetRange.startTick;
+    const loopCount = targetDur > scaledSrcDur ? Math.ceil(targetDur / scaledSrcDur) : 1;
+
+    // 5. 逐一聲部處理音符移植與通道歸一化
+    for (const targetCh of channelsToCopy) {
+      // 解析來源聲部的對應 MIDI 通道
+      let srcMidiCh: number = targetCh;
+      if (options?.channelMapping && options.channelMapping[targetCh] !== undefined) {
+        srcMidiCh = options.channelMapping[targetCh];
+      } else {
+        // 從來源段落 CASM 映射反推對應的來源通道 (相容 SFF1 的 0~7 映射至 8~15)
+        const srcSecLower = srcSec.trim().toLowerCase();
+        const srcCasmMap = sourceParsed.casmMappings?.[srcSecLower]
+          || sourceParsed.casmMappings?.[srcSecLower.replace(/\s+/g, '')];
+        if (srcCasmMap) {
+          for (const [srcStr, dst] of Object.entries(srcCasmMap)) {
+            if (dst === targetCh) {
+              srcMidiCh = parseInt(srcStr, 10);
+              break;
+            }
+          }
+        }
+      }
+
+      // 從來源 STY 提取該通道音符
+      let srcNotes = StyleRemixer.extractSectionChannelNotes(
+        sourceParsed,
+        srcRange.startTick,
+        srcRange.endTick,
+        srcMidiCh
+      );
+
+      // 若來源 CASM 查無音符且 srcMidiCh !== targetCh，嘗試直接提取 targetCh
+      if (srcNotes.length === 0 && srcMidiCh !== targetCh) {
+        srcNotes = StyleRemixer.extractSectionChannelNotes(
+          sourceParsed,
+          srcRange.startTick,
+          srcRange.endTick,
+          targetCh
+        );
+      }
+
+      // 若兩者均查無音符，智慧以聲部角色搜尋 SFF1 傳統通道
+      if (srcNotes.length === 0) {
+        const partDef = Object.values(DEFAULT_STYLE_PARTS).find(p => p.channel === targetCh);
+        if (partDef) {
+          const fallbackCh = StyleRemixer.resolveSourceChannel(sourceParsed, srcSec, partDef.partId);
+          if (fallbackCh !== targetCh && fallbackCh !== srcMidiCh) {
+            srcNotes = StyleRemixer.extractSectionChannelNotes(
+              sourceParsed,
+              srcRange.startTick,
+              srcRange.endTick,
+              fallbackCh
+            );
+            if (srcNotes.length > 0) {
+              srcMidiCh = fallbackCh;
+            }
+          }
+        }
+      }
+
+      if (srcNotes.length === 0) {
+        if (overwrite) {
+          this.clearSectionNotes(targetParsed, targetSec, targetCh);
+        }
+        continue;
+      }
+
+      // 進行 PPQ 縮放並組合音符
+      const combinedNotes: Array<{
+        noteNumber: number;
+        relTick: number;
+        durationTicks: number;
+        velocity: number;
+        sourceChannel?: number;
+      }> = [];
+
+      for (let loop = 0; loop < loopCount; loop++) {
+        const loopOffset = loop * scaledSrcDur;
+        for (const n of srcNotes) {
+          const scaledStart = Math.round(n.startTick * ppqScale);
+          const scaledDur = Math.max(12, Math.round(n.durationTick * ppqScale));
+          const start = scaledStart + loopOffset;
+          if (start < targetDur) {
+            combinedNotes.push({
+              noteNumber: n.note,
+              relTick: start,
+              durationTicks: Math.min(scaledDur, targetDur - start),
+              velocity: n.velocity,
+              sourceChannel: targetCh, // 歸一化為目標通道
+            });
+          }
+        }
+      }
+
+      // 替換目標段落該通道音符 (強制歸一化至 targetCh)
+      const ok = this.replaceSectionChannelNotes(targetParsed, targetSec, targetCh, combinedNotes, targetCh);
+      if (ok) {
+        copiedNotesCount += combinedNotes.length;
+        copiedChannels.push(targetCh);
+      }
+    }
+
+    // 6. 音色與混音設定移植 (若 copyVoices !== false)
+    if (options?.copyVoices !== false) {
+      for (const targetCh of channelsToCopy) {
+        let srcMidiCh = targetCh;
+        if (options?.channelMapping && options.channelMapping[targetCh] !== undefined) {
+          srcMidiCh = options.channelMapping[targetCh];
+        } else {
+          const srcSecLower = srcSec.trim().toLowerCase();
+          const srcCasmMap = sourceParsed.casmMappings?.[srcSecLower]
+            || sourceParsed.casmMappings?.[srcSecLower.replace(/\s+/g, '')];
+          if (srcCasmMap) {
+            for (const [srcStr, dst] of Object.entries(srcCasmMap)) {
+              if (dst === targetCh) {
+                srcMidiCh = parseInt(srcStr, 10);
+                break;
+              }
+            }
+          }
+        }
+
+        const srcOverride = StyleRemixer.getSectionChannelOverride(
+          sourceParsed,
+          srcRange.startTick,
+          srcRange.endTick,
+          srcMidiCh
+        ) || StyleRemixer.getSectionChannelOverride(
+          sourceParsed,
+          srcRange.startTick,
+          srcRange.endTick,
+          targetCh
+        );
+
+        const srcPart = sourceParsed.parts.find(p => p.channel === srcMidiCh || p.channel === targetCh);
+
+        const bankMsb = srcOverride?.bankMsb ?? srcPart?.bankMsb;
+        const bankLsb = srcOverride?.bankLsb ?? srcPart?.bankLsb;
+        const pc = srcOverride?.pc ?? srcPart?.programChange;
+        const volume = srcOverride?.volume ?? srcPart?.volume;
+        const pan = srcOverride?.pan ?? srcPart?.pan;
+        const reverb = srcOverride?.reverb ?? srcPart?.reverb;
+        const chorus = srcOverride?.chorus ?? srcPart?.chorus;
+
+        if (pc !== undefined || bankMsb !== undefined || volume !== undefined) {
+          this.setPartMixing(
+            targetParsed,
+            targetCh,
+            {
+              bankMsb,
+              bankLsb,
+              programChange: pc,
+              volume,
+              pan,
+              reverb,
+              chorus,
+            },
+            { targetSection: targetSec }
+          );
+        }
+      }
+    }
+
+    // 7. CASM Ctb2 和弦轉調規則移植 (若 copyCasm !== false)
+    if (options?.copyCasm !== false) {
+      try {
+        const srcRules = CasmModifier.extractPartRules(sourceParsed, srcSec);
+        for (const targetCh of channelsToCopy) {
+          let srcMidiCh = targetCh;
+          if (options?.channelMapping && options.channelMapping[targetCh] !== undefined) {
+            srcMidiCh = options.channelMapping[targetCh];
+          }
+
+          let matchedRule = srcRules.find(r => r.channel === targetCh || r.channel === srcMidiCh);
+          if (!matchedRule) {
+            const defaultRules = CasmModifier.getDefaultPartRules();
+            matchedRule = defaultRules.find(r => r.channel === targetCh);
+          }
+
+          if (matchedRule) {
+            const ruleToInject: CasmPartRule = {
+              ...matchedRule,
+              channel: targetCh,
+            };
+            CasmModifier.injectOrUpdateSectionCasmRule(targetParsed, targetSec, targetCh, ruleToInject);
+          }
+        }
+
+        // 同步 targetParsed.casmMappings
+        if (!targetParsed.casmMappings) targetParsed.casmMappings = {};
+        const targetSecLower = targetSec.trim().toLowerCase();
+        if (!targetParsed.casmMappings[targetSecLower]) targetParsed.casmMappings[targetSecLower] = {};
+        for (const targetCh of channelsToCopy) {
+          targetParsed.casmMappings[targetSecLower][targetCh] = targetCh;
+        }
+        const noSpace = targetSecLower.replace(/\s+/g, '');
+        if (!targetParsed.casmMappings[noSpace]) {
+          targetParsed.casmMappings[noSpace] = targetParsed.casmMappings[targetSecLower];
+        }
+        targetParsed.hasCasm = true;
+      } catch {
+        // CASM 容錯處理
+      }
+    }
+
+    return {
+      success: true,
+      sourceSection: srcSec,
+      targetSection: targetSec,
+      copiedNotesCount,
+      copiedChannels,
+      srcMeasureCount: srcRange.measureCount,
+      targetMeasureCount: targetRange.measureCount,
+      ppqScaled,
+      sourcePpq: srcPpq,
+      targetPpq,
     };
   }
 

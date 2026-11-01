@@ -31,6 +31,31 @@ export type StyleSectionType =
   | 'Ending C'
   | 'Break';
 
+export interface StandardSectionInfo {
+  name: string;
+  label: string;
+  category: 'Intro' | 'Main' | 'Fill In' | 'Ending';
+  defaultBars: number;
+}
+
+export const ALL_STANDARD_SECTIONS: StandardSectionInfo[] = [
+  { name: 'Intro A', label: '前奏 A', category: 'Intro', defaultBars: 4 },
+  { name: 'Intro B', label: '前奏 B', category: 'Intro', defaultBars: 4 },
+  { name: 'Intro C', label: '前奏 C', category: 'Intro', defaultBars: 4 },
+  { name: 'Main A', label: '主奏 A', category: 'Main', defaultBars: 4 },
+  { name: 'Main B', label: '主奏 B', category: 'Main', defaultBars: 4 },
+  { name: 'Main C', label: '主奏 C', category: 'Main', defaultBars: 4 },
+  { name: 'Main D', label: '主奏 D', category: 'Main', defaultBars: 4 },
+  { name: 'Fill In AA', label: '過門 AA', category: 'Fill In', defaultBars: 1 },
+  { name: 'Fill In BB', label: '過門 BB', category: 'Fill In', defaultBars: 1 },
+  { name: 'Fill In CC', label: '過門 CC', category: 'Fill In', defaultBars: 1 },
+  { name: 'Fill In DD', label: '過門 DD', category: 'Fill In', defaultBars: 1 },
+  { name: 'Fill In BA', label: 'Break 過門', category: 'Fill In', defaultBars: 1 },
+  { name: 'Ending A', label: '尾奏 A', category: 'Ending', defaultBars: 2 },
+  { name: 'Ending B', label: '尾奏 B', category: 'Ending', defaultBars: 4 },
+  { name: 'Ending C', label: '尾奏 C', category: 'Ending', defaultBars: 4 },
+];
+
 export interface StylePartConfig {
   partId: StylePartId;
   channel: number; // 0-indexed: 8 ~ 15 (對應 MIDI Channel 9 ~ 16)

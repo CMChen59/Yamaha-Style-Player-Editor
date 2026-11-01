@@ -600,6 +600,268 @@
       color: #fca5a5;
     }
 
+    /* 多小節和弦進行輪播 (Chord Progression) */
+    .chord-progression-panel {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .progression-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .progression-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .progression-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #a78bfa;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .progression-toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      background: rgba(167, 139, 250, 0.1);
+      border: 1px solid rgba(167, 139, 250, 0.3);
+      padding: 4px 12px;
+      border-radius: 20px;
+      transition: all 0.2s ease;
+    }
+
+    .progression-toggle-label:hover {
+      background: rgba(167, 139, 250, 0.2);
+      border-color: #a78bfa;
+    }
+
+    .progression-checkbox {
+      display: none;
+    }
+
+    .progression-toggle-switch {
+      width: 32px;
+      height: 18px;
+      background: #334155;
+      border-radius: 10px;
+      position: relative;
+      transition: background 0.2s;
+    }
+
+    .progression-toggle-switch::after {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #94a3b8;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .progression-checkbox:checked + .progression-toggle-switch {
+      background: #8b5cf6;
+      box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+    }
+
+    .progression-checkbox:checked + .progression-toggle-switch::after {
+      transform: translateX(14px);
+      background: #ffffff;
+    }
+
+    .progression-toggle-text {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .progression-preset-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.84rem;
+      color: #cbd5e1;
+    }
+
+    .progression-preset-select {
+      background: var(--bg-card);
+      border: 1px solid rgba(167, 139, 250, 0.4);
+      color: #f1f5f9;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      outline: none;
+      cursor: pointer;
+      min-width: 220px;
+    }
+
+    .progression-preset-select:focus {
+      border-color: #a78bfa;
+      box-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
+    }
+
+    .progression-cards-scroll {
+      overflow-x: auto;
+      padding-top: 14px;
+      padding-bottom: 8px;
+    }
+
+    .card-chord-select {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      font-size: 1.08rem;
+      font-weight: 800;
+      border-radius: 6px;
+      padding: 3px 8px;
+      text-align: center;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.15s;
+      max-width: 86px;
+    }
+
+    .card-chord-select:hover, .card-chord-select:focus {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.18);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
+    }
+
+    .progression-bar-card.is-playing-card .card-chord-select {
+      color: #fbbf24;
+      border-color: rgba(245, 158, 11, 0.6);
+      background: rgba(245, 158, 11, 0.15);
+    }
+
+    .progression-cards-container {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+      min-width: min-content;
+    }
+
+    .progression-bar-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 14px;
+      min-width: 90px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+      position: relative;
+    }
+
+    .progression-bar-card:hover {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(167, 139, 250, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .progression-bar-card.is-selected-card {
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .progression-bar-card.is-selected-card::before {
+      content: '✏️ 編輯中';
+      position: absolute;
+      top: -9px;
+      font-size: 0.62rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #0284c7;
+      color: #fff;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .progression-bar-card.is-playing-card {
+      border-color: #f59e0b !important;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(217, 119, 6, 0.25)) !important;
+      box-shadow: 0 0 18px rgba(245, 158, 11, 0.6) !important;
+      transform: translateY(-2px);
+      animation: pulse-playing-card 1.2s infinite alternate;
+    }
+
+    @keyframes pulse-playing-card {
+      0% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.4); }
+      100% { box-shadow: 0 0 22px rgba(245, 158, 11, 0.8); }
+    }
+
+    .card-bar-num {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .card-chord-name {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #38bdf8;
+      letter-spacing: 0.5px;
+    }
+
+    .progression-bar-card.is-playing-card .card-chord-name {
+      color: #fbbf24;
+    }
+
+    .card-chord-type {
+      font-size: 0.68rem;
+      color: #cbd5e1;
+      opacity: 0.85;
+    }
+
+    .progression-footer-hint {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+
+    .btn-progression-reset {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: #94a3b8;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.76rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-progression-reset:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+      border-color: #94a3b8;
+    }
+
     /* 播放主控制列 */
     .transport-bar {
       background: var(--bg-panel);
@@ -1215,6 +1477,98 @@
       text-decoration: underline;
     }
 
+    /* 空間效果器 (Reverb & Chorus) 樣式 */
+    .part-fx-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 2px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      transition: all 0.2s ease;
+    }
+    .part-fx-group.collapsed {
+      display: none;
+    }
+
+    .part-rev-wrap, .part-cho-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .part-rev-slider {
+      flex: 1;
+      min-width: 0;
+      accent-color: #a855f7;
+      cursor: pointer;
+      height: 12px;
+    }
+
+    .rev-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #c084fc;
+      min-width: 28px;
+      text-align: right;
+      font-family: monospace;
+      cursor: pointer;
+      user-select: none;
+    }
+    .rev-badge:hover {
+      text-decoration: underline;
+    }
+
+    .part-cho-slider {
+      flex: 1;
+      min-width: 0;
+      accent-color: #06b6d4;
+      cursor: pointer;
+      height: 12px;
+    }
+
+    .cho-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #22d3ee;
+      min-width: 28px;
+      text-align: right;
+      font-family: monospace;
+      cursor: pointer;
+      user-select: none;
+    }
+    .cho-badge:hover {
+      text-decoration: underline;
+    }
+
+    .mixer-fx-toggle-btn {
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #d8b4fe;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      user-select: none;
+    }
+    .mixer-fx-toggle-btn:hover {
+      background: rgba(168, 85, 247, 0.25);
+      border-color: #c084fc;
+      color: #f3e8ff;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+    }
+    .mixer-fx-toggle-btn.active {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(6, 182, 212, 0.25) 100%);
+      border-color: #a855f7;
+      color: #fff;
+      box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+    }
+
     .audio-output-select {
       background: #0f172a;
       color: #fff;
@@ -1281,6 +1635,37 @@
       background: rgba(255, 255, 255, 0.05);
       padding: 4px 8px;
       border-radius: 4px;
+    }
+
+    /* 雙重視圖切換按鈕 (鋼琴卷軸 vs 16-Step 鼓機矩陣) */
+    .editor-view-toggle {
+      display: inline-flex;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 6px;
+      padding: 2px;
+      gap: 2px;
+      margin-left: 6px;
+    }
+    .view-toggle-btn {
+      padding: 3px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #94a3b8;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .view-toggle-btn:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .view-toggle-btn.active {
+      color: #ffffff;
+      background: #0284c7;
+      box-shadow: 0 0 8px rgba(2, 132, 199, 0.5);
     }
 
     .editor-toolbar-right {
@@ -1540,64 +1925,173 @@
     }
 
     .ruler-bar-cell {
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
+      border-left: 2px solid rgba(56, 189, 248, 0.5);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 4px 6px 2px 6px;
+      padding: 4px 0 2px 0;
       box-sizing: border-box;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .ruler-bar-cell:last-child {
+      border-right: 2px solid rgba(56, 189, 248, 0.5);
+    }
+
+    .ruler-bar-cell.is-even-bar {
+      background: rgba(255, 255, 255, 0.025);
     }
 
     .ruler-bar-title {
       font-size: 0.72rem;
       font-weight: 700;
       color: #38bdf8;
+      letter-spacing: 0.5px;
+      padding-left: 6px;
     }
 
     .ruler-beats-row {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      width: 100%;
+      height: 16px;
+      align-items: center;
     }
 
     .ruler-beat-marker {
       font-size: 0.62rem;
       font-family: monospace;
-      color: var(--text-muted);
+      color: #94a3b8;
+      padding-left: 4px;
+      white-space: nowrap;
+    }
+
+    .editor-time-ruler.high-contrast-ruler .ruler-bar-cell {
+      border-color: #38bdf8 !important;
     }
 
     .editor-grid-content {
       position: relative;
       background: #060910;
+      overflow: hidden;
     }
 
+    /* 偶數小節斑馬紋條紋 */
+    .grid-bar-stripe {
+      position: absolute;
+      top: 0;
+      background: rgba(255, 255, 255, 0.022);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* 水平音高格線與黑白鍵底色 */
     .grid-row-bg {
       position: absolute;
       left: 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       box-sizing: border-box;
       pointer-events: none;
+      z-index: 1;
     }
 
     .grid-row-bg.row-black {
-      background: rgba(0, 0, 0, 0.25);
+      background: rgba(0, 0, 0, 0.35);
     }
 
+    .grid-row-bg.row-white {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    /* 中央 C 與八度音高專屬水平導引光條 */
+    .grid-row-bg.row-root-c {
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.09) 0%, rgba(56, 189, 248, 0.025) 100%) !important;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.35) !important;
+    }
+
+    /* 垂直格線多階層系統 */
     .grid-v-line {
       position: absolute;
       top: 0;
-      width: 1px;
       pointer-events: none;
       box-sizing: border-box;
+      z-index: 2;
     }
 
+    /* 1. 小節線 (Bar Line) - 顯著加粗帶天藍色微光 */
     .grid-v-line.bar-line {
-      background: rgba(255, 255, 255, 0.15);
-      z-index: 1;
+      width: 2px;
+      background: rgba(56, 189, 248, 0.5);
+      box-shadow: 0 0 3px rgba(56, 189, 248, 0.3);
     }
 
+    /* 2. 正拍線 (Beat Line, 1/4 拍) - 明確分隔 */
     .grid-v-line.beat-line {
-      background: rgba(255, 255, 255, 0.05);
+      width: 1px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 3. 細分量化線 (Sub-division Line, 1/8, 1/16, 1/32 拍) */
+    .grid-v-line.sub-line {
+      width: 1px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* 十字游標即時導引線 (Crosshairs) */
+    .editor-crosshair-v {
+      position: absolute;
+      top: 0;
+      width: 1px;
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0.9) 0%, rgba(56, 189, 248, 0.4) 100%);
+      box-shadow: 0 0 5px rgba(56, 189, 248, 0.7);
+      pointer-events: none;
+      z-index: 6;
+      transition: opacity 0.05s ease;
+    }
+
+    .editor-crosshair-h {
+      position: absolute;
+      left: 0;
+      background: rgba(56, 189, 248, 0.07);
+      border-top: 1px dashed rgba(56, 189, 248, 0.35);
+      border-bottom: 1px dashed rgba(56, 189, 248, 0.35);
+      pointer-events: none;
       z-index: 1;
+      transition: opacity 0.05s ease;
+    }
+
+    /* 👁️ 高對比格線模式 */
+    .editor-grid-content.high-contrast-grid .grid-v-line.bar-line {
+      width: 2px;
+      background: #38bdf8 !important;
+      box-shadow: 0 0 6px rgba(56, 189, 248, 0.55) !important;
+    }
+
+    .editor-grid-content.high-contrast-grid .grid-v-line.beat-line {
+      background: rgba(255, 255, 255, 0.35) !important;
+    }
+
+    .editor-grid-content.high-contrast-grid .grid-v-line.sub-line {
+      background: rgba(255, 255, 255, 0.16) !important;
+    }
+
+    .editor-grid-content.high-contrast-grid .grid-row-bg {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+    }
+
+    .editor-grid-content.high-contrast-grid .grid-row-bg.row-root-c {
+      background: rgba(56, 189, 248, 0.15) !important;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.6) !important;
+    }
+
+    .editor-grid-content.high-contrast-grid .grid-bar-stripe {
+      background: rgba(255, 255, 255, 0.045) !important;
+    }
+
+    /* 左側琴鍵中 C 鍵高亮 */
+    .editor-key-row.is-c-key {
+      background: linear-gradient(90deg, #162032 0%, rgba(56, 189, 248, 0.18) 100%) !important;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.4) !important;
     }
 
     /* 音符方塊 (Note Block) */
@@ -1760,6 +2254,156 @@
       color: #090d16;
       box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
       border-color: #10b981;
+    }
+
+    /* 🔁 複製第 1 小節填滿全段按鈕 */
+    .editor-action-btn.btn-fill-bars {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: rgba(129, 140, 248, 0.45);
+      color: #a5b4fc;
+      font-weight: 700;
+      transition: all 0.15s ease;
+    }
+
+    .editor-action-btn.btn-fill-bars:hover:not(:disabled) {
+      background: #6366f1;
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+      border-color: #818cf8;
+      transform: translateY(-1px);
+    }
+
+    /* 🥁 16-Step 鼓機步進矩陣樣式 */
+    .drum-step-matrix-wrap {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      background: #090d16;
+      border-left: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .drum-step-header {
+      display: grid;
+      height: 32px;
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.3);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .drum-header-step {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #64748b;
+      border-right: 1px solid rgba(255, 255, 255, 0.04);
+      user-select: none;
+      transition: background 0.08s ease;
+    }
+    .drum-header-step.is-bar-start {
+      border-left: 2px solid #38bdf8;
+      color: #38bdf8;
+      font-weight: 800;
+    }
+    .drum-header-step.is-beat-start:not(.is-bar-start) {
+      border-left: 1px solid rgba(56, 189, 248, 0.4);
+      color: #94a3b8;
+    }
+    .drum-header-step.is-playhead-step {
+      background: rgba(56, 189, 248, 0.35);
+      color: #ffffff;
+    }
+
+    .drum-step-body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .drum-step-row {
+      display: grid;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      background: rgba(10, 15, 26, 0.5);
+      align-items: center;
+      box-sizing: border-box;
+    }
+    .drum-step-row:hover {
+      background: rgba(30, 41, 59, 0.4);
+    }
+
+    .drum-step-pad {
+      margin: 2px 2px;
+      height: calc(100% - 4px);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+      box-sizing: border-box;
+    }
+    .drum-step-pad.is-alt-beat {
+      background: rgba(255, 255, 255, 0.07);
+    }
+    .drum-step-pad.is-bar-start {
+      border-left: 2px solid rgba(56, 189, 248, 0.7);
+    }
+    .drum-step-pad.is-beat-start:not(.is-bar-start) {
+      border-left: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .drum-step-pad:hover {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: scale(1.05);
+      z-index: 2;
+    }
+
+    .drum-step-pad.is-active {
+      background: var(--pad-color, #38bdf8);
+      border-color: #ffffff;
+      box-shadow: 0 0 12px var(--pad-color, rgba(56, 189, 248, 0.6)), inset 0 0 4px rgba(255, 255, 255, 0.6);
+      transform: scale(0.96);
+    }
+    .drum-step-pad.is-active:hover {
+      transform: scale(1.02);
+      filter: brightness(1.15);
+    }
+
+    .pad-led {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 4px #ffffff;
+      margin-bottom: 2px;
+    }
+
+    .pad-vel-text {
+      font-size: 0.62rem;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1;
+      text-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+    }
+
+    /* 播放即時跑燈追蹤 (Running LED Chase Light) */
+    .drum-step-pad.is-playhead-step {
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.95);
+      border-color: #38bdf8 !important;
+      outline: 1px solid #38bdf8;
+    }
+    .drum-step-pad.is-active.is-playhead-step {
+      filter: brightness(1.3);
+      box-shadow: 0 0 16px #ffffff, 0 0 8px var(--pad-color, #38bdf8);
     }
 
     .editor-quantize-panel {
@@ -3413,6 +4057,890 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    /* 🆕 全新伴奏製作彈窗 (NewStyleModal) 樣式 */
+    .btn-create-style {
+      background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
+      color: #fff;
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      padding: 5px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+    }
+    .btn-create-style:hover {
+      background: linear-gradient(135deg, #0369a1 0%, #0f766e 100%);
+      border-color: #38bdf8;
+      box-shadow: 0 4px 14px rgba(14, 165, 233, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .new-style-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: scFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .new-style-modal {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 14px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+      width: 92vw;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: #f8fafc;
+    }
+
+    .ns-modal-header {
+      background: #1e293b;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ns-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ns-modal-title {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .ns-header-badge {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .ns-close-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+    .ns-close-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #f8fafc;
+    }
+
+    .ns-modal-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: 74vh;
+      overflow-y: auto;
+    }
+
+    .ns-section-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .ns-card-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 12px;
+    }
+
+    .ns-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 600px) {
+      .ns-form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .ns-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .ns-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .ns-hint {
+      font-size: 0.68rem;
+      color: #64748b;
+    }
+
+    .ns-input-text, .ns-select {
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f8fafc;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .ns-input-text:focus, .ns-select:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+    }
+
+    .ns-custom-sec-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 600px) {
+      .ns-custom-sec-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .ns-sec-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 0.75rem;
+      color: #cbd5e1;
+      cursor: pointer;
+    }
+    .ns-sec-chip:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .ns-sec-chip input[type="checkbox"] {
+      accent-color: #38bdf8;
+    }
+
+    .ns-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+      cursor: pointer;
+      user-select: none;
+    }
+    .ns-checkbox-label input[type="checkbox"] {
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+
+    .ns-modal-footer {
+      background: #1e293b;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .ns-summary-text {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      flex: 1;
+    }
+    .ns-summary-text strong {
+      color: #38bdf8;
+    }
+
+    .ns-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ns-btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+      font-size: 0.82rem;
+      padding: 7px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ns-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+    }
+
+    .ns-btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
+      border: none;
+      color: #ffffff;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 7px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+    }
+    .ns-btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(14, 165, 233, 0.5);
+    }
+    .ns-btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ==========================================================================
+       Tier 2-1: 新增伴奏段落 (Add Section Modal)
+       ========================================================================== */
+    .btn-sec-add {
+      background: rgba(16, 185, 129, 0.18);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      color: #6ee7b7;
+    }
+    .btn-sec-add:hover {
+      background: #10b981;
+      border-color: #10b981;
+      color: #042f2e;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .add-section-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 15, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .add-section-modal {
+      background: #0f172a;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 14px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(16, 185, 129, 0.15);
+      width: 92vw;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: #f8fafc;
+      animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .as-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .as-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .as-modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin: 0;
+    }
+    .as-header-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+      font-weight: 600;
+    }
+    .as-close-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+    .as-close-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .as-modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      max-height: 75vh;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .as-card {
+      background: rgba(30, 41, 59, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .as-card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #38bdf8;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .as-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .as-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .as-select {
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f8fafc;
+      font-size: 0.9rem;
+      padding: 8px 12px;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .as-select:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    }
+    .as-bars-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .as-quick-bars {
+      display: flex;
+      gap: 6px;
+    }
+    .as-btn-bar {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+      font-size: 0.82rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .as-btn-bar:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+    .as-btn-bar.active {
+      background: #10b981;
+      border-color: #10b981;
+      color: #042f2e;
+      font-weight: 700;
+    }
+    .as-custom-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .as-input-bars {
+      width: 65px;
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #38bdf8;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 6px 8px;
+      border-radius: 6px;
+      outline: none;
+    }
+    .as-input-bars:focus {
+      border-color: #10b981;
+    }
+    .as-bar-unit {
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+    .as-hint {
+      font-size: 0.74rem;
+      color: #94a3b8;
+    }
+    .as-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.86rem;
+      color: #e2e8f0;
+      cursor: pointer;
+    }
+    .as-checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #10b981;
+      cursor: pointer;
+    }
+    .as-summary-box {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .as-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 20px;
+      background: rgba(15, 23, 42, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .as-btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #cbd5e1;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .as-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+    .as-btn-primary {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border: 1px solid rgba(16, 185, 129, 0.6);
+      color: #042f2e;
+      font-weight: 700;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    }
+    .as-btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+      transform: translateY(-1px);
+    }
+    .as-btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ==========================================================================
+       Tier 2-1: 跨檔案伴奏段落移植 (Section Import Modal)
+       ========================================================================== */
+    .btn-sec-import {
+      background: rgba(14, 165, 233, 0.18);
+      border: 1px solid rgba(14, 165, 233, 0.45);
+      color: #38bdf8;
+    }
+    .btn-sec-import:hover {
+      background: #0284c7;
+      border-color: #0284c7;
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(14, 165, 233, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .section-import-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 15, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .section-import-modal {
+      background: #0f172a;
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      border-radius: 14px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(14, 165, 233, 0.15);
+      width: 94vw;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: #f8fafc;
+      animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .si-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .si-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .si-modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin: 0;
+    }
+    .si-header-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(14, 165, 233, 0.2);
+      border: 1px solid rgba(14, 165, 233, 0.4);
+      color: #38bdf8;
+      font-weight: 600;
+    }
+    .si-close-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+    .si-close-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .si-modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      max-height: 75vh;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .si-card {
+      background: rgba(30, 41, 59, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 14px 16px;
+      transition: opacity 0.2s;
+    }
+    .si-card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #38bdf8;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .si-drop-zone {
+      border: 2px dashed rgba(14, 165, 233, 0.4);
+      border-radius: 10px;
+      padding: 18px 20px;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.6);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .si-drop-zone:hover, .si-drop-zone.drag-over {
+      border-color: #38bdf8;
+      background: rgba(14, 165, 233, 0.12);
+      box-shadow: 0 0 15px rgba(14, 165, 233, 0.2);
+    }
+    .si-drop-icon {
+      font-size: 1.8rem;
+    }
+    .si-drop-text {
+      font-size: 0.88rem;
+      color: #cbd5e1;
+    }
+    .si-drop-text strong {
+      color: #38bdf8;
+    }
+    .si-drop-hint {
+      font-size: 0.74rem;
+      color: #64748b;
+    }
+    .si-file-summary {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      font-size: 0.82rem;
+      color: #6ee7b7;
+    }
+    .si-route-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+    }
+    @media (max-width: 640px) {
+      .si-route-grid {
+        grid-template-columns: 1fr;
+      }
+      .si-route-arrow {
+        text-align: center;
+        padding: 4px 0;
+      }
+    }
+    .si-route-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .si-route-arrow {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #38bdf8;
+      white-space: nowrap;
+    }
+    .si-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .si-hint {
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+    .si-select {
+      background: #090d16;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f8fafc;
+      font-size: 0.85rem;
+      padding: 8px 10px;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .si-select:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.25);
+    }
+    .si-channels-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .si-channel-presets {
+      display: flex;
+      gap: 6px;
+    }
+    .si-preset-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+      font-size: 0.72rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .si-preset-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+    .si-channels-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 8px;
+    }
+    .si-channel-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 12px;
+      transition: all 0.15s ease;
+    }
+    .si-channel-item.is-checked {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(56, 189, 248, 0.08);
+    }
+    .si-channel-item.is-empty {
+      opacity: 0.6;
+    }
+    .si-channel-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .si-ch-checkbox {
+      width: 16px;
+      height: 16px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+    .si-ch-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .si-ch-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .si-ch-voice {
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
+    .si-ch-count {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #64748b;
+    }
+    .si-ch-count.has-notes {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      font-weight: 600;
+    }
+    .si-options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 10px;
+    }
+    .si-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+      cursor: pointer;
+    }
+    .si-checkbox-label input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+    .si-summary-box {
+      background: rgba(14, 165, 233, 0.08);
+      border: 1px solid rgba(14, 165, 233, 0.25);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .si-modal-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 20px;
+      background: rgba(15, 23, 42, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .si-btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #cbd5e1;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .si-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+    .si-btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%);
+      border: 1px solid rgba(14, 165, 233, 0.6);
+      color: #ffffff;
+      font-weight: 700;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
+    }
+    .si-btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+      box-shadow: 0 6px 16px rgba(14, 165, 233, 0.35);
+      transform: translateY(-1px);
+    }
+    .si-btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -3439,7 +4967,10 @@
         <div class="drop-zone-title">點擊選擇或拖曳 Yamaha STY 伴奏檔案至此</div>
         <div class="drop-zone-desc">支援 .sty, .prs, .sst 等 Yamaha 原廠伴奏格式</div>
         <div class="sample-bar" onclick="event.stopPropagation()">
-          <span style="font-size: 0.75rem; color: #94a3b8;">經典示範伴奏：</span>
+          <button id="btn-open-new-style" class="btn-create-style" title="從無到有建立全新的 Yamaha SFF2 伴奏檔案">
+            ✨ 建立全新伴奏 (New Style)
+          </button>
+          <span style="font-size: 0.75rem; color: #94a3b8; margin-left: 6px;">或選擇示範伴奏：</span>
           <button class="sample-btn" data-file="LoveSong.T547.sty">🎵 LoveSong.T547.sty (70 BPM)</button>
           <button class="sample-btn" data-file="4006_SX900.T547.sty">🎵 4006_SX900.T547.sty (92 BPM)</button>
           <button class="sample-btn" data-file="1024_容易受傷的女人.sty">🎵 容易受傷的女人.sty (66 BPM)</button>
@@ -3592,6 +5123,45 @@
           <button id="btn-apply-custom-chord" class="btn-chord-apply">套用和弦</button>
           <button id="btn-reset-chord" class="btn-chord-reset">🔄 重設原調 (C)</button>
         </div>
+
+        <!-- 多小節和弦進行輪播 (Chord Progression Auto-Advance) -->
+        <div class="chord-progression-panel" id="chord-progression-panel">
+          <div class="progression-header">
+            <div class="progression-title-wrap">
+              <span class="progression-title">🔄 多小節和弦進行輪播 (Chord Progression)</span>
+              <label class="progression-toggle-label" title="播放時隨小節推進自動轉調伴奏聲部">
+                <input type="checkbox" id="toggle-chord-auto-advance" class="progression-checkbox" />
+                <span class="progression-toggle-switch"></span>
+                <span class="progression-toggle-text">自動輪播</span>
+              </label>
+            </div>
+            <div class="progression-preset-wrap">
+              <span class="progression-preset-label">🎵 進行預設:</span>
+              <select id="select-chord-progression-preset" class="progression-preset-select">
+                <option value="pop-1564">流行 1-5-6-4 (C - G - Am - F)</option>
+                <option value="pop-1645">流行 1-6-4-5 (C - Am - F - G)</option>
+                <option value="canon-8">卡農進行 8 小節 (C - G - Am - Em - F - C - F - G)</option>
+                <option value="ballad-6415">抒情小調 6-4-1-5 (Am - F - C - G)</option>
+                <option value="jazz-251">爵士 2-5-1 (Dm7 - G7 - Cmaj7 - C)</option>
+                <option value="soul-4536">動聽 4-5-3-6 (F - G - Em - Am)</option>
+                <option value="blues-12">藍調 12 小節 (C7 - F7 - G7)</option>
+                <option value="all-c">基準原調 (全部 C)</option>
+                <option value="custom">自訂進行 (Custom)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="progression-cards-scroll">
+            <div class="progression-cards-container" id="progression-cards-container">
+              <!-- 動態生成小節和弦卡片 -->
+            </div>
+          </div>
+
+          <div class="progression-footer-hint">
+            <span id="progression-hint-text">💡 點選上方小節卡片，直接在卡片上選取或點擊上方和弦快捷鍵即可指派該小節和弦！</span>
+            <button id="btn-reset-progression" class="btn-progression-reset">🔄 還原預設進行</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -3618,7 +5188,9 @@
             <button id="btn-apply-custom-bars" class="btn-apply-bars" title="套用小節數">套用</button>
           </div>
           <div class="sec-divider"></div>
+          <button id="btn-open-add-section" class="btn-sec-action btn-sec-add" title="在目前風格中新增全新伴奏段落">➕ 新增段落</button>
           <button id="btn-open-section-clone" class="btn-sec-action" title="跨段落複製與加花衍生">📋 複製段落</button>
+          <button id="btn-open-section-import" class="btn-sec-action btn-sec-import" title="從外部 STY 伴奏檔中匯入指定段落">📥 匯入外部段落</button>
         </div>
       </div>
       <div id="section-buttons" class="section-grid">
@@ -3629,8 +5201,11 @@
     <!-- 8 伴奏聲部混音盤 -->
     <section class="mixer-panel">
       <div class="panel-header">
-        <span>8 大伴奏聲部狀態與混音盤 (8-Part Arranger Mixer)</span>
-        <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">點選任一卡牌切換焦點編輯聲部 ｜ LED 發聲閃爍 ｜ 靜音 ｜ 獨奏 ｜ 音量</span>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span>8 大伴奏聲部狀態與混音盤 (8-Part Arranger Mixer)</span>
+          <button id="btn-toggle-fx" class="mixer-fx-toggle-btn active" title="展開或收合 CC 91 殘響與 CC 93 合唱空間效果器滑桿">✨ 空間效果 (Rev/Cho)</button>
+        </div>
+        <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">點選任一卡牌切換焦點編輯聲部 ｜ LED 發聲閃爍 ｜ 靜音 ｜ 獨奏 ｜ 音量 ｜ 空間效果</span>
       </div>
       <div id="mixer-grid" class="mixer-grid">
         <!-- 動態渲染 8 個聲部卡片 -->

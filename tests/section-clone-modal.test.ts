@@ -166,6 +166,10 @@ class MockElement {
       customTargetWrap.id = 'sc-custom-target-wrap';
       modal.appendChild(customTargetWrap);
 
+      const selectNewTarget = new MockElement('select');
+      selectNewTarget.id = 'sc-select-new-target';
+      customTargetWrap.appendChild(selectNewTarget);
+
       const inputCustomTarget = new MockElement('input');
       inputCustomTarget.id = 'sc-input-custom-target';
       customTargetWrap.appendChild(inputCustomTarget);
@@ -398,5 +402,33 @@ describe('Tier 2-1 Step 3: 跨段落克隆與衍生彈窗 (Section Clone Modal) 
     // 驗證 Main E 中的鼓組音符數大於 0
     const drumCount = StyleRemixer.countNotesInChannel(parsed, range!.startTick, range!.endTick, 9);
     expect(drumCount).toBeGreaterThan(0);
+  });
+
+  it('7. 選擇「➕ 建立全新段落」時，自動提供未存在之 Yamaha 標準段落下拉選單，避免拼寫錯誤', async () => {
+    const { SectionCloneModal } = await import('../src/player/section-clone-modal');
+    const buffer = fs.readFileSync(sampleStyPath);
+    const parsed = YamahaParser.parse(new Uint8Array(buffer), 'STY');
+
+    const modal = new SectionCloneModal();
+    let callbackTarget = '';
+    modal.open(parsed, 'Main A', (_src, target) => {
+      callbackTarget = target;
+    });
+
+    const selectNewTarget = mockBody.querySelector('#sc-select-new-target') as MockElement;
+    expect(selectNewTarget).toBeDefined();
+    expect(selectNewTarget.options.length).toBeGreaterThan(0);
+
+    // 下拉選單應包含 Yamaha 標準段落選項，並能正常指派
+    const optValues = selectNewTarget.options.map(o => o.value);
+    expect(optValues.length).toBeGreaterThan(0);
+
+    // 模擬選取新段落並送出
+    const selectTarget = mockBody.querySelector('#sc-select-target') as MockElement;
+    selectTarget.value = '__NEW__';
+    selectNewTarget.value = optValues[0];
+
+    (modal as any).handleConfirm();
+    expect(callbackTarget).toBe(optValues[0]);
   });
 });

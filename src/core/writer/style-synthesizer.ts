@@ -372,6 +372,16 @@ export class YamahaStyleSynthesizer {
 
     // 7. 生成 Style 專屬 SFF2 CASM 轉調區塊
     const customChunks: YamahaCustomChunk[] = [];
+    const casmMappings: Record<string, Record<number, number>> = {};
+    for (const s of defaultSections) {
+      const mapping: Record<number, number> = {};
+      for (let ch = 8; ch <= 15; ch++) {
+        mapping[ch] = ch;
+      }
+      casmMappings[s.name.toLowerCase()] = mapping;
+      casmMappings[s.name.toLowerCase().replace(/\s+/g, '')] = mapping;
+    }
+
     if (options?.injectCasm !== false) {
       const secInfoList = defaultSections.map((s) => ({
         name: s.name,
@@ -390,6 +400,7 @@ export class YamahaStyleSynthesizer {
       tracks: [track0],
       parts,
       customChunks,
+      casmMappings,
       hasCasm: customChunks.some((c) => c.id === 'CASM'),
       hasOts: false,
     };

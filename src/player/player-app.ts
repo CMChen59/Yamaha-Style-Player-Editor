@@ -9,7 +9,11 @@ import { YamahaStyleModifier } from '../core/writer/style-modifier';
 import type { PlaybackNoteEvent, PlaybackCCEvent } from './sty-playback-engine';
 import { VoicePickerModal } from './voice-picker-modal';
 import { SectionCloneModal } from './section-clone-modal';
-import { ChordTransposer, POPULAR_AUDITION_CHORDS, type ChordDefinition, type ChordType } from '../core/writer/chord-transposer';
+import { SectionImportModal } from './section-import-modal';
+import { AddSectionModal, type AddSectionConfig } from './add-section-modal';
+import { NewStyleModal, type NewStyleModalConfig } from './new-style-modal';
+import { YamahaStyleSynthesizer } from '../core/writer/style-synthesizer';
+import { ChordTransposer, POPULAR_AUDITION_CHORDS, CHORD_TYPE_INTERVALS, type ChordDefinition, type ChordType } from '../core/writer/chord-transposer';
 import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
 
 // Yamaha 標準 8 伴奏聲部定義
@@ -37,6 +41,7 @@ export class PlayerApp {
   public activeSectionName: string = '';
   private baseBpm: number = 120;
   private focusedChannel: number = 8; // 預設聚焦 Channel 8 (即面板 CH 9 Rhythm 1)
+  private isFxVisible: boolean = true; // 混音盤空間效果器 (Reverb & Chorus) 展開狀態
 
   // UI Elements
   private dropZone!: HTMLElement;
@@ -84,6 +89,12 @@ export class PlayerApp {
   private voicePicker!: VoicePickerModal;
   private sectionCloneModal!: SectionCloneModal;
   private btnOpenSectionClone!: HTMLButtonElement;
+  private sectionImportModal!: SectionImportModal;
+  private btnOpenSectionImport!: HTMLButtonElement;
+  private addSectionModal!: AddSectionModal;
+  private btnOpenAddSection!: HTMLButtonElement;
+  private newStyleModal!: NewStyleModal;
+  private btnOpenNewStyle!: HTMLButtonElement;
   // 🎹 虛擬和弦轉調測試元件
   private chordPillsContainer!: HTMLElement;
   private labelCurrentChordName!: HTMLElement;
@@ -92,6 +103,11 @@ export class PlayerApp {
   private selectChordType!: HTMLSelectElement;
   private btnApplyCustomChord!: HTMLButtonElement;
   private btnResetChord!: HTMLButtonElement;
+  // 🔄 多小節和弦進行輪播元件
+  private toggleChordAutoAdvance!: HTMLInputElement;
+  private selectChordProgressionPreset!: HTMLSelectElement;
+  private progressionCardsContainer!: HTMLElement;
+  private btnResetProgression!: HTMLButtonElement;
 
   constructor() {
     document.addEventListener('DOMContentLoaded', () => this.init());
@@ -127,6 +143,9 @@ export class PlayerApp {
 
     this.voicePicker = new VoicePickerModal();
     this.sectionCloneModal = new SectionCloneModal();
+    this.sectionImportModal = new SectionImportModal();
+    this.addSectionModal = new AddSectionModal();
+    this.newStyleModal = new NewStyleModal();
 
     this.setFocusedChannel(8); // 預設聚焦 CH 9 Rhythm 1
     this.initMidi();
@@ -157,7 +176,10 @@ export class PlayerApp {
     this.mixerContainer = document.getElementById('mixer-grid')!;
     this.midiStatusPill = document.getElementById('midi-status-pill')!;
     this.btnExportSty = document.getElementById('btn-export-sty') as HTMLButtonElement;
+    this.btnOpenAddSection = document.getElementById('btn-open-add-section') as HTMLButtonElement;
     this.btnOpenSectionClone = document.getElementById('btn-open-section-clone') as HTMLButtonElement;
+    this.btnOpenSectionImport = document.getElementById('btn-open-section-import') as HTMLButtonElement;
+    this.btnOpenNewStyle = document.getElementById('btn-open-new-style') as HTMLButtonElement;
 
     // 🎯 聚焦聲部資訊橫幅元件
     this.focusedTrackBanner = document.getElementById('focused-track-banner')!;
@@ -185,6 +207,12 @@ export class PlayerApp {
     this.selectChordType = document.getElementById('select-chord-type') as HTMLSelectElement;
     this.btnApplyCustomChord = document.getElementById('btn-apply-custom-chord') as HTMLButtonElement;
     this.btnResetChord = document.getElementById('btn-reset-chord') as HTMLButtonElement;
+
+    // 🔄 多小節和弦進行輪播元件綁定
+    this.toggleChordAutoAdvance = document.getElementById('toggle-chord-auto-advance') as HTMLInputElement;
+    this.selectChordProgressionPreset = document.getElementById('select-chord-progression-preset') as HTMLSelectElement;
+    this.progressionCardsContainer = document.getElementById('progression-cards-container')!;
+    this.btnResetProgression = document.getElementById('btn-reset-progression') as HTMLButtonElement;
   }
 
   private setupEventListeners() {
@@ -196,9 +224,28 @@ export class PlayerApp {
       });
     });
 
+    if (this.btnOpenAddSection) {
+      this.btnOpenAddSection.addEventListener('click', () => {
+        this.openAddSectionModal();
+      });
+    }
+
     if (this.btnOpenSectionClone) {
       this.btnOpenSectionClone.addEventListener('click', () => {
         this.openSectionCloneModal();
+      });
+    }
+
+    if (this.btnOpenSectionImport) {
+      this.btnOpenSectionImport.addEventListener('click', () => {
+        this.openSectionImportModal();
+      });
+    }
+
+    if (this.btnOpenNewStyle) {
+      this.btnOpenNewStyle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openNewStyleModal();
       });
     }
 
@@ -389,6 +436,17 @@ export class PlayerApp {
 
     this.btnTestPiano.addEventListener('click', () => {
       midiManager.playTestChime(0);
+    });
+
+    // ✨ 空間效果 (Reverb & Chorus) 展開/收合開關
+    const btnToggleFx = document.getElementById('btn-toggle-fx');
+    btnToggleFx?.addEventListener('click', () => {
+      this.isFxVisible = !this.isFxVisible;
+      btnToggleFx.classList.toggle('active', this.isFxVisible);
+      const fxGroups = this.mixerContainer.querySelectorAll('.part-fx-group');
+      fxGroups.forEach((grp) => {
+        grp.classList.toggle('collapsed', !this.isFxVisible);
+      });
     });
 
     // 💾 匯出 STY 伴奏檔案
@@ -648,6 +706,7 @@ export class PlayerApp {
     this.renderMixer();
     this.syncMixerVolumes();
     this.syncSectionResizeUI();
+    this.renderProgressionCards();
 
     // 更新當前聚焦聲部的音符統計與資訊
     this.updateFocusedBanner();
@@ -767,8 +826,20 @@ export class PlayerApp {
       }
 
       pill.addEventListener('click', () => {
-        styPlaybackEngine.setAuditionChord(chord);
-        styPlaybackEngine.previewChord(chord);
+        if (styPlaybackEngine.getChordAutoAdvance()) {
+          // 自動輪播模式：指派和弦至當前選定編輯之小節卡片
+          const selectedBar = styPlaybackEngine.getSelectedProgressionBarIndex();
+          styPlaybackEngine.setChordForProgressionBar(selectedBar, chord);
+          if (this.selectChordProgressionPreset) {
+            this.selectChordProgressionPreset.value = 'custom';
+          }
+          this.renderProgressionCards();
+          styPlaybackEngine.previewChord(chord);
+        } else {
+          // 單和弦全段試聽模式
+          styPlaybackEngine.setAuditionChord(chord);
+          styPlaybackEngine.previewChord(chord);
+        }
       });
 
       this.chordPillsContainer.appendChild(pill);
@@ -780,8 +851,18 @@ export class PlayerApp {
         const root = this.selectChordRoot?.value || 'C';
         const type = (this.selectChordType?.value || 'maj') as ChordType;
         const customChord = ChordTransposer.buildChord(root, type);
-        styPlaybackEngine.setAuditionChord(customChord);
-        styPlaybackEngine.previewChord(customChord);
+        if (styPlaybackEngine.getChordAutoAdvance()) {
+          const selectedBar = styPlaybackEngine.getSelectedProgressionBarIndex();
+          styPlaybackEngine.setChordForProgressionBar(selectedBar, customChord);
+          if (this.selectChordProgressionPreset) {
+            this.selectChordProgressionPreset.value = 'custom';
+          }
+          this.renderProgressionCards();
+          styPlaybackEngine.previewChord(customChord);
+        } else {
+          styPlaybackEngine.setAuditionChord(customChord);
+          styPlaybackEngine.previewChord(customChord);
+        }
       });
     }
 
@@ -797,8 +878,171 @@ export class PlayerApp {
       this.updateChordAuditionUI(chord);
     });
 
+    // 5. 初始化多小節和弦進行輪播控制 (Chord Progression Auto-Advance)
+    this.setupChordProgressionControls();
+
     // 初始化當前顯示
     this.updateChordAuditionUI(currentChord);
+  }
+
+  /**
+   * 🔄 初始化多小節和弦進行輪播控制 (Chord Progression Auto-Advance)
+   */
+  private setupChordProgressionControls() {
+    if (this.toggleChordAutoAdvance) {
+      this.toggleChordAutoAdvance.checked = styPlaybackEngine.getChordAutoAdvance();
+      this.toggleChordAutoAdvance.addEventListener('change', () => {
+        const enabled = this.toggleChordAutoAdvance.checked;
+        styPlaybackEngine.setChordAutoAdvance(enabled);
+        this.renderProgressionCards();
+        if (!enabled) {
+          this.updateChordAuditionUI(styPlaybackEngine.getAuditionChord());
+        }
+      });
+    }
+
+    if (this.selectChordProgressionPreset) {
+      this.selectChordProgressionPreset.value = styPlaybackEngine.getChordProgressionPresetId();
+      this.selectChordProgressionPreset.addEventListener('change', () => {
+        const presetId = this.selectChordProgressionPreset.value;
+        if (presetId !== 'custom') {
+          const chords = ChordTransposer.getProgressionPreset(presetId);
+          styPlaybackEngine.setChordProgression(chords, presetId);
+          this.renderProgressionCards();
+        }
+      });
+    }
+
+    if (this.btnResetProgression) {
+      this.btnResetProgression.addEventListener('click', () => {
+        const defaultPresetId = 'pop-1564';
+        const chords = ChordTransposer.getProgressionPreset(defaultPresetId);
+        styPlaybackEngine.setChordProgression(chords, defaultPresetId);
+        if (this.selectChordProgressionPreset) {
+          this.selectChordProgressionPreset.value = defaultPresetId;
+        }
+        this.renderProgressionCards();
+      });
+    }
+
+    // 監聽播放進程輪播即時更新
+    styPlaybackEngine.onProgressionBarChange((barIndex, chord) => {
+      const cards = this.progressionCardsContainer?.querySelectorAll('.progression-bar-card');
+      cards?.forEach((card) => {
+        const idx = parseInt((card as HTMLElement).dataset.barIndex || '-1', 10);
+        card.classList.toggle('is-playing-card', idx === barIndex);
+      });
+
+      if (barIndex >= 0 && styPlaybackEngine.getChordAutoAdvance()) {
+        if (this.labelCurrentChordName) {
+          this.labelCurrentChordName.textContent = `${chord.displayName} (第 ${barIndex + 1} 小節)`;
+        }
+        if (this.labelCurrentChordDetail) {
+          this.labelCurrentChordDetail.textContent = `${ChordTransposer.getChordDescription(chord)} · 自動輪播中`;
+        }
+        // 同步高亮對應的 chord-pill
+        const pills = this.chordPillsContainer?.querySelectorAll('.chord-pill');
+        pills?.forEach((p) => {
+          const pillEl = p as HTMLElement;
+          pillEl.classList.toggle('is-active-chord', pillEl.dataset.chordName === chord.displayName);
+        });
+      }
+    });
+
+    // 初始渲染卡片
+    this.renderProgressionCards();
+  }
+
+  /**
+   * 渲染小節和弦進行軌跡卡片
+   */
+  private renderProgressionCards() {
+    if (!this.progressionCardsContainer) return;
+    this.progressionCardsContainer.innerHTML = '';
+
+    const totalBars = Math.max(1, styPlaybackEngine.getTotalBars());
+    const selectedBar = styPlaybackEngine.getSelectedProgressionBarIndex();
+
+    // 更新下方操作提示說明
+    const hintEl = document.getElementById('progression-hint-text');
+    if (hintEl) {
+      hintEl.textContent = `🎯 正在編輯【第 ${selectedBar + 1} 小節】：可直接在卡片上下拉選取，或點擊上方 12 顆和弦按鈕立即替換！`;
+    }
+
+    const commonChords = [
+      'C', 'Dm', 'Em', 'F', 'G', 'Am', 'G7', 'C7',
+      'Bb', 'Dm7', 'Cmaj7', 'Fmaj7', 'Am7', 'Gsus4',
+      'D', 'E', 'A', 'Fm', 'Bdim'
+    ];
+
+    for (let barIdx = 0; barIdx < totalBars; barIdx++) {
+      const chord = styPlaybackEngine.getChordForBar(barIdx);
+      const card = document.createElement('div');
+      card.className = 'progression-bar-card';
+      card.dataset.barIndex = String(barIdx);
+
+      if (barIdx === selectedBar) {
+        card.classList.add('is-selected-card');
+      }
+
+      const barNum = document.createElement('div');
+      barNum.className = 'card-bar-num';
+      barNum.textContent = `第 ${barIdx + 1} 小節`;
+
+      // 支援在卡片上直接下拉切換和弦
+      const chordSelect = document.createElement('select');
+      chordSelect.className = 'card-chord-select';
+      chordSelect.title = `點擊直接更換第 ${barIdx + 1} 小節和弦`;
+
+      const chordList = [...commonChords];
+      if (!chordList.includes(chord.displayName)) {
+        chordList.push(chord.displayName);
+      }
+
+      chordList.forEach((cName) => {
+        const opt = document.createElement('option');
+        opt.value = cName;
+        opt.textContent = cName;
+        if (cName === chord.displayName) opt.selected = true;
+        chordSelect.appendChild(opt);
+      });
+
+      chordSelect.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const newChord = ChordTransposer.parseChordString(chordSelect.value);
+        styPlaybackEngine.setSelectedProgressionBarIndex(barIdx);
+        styPlaybackEngine.setChordForProgressionBar(barIdx, newChord);
+        if (this.selectChordProgressionPreset) {
+          this.selectChordProgressionPreset.value = 'custom';
+        }
+        this.renderProgressionCards();
+        styPlaybackEngine.previewChord(newChord);
+      });
+
+      chordSelect.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (styPlaybackEngine.getSelectedProgressionBarIndex() !== barIdx) {
+          styPlaybackEngine.setSelectedProgressionBarIndex(barIdx);
+          this.renderProgressionCards();
+        }
+      });
+
+      const chordType = document.createElement('div');
+      chordType.className = 'card-chord-type';
+      chordType.textContent = CHORD_TYPE_INTERVALS[chord.type]?.label.split(' ')[0] || chord.type;
+
+      card.appendChild(barNum);
+      card.appendChild(chordSelect);
+      card.appendChild(chordType);
+
+      card.addEventListener('click', () => {
+        styPlaybackEngine.setSelectedProgressionBarIndex(barIdx);
+        this.renderProgressionCards();
+        styPlaybackEngine.previewChord(chord);
+      });
+
+      this.progressionCardsContainer.appendChild(card);
+    }
   }
 
   /**
@@ -828,6 +1072,28 @@ export class PlayerApp {
     }
     if (this.selectChordType) {
       this.selectChordType.value = chord.type;
+    }
+  }
+
+  /**
+   * 即時同步混音參數至記憶體中的 STY 結構 (Track 0 與 CASM 來源通道)
+   */
+  private syncPartMixingParam(channel: number, params: { volume?: number; pan?: number; reverb?: number; chorus?: number }) {
+    if (!this.currentParsed) return;
+    YamahaStyleModifier.setPartMixing(this.currentParsed, channel, params);
+    const currentSec = styPlaybackEngine.getCurrentSection();
+    if (currentSec) {
+      const secNameLower = currentSec.name.toLowerCase();
+      const casmSecMap = this.currentParsed.casmMappings?.[secNameLower]
+        || this.currentParsed.casmMappings?.[secNameLower.replace(/\s+/g, '')];
+      if (casmSecMap) {
+        for (const [srcStr, dst] of Object.entries(casmSecMap)) {
+          if (dst === channel) {
+            const srcCh = parseInt(srcStr, 10);
+            YamahaStyleModifier.setPartMixing(this.currentParsed, srcCh, params);
+          }
+        }
+      }
     }
   }
 
@@ -869,6 +1135,18 @@ export class PlayerApp {
           <span class="ctrl-sub-label">PAN</span>
           <input type="range" id="pan-${part.channel}" class="part-pan-slider" min="0" max="127" value="${styPlaybackEngine.getChannelPan(part.channel)}">
           <span id="pan-txt-${part.channel}" class="pan-badge" title="雙擊滑桿或數值置中 (C)">${formatYamahaPan(styPlaybackEngine.getChannelPan(part.channel))}</span>
+        </div>
+        <div class="part-fx-group ${this.isFxVisible ? '' : 'collapsed'}">
+          <div class="part-rev-wrap">
+            <span class="ctrl-sub-label" title="CC 91 殘響深度 (Reverb Send Depth)">REV</span>
+            <input type="range" id="rev-${part.channel}" class="part-rev-slider" min="0" max="127" value="${styPlaybackEngine.getChannelReverb(part.channel)}">
+            <span id="rev-txt-${part.channel}" class="rev-badge" title="雙擊重設為 Yamaha 原廠標準殘響值 (40)">${styPlaybackEngine.getChannelReverb(part.channel)}</span>
+          </div>
+          <div class="part-cho-wrap">
+            <span class="ctrl-sub-label" title="CC 93 合唱深度 (Chorus Send Depth)">CHO</span>
+            <input type="range" id="cho-${part.channel}" class="part-cho-slider" min="0" max="127" value="${styPlaybackEngine.getChannelChorus(part.channel)}">
+            <span id="cho-txt-${part.channel}" class="cho-badge" title="雙擊重設為 Yamaha 原廠標準合唱值 (0)">${styPlaybackEngine.getChannelChorus(part.channel)}</span>
+          </div>
         </div>
       `;
 
@@ -918,6 +1196,11 @@ export class PlayerApp {
         const txt = card.querySelector(`#vol-txt-${part.channel}`);
         if (txt) txt.textContent = vol.toString();
       });
+      sliderVol.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const vol = parseInt(sliderVol.value, 10);
+        this.syncPartMixingParam(part.channel, { volume: vol });
+      });
 
       const sliderPan = card.querySelector(`#pan-${part.channel}`) as HTMLInputElement;
       const txtPan = card.querySelector(`#pan-txt-${part.channel}`);
@@ -929,6 +1212,11 @@ export class PlayerApp {
         styPlaybackEngine.setChannelPan(part.channel, pan);
         if (txtPan) txtPan.textContent = formatYamahaPan(pan);
       });
+      sliderPan.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const pan = parseInt(sliderPan.value, 10);
+        this.syncPartMixingParam(part.channel, { pan });
+      });
 
       // 雙擊滑桿或數值徽章一鍵置中 (Center: 64)
       const resetCenter = (e: Event) => {
@@ -936,9 +1224,64 @@ export class PlayerApp {
         sliderPan.value = '64';
         styPlaybackEngine.setChannelPan(part.channel, 64);
         if (txtPan) txtPan.textContent = 'C';
+        this.syncPartMixingParam(part.channel, { pan: 64 });
       };
       sliderPan.addEventListener('dblclick', resetCenter);
       txtPan?.addEventListener('dblclick', resetCenter);
+
+      // ✨ CC 91 殘響 (Reverb) 控制與重設 (預設 40)
+      const sliderRev = card.querySelector(`#rev-${part.channel}`) as HTMLInputElement;
+      const txtRev = card.querySelector(`#rev-txt-${part.channel}`);
+
+      sliderRev.addEventListener('click', (e) => e.stopPropagation());
+      sliderRev.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const rev = parseInt(sliderRev.value, 10);
+        styPlaybackEngine.setChannelReverb(part.channel, rev);
+        if (txtRev) txtRev.textContent = rev.toString();
+      });
+      sliderRev.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const rev = parseInt(sliderRev.value, 10);
+        this.syncPartMixingParam(part.channel, { reverb: rev });
+      });
+
+      const resetReverb = (e: Event) => {
+        e.stopPropagation();
+        sliderRev.value = '40';
+        styPlaybackEngine.setChannelReverb(part.channel, 40);
+        if (txtRev) txtRev.textContent = '40';
+        this.syncPartMixingParam(part.channel, { reverb: 40 });
+      };
+      sliderRev.addEventListener('dblclick', resetReverb);
+      txtRev?.addEventListener('dblclick', resetReverb);
+
+      // ✨ CC 93 合唱 (Chorus) 控制與重設 (預設 0)
+      const sliderCho = card.querySelector(`#cho-${part.channel}`) as HTMLInputElement;
+      const txtCho = card.querySelector(`#cho-txt-${part.channel}`);
+
+      sliderCho.addEventListener('click', (e) => e.stopPropagation());
+      sliderCho.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const cho = parseInt(sliderCho.value, 10);
+        styPlaybackEngine.setChannelChorus(part.channel, cho);
+        if (txtCho) txtCho.textContent = cho.toString();
+      });
+      sliderCho.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const cho = parseInt(sliderCho.value, 10);
+        this.syncPartMixingParam(part.channel, { chorus: cho });
+      });
+
+      const resetChorus = (e: Event) => {
+        e.stopPropagation();
+        sliderCho.value = '0';
+        styPlaybackEngine.setChannelChorus(part.channel, 0);
+        if (txtCho) txtCho.textContent = '0';
+        this.syncPartMixingParam(part.channel, { chorus: 0 });
+      };
+      sliderCho.addEventListener('dblclick', resetChorus);
+      txtCho?.addEventListener('dblclick', resetChorus);
     });
   }
 
@@ -955,6 +1298,18 @@ export class PlayerApp {
       const txtPan = this.mixerContainer.querySelector(`#pan-txt-${part.channel}`);
       if (sliderPan) sliderPan.value = pan.toString();
       if (txtPan) txtPan.textContent = formatYamahaPan(pan);
+
+      const rev = styPlaybackEngine.getChannelReverb(part.channel);
+      const sliderRev = this.mixerContainer.querySelector(`#rev-${part.channel}`) as HTMLInputElement | null;
+      const txtRev = this.mixerContainer.querySelector(`#rev-txt-${part.channel}`);
+      if (sliderRev) sliderRev.value = rev.toString();
+      if (txtRev) txtRev.textContent = rev.toString();
+
+      const cho = styPlaybackEngine.getChannelChorus(part.channel);
+      const sliderCho = this.mixerContainer.querySelector(`#cho-${part.channel}`) as HTMLInputElement | null;
+      const txtCho = this.mixerContainer.querySelector(`#cho-txt-${part.channel}`);
+      if (sliderCho) sliderCho.value = cho.toString();
+      if (txtCho) txtCho.textContent = cho.toString();
     });
   }
 
@@ -1095,6 +1450,110 @@ export class PlayerApp {
   }
 
   /**
+   * 開啟新增伴奏段落彈窗 (Add Section Modal)
+   */
+  public openAddSectionModal() {
+    if (!this.currentParsed) {
+      alert('請先載入或建立 STY 伴奏檔案');
+      return;
+    }
+    this.addSectionModal.open(this.currentParsed, (config) => {
+      this.addNewSection(config);
+    });
+  }
+
+  /**
+   * 為當前風格新增指定 Yamaha 標準段落 (自動注入 CASM 與可選導引拍)
+   */
+  public addNewSection(config: AddSectionConfig) {
+    if (!this.currentParsed) return;
+
+    const ok = YamahaStyleModifier.createSection(
+      this.currentParsed,
+      config.sectionName,
+      config.bars
+    );
+
+    if (!ok) {
+      alert(`新增伴奏段落 [${config.sectionName}] 失敗，請重試！`);
+      return;
+    }
+
+    // 若啟用導引拍，自動在 CH 10 (Rhythm 2, channel index 9) 產生標準 4 拍鼓點打底
+    if (config.pilotBeat) {
+      const division = this.currentParsed.division || 1920;
+      const timeSig = this.currentParsed.timeSignature || { numerator: 4, denominator: 4 };
+      const ticksPerBeat = division;
+      const ticksPerBar = Math.round(ticksPerBeat * timeSig.numerator * (4 / timeSig.denominator));
+      const beatTicks = Math.round(ticksPerBar / timeSig.numerator);
+
+      for (let b = 0; b < config.bars; b++) {
+        const barStart = b * ticksPerBar;
+        for (let beat = 0; beat < timeSig.numerator; beat++) {
+          const beatStart = barStart + beat * beatTicks;
+          // 閉鈸 (Closed Hat: 42) 每一拍穩定敲擊
+          YamahaStyleModifier.addSectionNote(this.currentParsed, config.sectionName, 9, {
+            note: 42,
+            velocity: beat % 2 === 0 ? 80 : 70,
+            startTick: beatStart,
+            durationTick: Math.round(beatTicks * 0.5),
+          });
+
+          // 4/4 拍律動: 1, 3 拍大鼓 (Kick: 36), 2, 4 拍小鼓 (Snare: 38)
+          if (timeSig.numerator === 4) {
+            if (beat === 0 || beat === 2) {
+              YamahaStyleModifier.addSectionNote(this.currentParsed, config.sectionName, 9, {
+                note: 36,
+                velocity: 100,
+                startTick: beatStart,
+                durationTick: Math.round(beatTicks * 0.5),
+              });
+            } else if (beat === 1 || beat === 3) {
+              YamahaStyleModifier.addSectionNote(this.currentParsed, config.sectionName, 9, {
+                note: 38,
+                velocity: 95,
+                startTick: beatStart,
+                durationTick: Math.round(beatTicks * 0.5),
+              });
+            }
+          } else if (timeSig.numerator === 3) {
+            if (beat === 0) {
+              YamahaStyleModifier.addSectionNote(this.currentParsed, config.sectionName, 9, {
+                note: 36,
+                velocity: 100,
+                startTick: beatStart,
+                durationTick: Math.round(beatTicks * 0.5),
+              });
+            } else {
+              YamahaStyleModifier.addSectionNote(this.currentParsed, config.sectionName, 9, {
+                note: 38,
+                velocity: 85,
+                startTick: beatStart,
+                durationTick: Math.round(beatTicks * 0.5),
+              });
+            }
+          } else {
+            if (beat === 0) {
+              YamahaStyleModifier.addSectionNote(this.currentParsed, config.sectionName, 9, {
+                note: 36,
+                velocity: 100,
+                startTick: beatStart,
+                durationTick: Math.round(beatTicks * 0.5),
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 重新載入播放引擎以解析最新段落 Marker、CASM 與小節長度
+    styPlaybackEngine.loadParsed(this.currentParsed);
+    this.renderSectionButtons();
+    this.selectSection(config.sectionName);
+    this.setFocusedChannel(9); // 自動聚焦 CH 10 Rhythm 2
+  }
+
+  /**
    * 開啟跨段落克隆與衍生視窗 (Section Clone Modal)
    */
   public openSectionCloneModal() {
@@ -1126,6 +1585,194 @@ export class PlayerApp {
         this.selectSection(targetSec);
         alert(`🎉 已成功將【${srcSec}】複製至【${targetSec}】！\n共複製 ${result.copiedNotesCount} 顆音符，包含 ${result.copiedChannels.length} 個聲部。`);
       }
+    );
+  }
+
+  /**
+   * 開啟跨檔案伴奏段落移植視窗 (Section Import Modal)
+   */
+  public openSectionImportModal() {
+    if (!this.currentParsed) {
+      alert('請先載入或建立 STY 伴奏檔案');
+      return;
+    }
+
+    this.sectionImportModal.open(
+      this.currentParsed,
+      (sourceParsed, srcSec, options) => {
+        const result = YamahaStyleModifier.importSectionFromExternalStyle(
+          this.currentParsed!,
+          sourceParsed,
+          srcSec,
+          options
+        );
+
+        if (!result.success) {
+          alert(`跨檔案段落移植失敗: ${result.message || '未知錯誤'}`);
+          return;
+        }
+
+        // 重新載入播放引擎以解析最新段落 Marker、CASM 與小節長度
+        styPlaybackEngine.loadParsed(this.currentParsed!);
+        this.renderSectionButtons();
+        this.selectSection(result.targetSection);
+        this.renderMixer();
+        this.updateFocusedBanner();
+        if (result.copiedChannels.length > 0) {
+          this.setFocusedChannel(result.copiedChannels[0]);
+        }
+
+        const ppqNotice = result.ppqScaled
+          ? `\n時間軸自動完成 ${result.sourcePpq} ➔ ${result.targetPpq} PPQ 縮放。`
+          : '';
+
+        alert(`🎉 跨檔案段落移植成功！\n已成功將【${srcSec}】移植至【${result.targetSection}】！\n共複製 ${result.copiedNotesCount} 顆音符，涵蓋 ${result.copiedChannels.length} 個伴奏聲部。${ppqNotice}`);
+      }
+    );
+  }
+
+  /**
+   * 開啟全新伴奏製作嚮導視窗 (New Style Modal)
+   */
+  public openNewStyleModal() {
+    this.newStyleModal.open((config) => {
+      this.createNewStyle(config);
+    });
+  }
+
+  /**
+   * 根據嚮導設定，從無到有建立全新符合 Yamaha SFF2 / PSR-SX920 標準的空白伴奏檔案
+   */
+  public createNewStyle(config: NewStyleModalConfig) {
+    const division = 1920;
+    const timeSig = config.timeSignature;
+    const ticksPerBeat = division;
+    const ticksPerBar = Math.round(ticksPerBeat * timeSig.numerator * (4 / timeSig.denominator));
+
+    // 1. 若勾選了基礎鼓點指引 (Pilot Metronome Beat)，在 Main A 預填基礎節奏打底
+    const sectionsWithNotes = config.sections.map((sec) => {
+      if (sec.name === 'Main A' && config.pilotBeat) {
+        const notes: any[] = [];
+        const bars = Math.max(1, sec.bars);
+        const beatTicks = Math.round(ticksPerBar / timeSig.numerator);
+        for (let b = 0; b < bars; b++) {
+          const barStart = b * ticksPerBar;
+          for (let beat = 0; beat < timeSig.numerator; beat++) {
+            const beatStart = barStart + beat * beatTicks;
+            // 閉鈸 (Closed Hat: 42) 每一拍穩定敲擊
+            notes.push({
+              channel: 9, // Rhythm 2
+              note: 42,
+              velocity: beat % 2 === 0 ? 80 : 70,
+              startTick: beatStart,
+              durationTick: Math.round(beatTicks * 0.5),
+            });
+
+            // 4/4 拍律動: 1, 3 拍大鼓 (Kick: 36), 2, 4 拍小鼓 (Snare: 38)
+            if (timeSig.numerator === 4) {
+              if (beat === 0 || beat === 2) {
+                notes.push({
+                  channel: 9,
+                  note: 36,
+                  velocity: 100,
+                  startTick: beatStart,
+                  durationTick: Math.round(beatTicks * 0.5),
+                });
+              } else if (beat === 1 || beat === 3) {
+                notes.push({
+                  channel: 9,
+                  note: 38,
+                  velocity: 95,
+                  startTick: beatStart,
+                  durationTick: Math.round(beatTicks * 0.5),
+                });
+              }
+            } else if (timeSig.numerator === 3) {
+              // 3/4 拍華爾滋: 1 拍大鼓, 2, 3 拍小鼓
+              if (beat === 0) {
+                notes.push({ channel: 9, note: 36, velocity: 100, startTick: beatStart, durationTick: Math.round(beatTicks * 0.5) });
+              } else {
+                notes.push({ channel: 9, note: 38, velocity: 85, startTick: beatStart, durationTick: Math.round(beatTicks * 0.5) });
+              }
+            } else {
+              if (beat === 0) {
+                notes.push({ channel: 9, note: 36, velocity: 100, startTick: beatStart, durationTick: Math.round(beatTicks * 0.5) });
+              }
+            }
+          }
+        }
+        return { ...sec, notes };
+      }
+      return { ...sec };
+    });
+
+    // 2. 依據預設配置 8 聲部樂器
+    let selectedParts: any = undefined;
+    if (config.preset === 'ballad') {
+      selectedParts = {
+        Rhythm1: { msb: 127, lsb: 0, pc: 89, volume: 85 }, // Pop Kit
+        Rhythm2: { msb: 127, lsb: 0, pc: 0, volume: 95 },  // Standard Kit
+        Bass: { msb: 0, lsb: 0, pc: 32, volume: 95 },      // Acoustic Bass
+        Chord1: { msb: 0, lsb: 0, pc: 0, volume: 90 },     // Grand Piano
+        Chord2: { msb: 0, lsb: 0, pc: 4, volume: 85 },     // Electric Piano
+        Pad: { msb: 0, lsb: 0, pc: 89, volume: 80 },       // Warm Pad
+        Phrase1: { msb: 0, lsb: 0, pc: 64, volume: 85 },   // Soprano Sax
+        Phrase2: { msb: 0, lsb: 0, pc: 73, volume: 80 },   // Flute
+      };
+    } else if (config.preset === 'rock') {
+      selectedParts = {
+        Rhythm1: { msb: 127, lsb: 0, pc: 16, volume: 90 }, // Rock Kit
+        Rhythm2: { msb: 127, lsb: 0, pc: 0, volume: 100 }, // Standard Kit
+        Bass: { msb: 0, lsb: 0, pc: 34, volume: 100 },     // Pick Bass
+        Chord1: { msb: 0, lsb: 0, pc: 30, volume: 95 },    // Distortion Guitar
+        Chord2: { msb: 0, lsb: 0, pc: 27, volume: 90 },    // Clean Guitar
+        Pad: { msb: 0, lsb: 0, pc: 18, volume: 85 },       // Rock Organ
+        Phrase1: { msb: 0, lsb: 0, pc: 29, volume: 95 },   // Overdriven Guitar
+        Phrase2: { msb: 0, lsb: 0, pc: 48, volume: 80 },   // Strings
+      };
+    }
+
+    // 3. 呼叫 YamahaStyleSynthesizer 生成全新 SFF2 結構
+    const newParsed = YamahaStyleSynthesizer.createBlankStyle({
+      styleName: config.styleName,
+      bpm: config.bpm,
+      timeSignature: config.timeSignature,
+      division,
+      sections: sectionsWithNotes,
+      parts: selectedParts,
+    });
+
+    // 4. 掛載進播放器與工作台
+    this.currentParsed = newParsed;
+    this.currentFileName = `${config.styleName}.sty`;
+    this.baseBpm = config.bpm;
+    this.sliderBpm.value = config.bpm.toString();
+    this.labelBpmValue.textContent = config.bpm.toString();
+
+    // 更新頂部儀表板
+    this.labelStyleTitle.textContent = config.styleName;
+    const musicalSecs = YamahaStyleSynthesizer.getMusicalSections(newParsed);
+    this.labelStyleInfo.textContent = `SFF2 (1920 PPQ) ｜ ${config.bpm} BPM ｜ ${config.timeSignature.numerator}/${config.timeSignature.denominator} 拍 ｜ ${musicalSecs.length} 個段落 ｜ 8 聲部已就緒`;
+
+    // 載入播放引擎
+    styPlaybackEngine.loadParsed(newParsed);
+
+    // 渲染段落按鈕
+    this.renderSectionButtons();
+    const firstSec = musicalSecs.find(s => s.name === 'Main A')?.name || musicalSecs[0]?.name || 'Main A';
+    this.selectSection(firstSec);
+
+    // 渲染混音卡牌並預設聚焦 CH 10 Rhythm 2
+    this.renderMixer();
+    this.setFocusedChannel(9);
+
+    alert(
+      `🎉 全新伴奏【${config.styleName}】已成功建立！\n\n` +
+      `• 拍號: ${config.timeSignature.numerator}/${config.timeSignature.denominator} 拍\n` +
+      `• 速度: ${config.bpm} BPM\n` +
+      `• 段落數: ${musicalSecs.length} 個段落\n` +
+      `• 規格: Yamaha SFF2 原廠相容 (1920 PPQ + CASM 智慧轉調)\n\n` +
+      `💡 說明：8 大伴奏混音盤與單軌鋼琴捲軸已完全就緒，可使用滑鼠繪製或 Web MIDI 實體琴鍵步進錄音！`
     );
   }
 
@@ -1325,13 +1972,17 @@ export class PlayerApp {
             events
           );
           const vol = styPlaybackEngine.getChannelVolume(ch);
-          YamahaStyleModifier.setPartMixing(this.currentParsed, ch, { volume: vol });
+          const pan = styPlaybackEngine.getChannelPan(ch);
+          const rev = styPlaybackEngine.getChannelReverb(ch);
+          const cho = styPlaybackEngine.getChannelChorus(ch);
+          const mixParams = { volume: vol, pan, reverb: rev, chorus: cho };
+          YamahaStyleModifier.setPartMixing(this.currentParsed, ch, mixParams);
 
           if (casmSecMap) {
             for (const [srcStr, dst] of Object.entries(casmSecMap)) {
               if (dst === ch) {
                 const srcCh = parseInt(srcStr, 10);
-                YamahaStyleModifier.setPartMixing(this.currentParsed, srcCh, { volume: vol });
+                YamahaStyleModifier.setPartMixing(this.currentParsed, srcCh, mixParams);
               }
             }
           }

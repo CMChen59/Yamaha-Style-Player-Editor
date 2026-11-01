@@ -85,7 +85,111 @@ export const POPULAR_AUDITION_CHORDS: ChordDefinition[] = [
   { root: 'D', type: 'maj', displayName: 'D', rootPitchClass: 2, semitonesFromC: 2, intervals: [0, 4, 7] },
 ];
 
+export interface ChordProgressionPreset {
+  id: string;
+  name: string;
+  description: string;
+  chordNames: string[];
+}
+
+/** 常用經典流行和弦進行預設 */
+export const CHORD_PROGRESSION_PRESETS: ChordProgressionPreset[] = [
+  {
+    id: 'pop-1564',
+    name: '流行 1-5-6-4 (C - G - Am - F)',
+    description: '華語與西洋流行金曲最常見循環進程',
+    chordNames: ['C', 'G', 'Am', 'F'],
+  },
+  {
+    id: 'pop-1645',
+    name: '流行 1-6-4-5 (C - Am - F - G)',
+    description: '經典 50 年代 Doo-Wop 抒情循環',
+    chordNames: ['C', 'Am', 'F', 'G'],
+  },
+  {
+    id: 'canon-8',
+    name: '卡農進行 8 小節 (C - G - Am - Em - F - C - F - G)',
+    description: '帕海貝爾卡農經典 8 小節循環',
+    chordNames: ['C', 'G', 'Am', 'Em', 'F', 'C', 'F', 'G'],
+  },
+  {
+    id: 'ballad-6415',
+    name: '抒情小調 6-4-1-5 (Am - F - C - G)',
+    description: '日韓抒情與動漫常見哀愁感性小調',
+    chordNames: ['Am', 'F', 'C', 'G'],
+  },
+  {
+    id: 'jazz-251',
+    name: '爵士 2-5-1 (Dm7 - G7 - Cmaj7 - C)',
+    description: '爵士標準曲最基礎 2-5-1 解決進程',
+    chordNames: ['Dm7', 'G7', 'Cmaj7', 'C'],
+  },
+  {
+    id: 'soul-4536',
+    name: '動聽 4-5-3-6 (F - G - Em - Am)',
+    description: '流行感性王道進行，動聽煽情',
+    chordNames: ['F', 'G', 'Em', 'Am'],
+  },
+  {
+    id: 'blues-12',
+    name: '藍調 12 小節 (C7 - F7 - G7)',
+    description: '標準 12 小節 Blues 和弦架構',
+    chordNames: ['C7', 'C7', 'C7', 'C7', 'F7', 'F7', 'C7', 'C7', 'G7', 'F7', 'C7', 'G7'],
+  },
+  {
+    id: 'all-c',
+    name: '基準原調 (全部 C)',
+    description: '維持原檔錄製調性試聽',
+    chordNames: ['C', 'C', 'C', 'C'],
+  },
+];
+
 export class ChordTransposer {
+  /**
+   * 解析和弦名稱字串 (如 'C', 'Am', 'G7', 'Dm7', 'Cmaj7', 'F#m', 'Bb', 'Gsus4', 'Bdim')
+   */
+  public static parseChordString(chordStr: string): ChordDefinition {
+    const trimmed = chordStr.trim();
+    if (!trimmed) return ChordTransposer.buildChord('C', 'maj');
+
+    // 比對根音 (A~G, 可帶 # 或 b) 與其餘後綴
+    const match = trimmed.match(/^([A-G][#b]?)(.*)$/i);
+    if (!match) return ChordTransposer.buildChord('C', 'maj');
+
+    // 格式化根音字首大寫，# 或 b 規範
+    let root = match[1].toUpperCase();
+    if (match[1].length === 2 && match[1][1].toLowerCase() === 'b') {
+      root = match[1][0].toUpperCase() + 'b';
+    } else if (match[1].length === 2 && match[1][1] === '#') {
+      root = match[1][0].toUpperCase() + '#';
+    }
+
+    const rest = match[2].toLowerCase();
+    let type: ChordType = 'maj';
+    if (rest === 'm' || rest === 'min' || rest === '-') {
+      type = 'm';
+    } else if (rest === 'maj7' || rest === 'm7+' || rest === 'ma7' || rest === 'major7') {
+      type = 'maj7';
+    } else if (rest === 'm7' || rest === 'min7' || rest === '-7') {
+      type = 'm7';
+    } else if (rest === '7' || rest === 'dom7') {
+      type = '7';
+    } else if (rest === 'sus4' || rest === 'sus') {
+      type = 'sus4';
+    } else if (rest === 'dim' || rest === 'o') {
+      type = 'dim';
+    }
+
+    return ChordTransposer.buildChord(root, type);
+  }
+
+  /**
+   * 取得指定預設進行名稱的和弦陣列
+   */
+  public static getProgressionPreset(presetId: string): ChordDefinition[] {
+    const preset = CHORD_PROGRESSION_PRESETS.find(p => p.id === presetId) || CHORD_PROGRESSION_PRESETS[0];
+    return preset.chordNames.map(name => ChordTransposer.parseChordString(name));
+  }
   /**
    * 根據根音與類型構建和弦定義物件
    */

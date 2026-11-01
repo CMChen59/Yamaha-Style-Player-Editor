@@ -7,6 +7,7 @@
 import type { YamahaFileParsed } from '../core/models/types';
 import { StyleRemixer } from '../core/writer/style-remixer';
 import type { CloneSectionOptions } from '../core/writer/style-modifier';
+import { ALL_STANDARD_SECTIONS } from '../core/models/style-types';
 
 interface PartChannelMeta {
   channel: number;
@@ -32,6 +33,7 @@ export class SectionCloneModal {
   private selectSourceSec!: HTMLSelectElement;
   private selectTargetSec!: HTMLSelectElement;
   private customTargetWrap!: HTMLElement;
+  private selectNewTarget!: HTMLSelectElement;
   private inputCustomTarget!: HTMLInputElement;
   private channelCheckboxesContainer!: HTMLElement;
   private chkMatchMeasures!: HTMLInputElement;
@@ -83,8 +85,10 @@ export class SectionCloneModal {
             <div class="sc-route-col">
               <label class="sc-field-label" for="sc-select-target">目標段落 (Destination):</label>
               <select id="sc-select-target" class="sc-select"></select>
-              <div id="sc-custom-target-wrap" class="sc-custom-target-wrap" style="display: none;">
-                <input type="text" id="sc-input-custom-target" class="sc-input-text" placeholder="輸入全新段落名稱 (如 Main C)...">
+              <div id="sc-custom-target-wrap" class="sc-custom-target-wrap" style="display: none; margin-top: 8px;">
+                <label class="sc-field-label" for="sc-select-new-target" style="font-size: 0.8rem; color: #38bdf8; margin-bottom: 4px; display: block;">選擇欲建立之 Yamaha 標準段落：</label>
+                <select id="sc-select-new-target" class="sc-select" style="border-color: #0284c7; background: #0f172a;"></select>
+                <input type="text" id="sc-input-custom-target" class="sc-input-text" style="display: none;" placeholder="輸入全新段落名稱 (如 Main C)...">
               </div>
             </div>
           </div>
@@ -148,6 +152,7 @@ export class SectionCloneModal {
     this.selectSourceSec = wrap.querySelector('#sc-select-source') as HTMLSelectElement;
     this.selectTargetSec = wrap.querySelector('#sc-select-target') as HTMLSelectElement;
     this.customTargetWrap = wrap.querySelector('#sc-custom-target-wrap') as HTMLElement;
+    this.selectNewTarget = wrap.querySelector('#sc-select-new-target') as HTMLSelectElement;
     this.inputCustomTarget = wrap.querySelector('#sc-input-custom-target') as HTMLInputElement;
     this.channelCheckboxesContainer = wrap.querySelector('#sc-channels-grid') as HTMLElement;
     this.chkMatchMeasures = wrap.querySelector('#sc-chk-match-measures') as HTMLInputElement;
@@ -187,11 +192,23 @@ export class SectionCloneModal {
     this.selectTargetSec.addEventListener('change', () => {
       const isNew = this.selectTargetSec.value === '__NEW__';
       this.customTargetWrap.style.display = isNew ? 'block' : 'none';
-      if (isNew) this.inputCustomTarget?.focus?.();
+      if (isNew) {
+        if (this.selectNewTarget && this.inputCustomTarget) {
+          this.inputCustomTarget.value = this.selectNewTarget.value;
+        }
+        this.selectNewTarget?.focus?.();
+      }
       this.updateSummaryText();
     });
 
-    this.inputCustomTarget.addEventListener('input', () => {
+    this.selectNewTarget?.addEventListener('change', () => {
+      if (this.inputCustomTarget) {
+        this.inputCustomTarget.value = this.selectNewTarget.value;
+      }
+      this.updateSummaryText();
+    });
+
+    this.inputCustomTarget?.addEventListener('input', () => {
       this.updateSummaryText();
     });
 
@@ -255,6 +272,34 @@ export class SectionCloneModal {
     optNew.value = '__NEW__';
     optNew.textContent = '➕ 建立全新段落...';
     this.selectTargetSec.appendChild(optNew);
+
+    // 找出所有尚未在目前 STY 中的 Yamaha 標準段落
+    const existingNamesLower = musical.map(s => s.name.trim().toLowerCase());
+    const unusedSections = ALL_STANDARD_SECTIONS.filter(
+      s => !existingNamesLower.includes(s.name.trim().toLowerCase())
+    );
+
+    // 填充全新段落下拉選單 (防呆防錯避免手動 Key 錯)
+    if (this.selectNewTarget) {
+      this.selectNewTarget.innerHTML = '';
+      if (unusedSections.length > 0) {
+        unusedSections.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.name;
+          opt.textContent = `${s.name} (${s.label} - 建議 ${s.defaultBars} 小節)`;
+          this.selectNewTarget.appendChild(opt);
+        });
+        if (this.inputCustomTarget) {
+          this.inputCustomTarget.value = unusedSections[0].name;
+        }
+      } else {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '已具備所有 Yamaha 標準段落';
+        opt.disabled = true;
+        this.selectNewTarget.appendChild(opt);
+      }
+    }
 
     // 智慧預選目標段落 (優先選擇與來源相鄰的段落，如 Main A 預選 Main B)
     const currentSrcName = this.selectSourceSec.value;
@@ -391,8 +436,10 @@ export class SectionCloneModal {
   private updateSummaryText() {
     const srcSec = this.selectSourceSec.value || '來源段落';
     let targetSec = this.selectTargetSec.value;
+    let isNewSection = false;
     if (targetSec === '__NEW__') {
-      targetSec = this.inputCustomTarget.value.trim() || '新段落';
+      isNewSection = true;
+      targetSec = this.selectNewTarget?.value || this.inputCustomTarget?.value?.trim() || '新段落';
     }
 
     const selectedChs = this.getSelectedChannels();
@@ -408,9 +455,15 @@ export class SectionCloneModal {
       return;
     }
 
-    this.summaryTextEl.innerHTML = `
-      即將將【<strong>${srcSec}</strong>】的 <strong>${selectedChs.length}</strong> 個聲部複製到【<strong>${targetSec}</strong>】
-    `;
+    if (isNewSection) {
+      this.summaryTextEl.innerHTML = `
+        將在風格中【全新建立】段落「<strong>${targetSec}</strong>」，並從「<strong>${srcSec}</strong>」複製 <strong>${selectedChs.length}</strong> 個聲部（自動配置 SFF2 CASM 規則）。
+      `;
+    } else {
+      this.summaryTextEl.innerHTML = `
+        即將將【<strong>${srcSec}</strong>】的 <strong>${selectedChs.length}</strong> 個聲部複製到【<strong>${targetSec}</strong>】
+      `;
+    }
   }
 
   /**
@@ -421,10 +474,10 @@ export class SectionCloneModal {
     let targetSec = this.selectTargetSec.value;
 
     if (targetSec === '__NEW__') {
-      targetSec = this.inputCustomTarget.value.trim();
+      targetSec = (this.selectNewTarget?.value || this.inputCustomTarget?.value || '').trim();
       if (!targetSec) {
-        alert('請輸入有效的新段落名稱 (例如 Main C 或 Ending B)');
-        this.inputCustomTarget?.focus?.();
+        alert('請選擇有效的新段落名稱 (例如 Main C 或 Ending B)');
+        this.selectNewTarget?.focus?.();
         return;
       }
     }

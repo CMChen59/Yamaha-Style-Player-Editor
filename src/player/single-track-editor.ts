@@ -108,6 +108,7 @@ export class SingleTrackEditor {
   private velInput: HTMLInputElement | null = null;
   private velStatus: HTMLElement | null = null;
   private gridScrollEl: HTMLElement | null = null;
+  private isHighContrastGrid: boolean = false;
 
   // 🎛️ 計畫 B: CC 控制器自動化控制線 (Automation Lanes)
   private activeController: number = 11; // 預設 CC 11 Expression (表情動態)
@@ -119,6 +120,10 @@ export class SingleTrackEditor {
   private lanePlayheadEl: HTMLElement | null = null;
   private laneSvgEl: SVGSVGElement | null = null;
   private laneValReadoutEl: HTMLElement | null = null;
+
+  // 🥁 鼓組 16-Step 步進格子矩陣視圖 (Drum Step Sequencer Grid)
+  private viewMode: 'piano-roll' | 'drum-grid' = 'piano-roll';
+  private lastPlayheadStep: number = -1;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -171,6 +176,9 @@ export class SingleTrackEditor {
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
         this.selectAllNotes();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        this.fillRemainingBarsFromBar1();
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if (e.shiftKey) {
@@ -446,6 +454,8 @@ export class SingleTrackEditor {
     this.ensureDefaultCCPoint(11, 127); // Expression
     this.ensureDefaultCCPoint(7, 100);  // Volume
     this.ensureDefaultCCPoint(10, 64);  // Pan
+    this.ensureDefaultCCPoint(91, 40);  // Reverb (預設 40)
+    this.ensureDefaultCCPoint(93, 0);   // Chorus (預設 0)
     this.ensureDefaultCCPoint(1, 0);    // Modulation
     this.ensureDefaultCCPoint(64, 0);   // Sustain
   }
@@ -498,6 +508,10 @@ export class SingleTrackEditor {
     this.timeSignature = timeSignature || { numerator: 4, denominator: 4 };
     this.voiceInfo = voiceInfo;
     this.isChannelActive = isActive;
+    const isDrum = styPlaybackEngine.isChannelDrum(this.channel);
+    if (!isDrum && this.viewMode === 'drum-grid') {
+      this.viewMode = 'piano-roll';
+    }
     this.selectedEvents.clear();
     this.initialVelocities.clear();
 
@@ -610,6 +624,10 @@ export class SingleTrackEditor {
    * 繪製完整編輯器 UI
    */
   private render() {
+    const prevScrollLeft = this.gridScrollEl ? this.gridScrollEl.scrollLeft : 0;
+    const prevScrollTop = this.gridScrollEl ? this.gridScrollEl.scrollTop : 0;
+    const isDrum = styPlaybackEngine.isChannelDrum(this.channel);
+
     this.container.innerHTML = '';
     this.container.style.setProperty('--part-accent', this.partAccentColor);
 
@@ -623,6 +641,13 @@ export class SingleTrackEditor {
         <span class="editor-voice-tag clickable-voice-tag" title="${this.voiceInfo ? this.voiceInfo.voiceName + ' (點擊更換音色)' : '點擊更換音色'}">${this.voiceInfo?.voiceName || (this.isChannelActive ? '預設音色' : '未配置音色')} ✏️</span>
         <span class="editor-meta-pill">拍號: ${this.timeSignature.numerator}/${this.timeSignature.denominator} | 總計: ${this.totalBars} 小節 | PPQ: ${this.division}</span>
         <span id="ed-note-count-pill" class="editor-meta-pill">音符總數: ${this.events.length}</span>
+
+        ${isDrum ? `
+          <div class="editor-view-toggle">
+            <button id="ed-view-pianoroll" class="view-toggle-btn ${this.viewMode === 'piano-roll' ? 'active' : ''}" title="切換至標準鋼琴卷軸視圖">🎹 鋼琴卷軸</button>
+            <button id="ed-view-drumgrid" class="view-toggle-btn ${this.viewMode === 'drum-grid' ? 'active' : ''}" title="切換至專業 16-Step 鼓機步進矩陣">🥁 16-Step 矩陣</button>
+          </div>
+        ` : ''}
       </div>
 
       <div class="editor-toolbar-right">
@@ -677,6 +702,11 @@ export class SingleTrackEditor {
           <button id="ed-btn-quantize-settings" class="editor-mini-btn ${this.isQuantizePanelOpen ? 'active' : ''}" title="展開/收合量化強度與搖擺律動面板">⚙️ 律動</button>
         </div>
 
+        <!-- 🔁 複製第 1 小節填滿全段 -->
+        <button id="ed-btn-fill-bars" class="editor-action-btn btn-fill-bars" ${this.totalBars <= 1 ? 'disabled' : ''} title="將第 1 小節的所有音符複製並平移填滿至後續所有小節 (清空覆蓋後續小節，快速鍵: Ctrl+D，支援 Ctrl+Z 復原)">
+          🔁 填滿後續小節
+        </button>
+
         <!-- ↩️ 復原 / ↪️ 重做 -->
         <div class="editor-history-btns">
           <button id="ed-btn-undo" class="editor-action-btn" title="復原上一步操作 (Ctrl+Z)" disabled>↩️ 復原</button>
@@ -695,6 +725,7 @@ export class SingleTrackEditor {
         <button id="ed-btn-toggle-lane" class="editor-action-btn ${this.isLaneVisible ? 'active' : ''}" title="顯示 / 隱藏 CC 控制器自動化控制線 (Expression / Volume / Pan)">🎛️ CC 控制線</button>
 
         <div class="editor-zoom-btns">
+          <button id="ed-btn-grid-contrast" class="editor-mini-btn ${this.isHighContrastGrid ? 'active' : ''}" title="切換高對比度格線模式 (更明亮清晰的小節線與拍線)">👁️ ${this.isHighContrastGrid ? '高對比' : '標準格線'}</button>
           <button id="ed-btn-fit-4" class="editor-mini-btn ${!this.isUserZoomed ? 'active' : ''}" title="保證視野內完整呈現 4 個小節">🎯 4 小節</button>
           <button id="ed-btn-fit-all" class="editor-mini-btn" title="縮放至完整段落小節">全曲</button>
           <button id="ed-btn-zoom-out" class="editor-mini-btn" title="縮小時間軸">🔍 -</button>
@@ -768,8 +799,10 @@ export class SingleTrackEditor {
     hintBar.className = 'editor-hint-bar';
     if (this.isStepRecording) {
       hintBar.innerHTML = `<span>🔴 <b>步進錄音進行中:</b> 在 PSR-SX920 彈奏和弦或旋律，放開琴鍵即寫入 ｜ <b>空白鍵 (Space)</b> 插入休止 ｜ <b>T 鍵</b> 延音 ｜ <b>Backspace</b> 退步 ｜ 點擊標尺直接跳轉游標</span>`;
+    } else if (this.viewMode === 'drum-grid' && isDrum) {
+      hintBar.innerHTML = `<span>🥁 <b>16-Step 鼓機步進矩陣:</b> 點擊格子即時<b>【開燈打點 / 關燈清除】</b> ｜ 點擊左側樂器試聽 ｜ 上方拉桿控制寫入力度 ｜ <b>🔁 填滿後續小節 (Ctrl+D)</b> 一鍵複製全段 ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b></span>`;
     } else {
-      hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b> ｜ <b>Alt+↑/↓ 移調 (Shift+Alt+↑/↓ 八度)</b></span>`;
+      hintBar.innerHTML = `<span>💡 <b>操作指南:</b> 點擊空白新增音符 ｜ 拖曳空白處<b>【框選】</b> ｜ 按住 Shift 點擊<b>【多選】</b> ｜ 拖曳音符<b>【批次移位】</b> ｜ 拖曳右把手調時值 ｜ 按 Delete / 右鍵<b>【批次刪除】</b> ｜ 上方拉桿/微調鈕<b>【批次改力度 / 🎲人性化】</b> ｜ <b>🔁 填滿後續小節 (Ctrl+D)</b> ｜ <b>Ctrl+Z 復原 / Ctrl+Y 重做</b> ｜ <b>Q 鍵量化</b> ｜ <b>Alt+↑/↓ 移調 (Shift+Alt+↑/↓ 八度)</b></span>`;
     }
     this.container.appendChild(hintBar);
 
@@ -790,6 +823,35 @@ export class SingleTrackEditor {
     const totalWidthPx = this.totalBars * this.pixelsPerBar;
     const beatsPerBar = this.timeSignature.numerator || 4;
 
+    if (this.viewMode === 'drum-grid' && isDrum) {
+      this.renderDrumStepGrid(scrollWrap);
+    } else {
+      this.renderPianoRoll(scrollWrap, totalWidthPx, beatsPerBar, isDrum);
+    }
+
+    // 恢復捲動位置 (避免點擊時畫面跳動)
+    if (prevScrollLeft > 0) scrollWrap.scrollLeft = prevScrollLeft;
+    if (prevScrollTop > 0) scrollWrap.scrollTop = prevScrollTop;
+
+    // 3. 建立 CC 控制器自動化控制線 (Automation Lane)
+    this.renderAutomationLane(totalWidthPx);
+
+    // 4. 綁定力度控制項、模式切換、快速微調按鈕、量化、縮放與選取事件
+    this.bindControls();
+
+    // 恢復選取高亮與狀態
+    this.updateSelectionUI(false);
+  }
+
+  /**
+   * 🎹 渲染標準鋼琴卷軸視圖 (Piano Roll View)
+   */
+  private renderPianoRoll(
+    scrollWrap: HTMLElement,
+    totalWidthPx: number,
+    beatsPerBar: number,
+    isDrum: boolean
+  ) {
     // 左側固定琴鍵 / 打擊樂名稱欄
     const keyCol = document.createElement('div');
     keyCol.className = 'editor-key-column';
@@ -802,8 +864,9 @@ export class SingleTrackEditor {
 
     // 渲染各行琴鍵 / 樂器名稱
     this.rows.forEach(r => {
+      const isC = !isDrum && (r.note % 12 === 0);
       const rowLabel = document.createElement('div');
-      rowLabel.className = `editor-key-row ${r.isBlack ? 'is-black-key' : 'is-white-key'}`;
+      rowLabel.className = `editor-key-row ${r.isBlack ? 'is-black-key' : 'is-white-key'}${isC ? ' is-c-key' : ''}`;
       rowLabel.style.height = `${this.rowHeight}px`;
 
       if (r.icon) {
@@ -842,12 +905,12 @@ export class SingleTrackEditor {
 
     // 頂部時間標尺 (Time Ruler)
     const timeRuler = document.createElement('div');
-    timeRuler.className = 'editor-time-ruler';
+    timeRuler.className = `editor-time-ruler${this.isHighContrastGrid ? ' high-contrast-ruler' : ''}`;
     timeRuler.style.width = `${totalWidthPx}px`;
 
     for (let bar = 1; bar <= this.totalBars; bar++) {
       const barCell = document.createElement('div');
-      barCell.className = 'ruler-bar-cell';
+      barCell.className = `ruler-bar-cell ${bar % 2 === 0 ? 'is-even-bar' : ''}`;
       barCell.style.width = `${this.pixelsPerBar}px`;
 
       let beatsHtml = '';
@@ -857,7 +920,7 @@ export class SingleTrackEditor {
 
       barCell.innerHTML = `
         <div class="ruler-bar-title">第 ${bar} 小節</div>
-        <div class="ruler-beats-row">${beatsHtml}</div>
+        <div class="ruler-beats-row" style="grid-template-columns: repeat(${beatsPerBar}, 1fr);">${beatsHtml}</div>
       `;
       timeRuler.appendChild(barCell);
     }
@@ -879,38 +942,97 @@ export class SingleTrackEditor {
 
     // 網格底層與音符層
     const gridContent = document.createElement('div');
-    gridContent.className = 'editor-grid-content';
+    gridContent.className = `editor-grid-content${this.isHighContrastGrid ? ' high-contrast-grid' : ''}`;
     gridContent.style.width = `${totalWidthPx}px`;
     gridContent.style.height = `${this.rows.length * this.rowHeight}px`;
 
-    // 繪製背景水平行線
+    // 1. 繪製偶數小節斑馬紋條紋 (Zebra Stripes for alternating bars)
+    for (let bar = 0; bar < this.totalBars; bar++) {
+      if (bar % 2 === 1) {
+        const barLeft = bar * this.pixelsPerBar;
+        const stripe = document.createElement('div');
+        stripe.className = 'grid-bar-stripe';
+        stripe.style.left = `${barLeft}px`;
+        stripe.style.width = `${this.pixelsPerBar}px`;
+        stripe.style.height = `${this.rows.length * this.rowHeight}px`;
+        gridContent.appendChild(stripe);
+      }
+    }
+
+    // 2. 繪製背景水平行線 (含中央 C 與八度專屬導引光條)
     this.rows.forEach((r, idx) => {
+      const isC = !isDrum && (r.note % 12 === 0);
       const line = document.createElement('div');
-      line.className = `grid-row-bg ${r.isBlack ? 'row-black' : 'row-white'}`;
+      line.className = `grid-row-bg ${r.isBlack ? 'row-black' : 'row-white'}${isC ? ' row-root-c' : ''}`;
       line.style.top = `${idx * this.rowHeight}px`;
       line.style.height = `${this.rowHeight}px`;
       line.style.width = `${totalWidthPx}px`;
       gridContent.appendChild(line);
     });
 
-    // 繪製小節與拍子垂直格線
+    // 3. 繪製多階層垂直格線 (小節線 + 正拍線 + 細分量化線)
+    const ticksPerBar = Math.round(this.totalTicks / this.totalBars);
+    const ticksPerBeat = Math.round(ticksPerBar / beatsPerBar);
+    const stepTicks = QuantizeEngine.getGridStepTicks(this.quantizeGrid, this.division);
+    const pxPerTick = totalWidthPx / this.totalTicks;
+
     for (let bar = 0; bar < this.totalBars; bar++) {
-      const barLeft = bar * this.pixelsPerBar;
+      const barStartTick = bar * ticksPerBar;
+      const barLeft = barStartTick * pxPerTick;
+
+      // 小節線 (Bar Line)
       const barLine = document.createElement('div');
       barLine.className = 'grid-v-line bar-line';
       barLine.style.left = `${barLeft}px`;
       barLine.style.height = `${this.rows.length * this.rowHeight}px`;
       gridContent.appendChild(barLine);
 
-      for (let b = 1; b < beatsPerBar; b++) {
-        const beatLeft = barLeft + (b * (this.pixelsPerBar / beatsPerBar));
-        const beatLine = document.createElement('div');
-        beatLine.className = 'grid-v-line beat-line';
-        beatLine.style.left = `${beatLeft}px`;
-        beatLine.style.height = `${this.rows.length * this.rowHeight}px`;
-        gridContent.appendChild(beatLine);
+      // 小節內部拍線與細分線
+      for (let b = 0; b < beatsPerBar; b++) {
+        const beatStartTick = barStartTick + b * ticksPerBeat;
+        const beatEndTick = beatStartTick + ticksPerBeat;
+
+        // 若不是第 0 拍，繪製正拍線 (Beat line)
+        if (b > 0) {
+          const beatLeft = beatStartTick * pxPerTick;
+          const beatLine = document.createElement('div');
+          beatLine.className = 'grid-v-line beat-line';
+          beatLine.style.left = `${beatLeft}px`;
+          beatLine.style.height = `${this.rows.length * this.rowHeight}px`;
+          gridContent.appendChild(beatLine);
+        }
+
+        // 繪製拍內細分量化線 (Sub-division lines)
+        if (stepTicks < ticksPerBeat) {
+          for (let subTick = beatStartTick + stepTicks; subTick < beatEndTick - 1; subTick += stepTicks) {
+            const subLeft = subTick * pxPerTick;
+            const subLine = document.createElement('div');
+            subLine.className = 'grid-v-line sub-line';
+            subLine.style.left = `${subLeft}px`;
+            subLine.style.height = `${this.rows.length * this.rowHeight}px`;
+            gridContent.appendChild(subLine);
+          }
+        }
       }
     }
+
+    // 結尾小節線
+    const endBarLine = document.createElement('div');
+    endBarLine.className = 'grid-v-line bar-line end-bar-line';
+    endBarLine.style.left = `${totalWidthPx - 2}px`;
+    endBarLine.style.height = `${this.rows.length * this.rowHeight}px`;
+    gridContent.appendChild(endBarLine);
+
+    // 4. 十字游標即時導引線 (Crosshair Alignment Guides)
+    const crosshairV = document.createElement('div');
+    crosshairV.className = 'editor-crosshair-v';
+    crosshairV.style.display = 'none';
+    gridContent.appendChild(crosshairV);
+
+    const crosshairH = document.createElement('div');
+    crosshairH.className = 'editor-crosshair-h';
+    crosshairH.style.display = 'none';
+    gridContent.appendChild(crosshairH);
 
     // 繪製音符事件 (Notes)
     this.events.forEach((ev, idx) => {
@@ -1138,6 +1260,46 @@ export class SingleTrackEditor {
       window.addEventListener('mouseup', onGridMouseUp);
     });
 
+    // 滑鼠懸停十字對齊導引線 (Crosshair Guidelines)
+    gridContent.addEventListener('mousemove', (e) => {
+      if (isMarquee) {
+        crosshairV.style.display = 'none';
+        crosshairH.style.display = 'none';
+        return;
+      }
+      const rect = gridContent.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      if (mouseX < 0 || mouseX > totalWidthPx || mouseY < 0 || mouseY > this.rows.length * this.rowHeight) {
+        crosshairV.style.display = 'none';
+        crosshairH.style.display = 'none';
+        return;
+      }
+
+      const rawProgress = Math.max(0, Math.min(1.0, mouseX / totalWidthPx));
+      const rawTick = Math.round(rawProgress * this.totalTicks);
+      const snappedTick = Math.min(this.totalTicks, Math.round(rawTick / stepTicks) * stepTicks);
+      const snappedX = snappedTick * pxPerTick;
+
+      crosshairV.style.left = `${snappedX}px`;
+      crosshairV.style.height = `${this.rows.length * this.rowHeight}px`;
+      crosshairV.style.display = 'block';
+
+      const rowIndex = Math.floor(mouseY / this.rowHeight);
+      if (rowIndex >= 0 && rowIndex < this.rows.length) {
+        crosshairH.style.top = `${rowIndex * this.rowHeight}px`;
+        crosshairH.style.height = `${this.rowHeight}px`;
+        crosshairH.style.width = `${totalWidthPx}px`;
+        crosshairH.style.display = 'block';
+      }
+    });
+
+    gridContent.addEventListener('mouseleave', () => {
+      crosshairV.style.display = 'none';
+      crosshairH.style.display = 'none';
+    });
+
     // 播放游標線 (GPU 加速 Translate3d)
     const playhead = document.createElement('div');
     playhead.className = 'editor-playhead';
@@ -1159,16 +1321,227 @@ export class SingleTrackEditor {
 
     canvasWrap.appendChild(gridContent);
     scrollWrap.appendChild(canvasWrap);
-    this.container.appendChild(scrollWrap);
+  }
 
-    // 3. 建立 CC 控制器自動化控制線 (Automation Lane)
-    this.renderAutomationLane(totalWidthPx);
+  /**
+   * 🥁 渲染 16-Step 鼓機步進矩陣視圖 (Drum Step Sequencer Grid)
+   */
+  private renderDrumStepGrid(scrollWrap: HTMLElement) {
+    this.playheadEl = null;
+    this.stepCursorEl = null;
 
-    // 4. 綁定力度控制項、模式切換、快速微調按鈕、量化、縮放與選取事件
-    this.bindControls();
+    const beatsPerBar = this.timeSignature.numerator || 4;
+    const stepsPerBar = beatsPerBar * 4;
+    const totalSteps = this.totalBars * stepsPerBar;
+    const ticksPerStep = Math.round(this.totalTicks / Math.max(1, totalSteps));
 
-    // 恢復選取高亮與狀態
-    this.updateSelectionUI(false);
+    // 1. 左側固定打擊樂名稱欄
+    const keyCol = document.createElement('div');
+    keyCol.className = 'editor-key-column drum-grid-key-col';
+
+    const corner = document.createElement('div');
+    corner.className = 'editor-corner-cell drum-grid-corner';
+    corner.textContent = '打擊樂器 (點擊試聽)';
+    keyCol.appendChild(corner);
+
+    this.rows.forEach(r => {
+      const rowLabel = document.createElement('div');
+      rowLabel.className = 'editor-key-row drum-key-row';
+      rowLabel.style.height = `${this.rowHeight}px`;
+      rowLabel.innerHTML = `
+        <span class="key-icon">${r.icon || '🥁'}</span>
+        <span class="key-name" title="${r.label}">${r.label}</span>
+        <span class="key-sub">${r.subLabel || ''}</span>
+      `;
+      // 點擊樂器名稱試聽
+      rowLabel.addEventListener('click', () => {
+        styPlaybackEngine.previewNote(this.channel, r.note, this.defaultVelocity);
+      });
+      keyCol.appendChild(rowLabel);
+    });
+
+    scrollWrap.appendChild(keyCol);
+
+    // 2. 右側矩陣容器
+    const matrixWrap = document.createElement('div');
+    matrixWrap.className = 'drum-step-matrix-wrap';
+
+    // 2.1 標尺頭部
+    const header = document.createElement('div');
+    header.className = 'drum-step-header';
+    header.style.gridTemplateColumns = `repeat(${totalSteps}, minmax(30px, 1fr))`;
+
+    for (let s = 0; s < totalSteps; s++) {
+      const barIdx = Math.floor(s / stepsPerBar);
+      const stepInBar = s % stepsPerBar;
+      const beatInBar = Math.floor(stepInBar / 4) + 1;
+      const subInBeat = (stepInBar % 4) + 1;
+
+      const headerCell = document.createElement('div');
+      headerCell.className = 'drum-header-step';
+      headerCell.dataset.step = `${s}`;
+
+      if (stepInBar === 0) {
+        headerCell.classList.add('is-bar-start');
+        headerCell.innerHTML = `<span class="step-bar-label">${barIdx + 1}</span>`;
+      } else if (subInBeat === 1) {
+        headerCell.classList.add('is-beat-start');
+        headerCell.innerHTML = `<span class="step-beat-label">${barIdx + 1}.${beatInBar}</span>`;
+      } else {
+        headerCell.innerHTML = `<span class="step-sub-dot">·</span>`;
+      }
+
+      header.appendChild(headerCell);
+    }
+    matrixWrap.appendChild(header);
+
+    // 2.2 矩陣本體 (各打擊樂行)
+    const body = document.createElement('div');
+    body.className = 'drum-step-body';
+
+    this.rows.forEach(r => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'drum-step-row';
+      rowEl.style.height = `${this.rowHeight}px`;
+      rowEl.style.gridTemplateColumns = `repeat(${totalSteps}, minmax(30px, 1fr))`;
+
+      for (let s = 0; s < totalSteps; s++) {
+        const barIdx = Math.floor(s / stepsPerBar);
+        const stepInBar = s % stepsPerBar;
+        const beatInBar = Math.floor(stepInBar / 4) + 1;
+        const subInBeat = (stepInBar % 4) + 1;
+
+        // 檢查此步進位置是否有已存在音符
+        const existingNote = this.events.find(
+          e => e.noteNumber === r.note && Math.round(e.relTick / ticksPerStep) === s
+        );
+
+        const pad = document.createElement('div');
+        pad.className = 'drum-step-pad';
+        pad.dataset.note = `${r.note}`;
+        pad.dataset.step = `${s}`;
+
+        if (stepInBar === 0) {
+          pad.classList.add('is-bar-start');
+        } else if (subInBeat === 1) {
+          pad.classList.add('is-beat-start');
+        }
+
+        const beatGroup = Math.floor(s / 4);
+        if (beatGroup % 2 === 1) {
+          pad.classList.add('is-alt-beat');
+        }
+
+        if (existingNote) {
+          pad.classList.add('is-active');
+          pad.style.setProperty('--pad-color', r.color || '#38bdf8');
+          pad.innerHTML = `
+            <span class="pad-led"></span>
+            <span class="pad-vel-text">${existingNote.velocity}</span>
+          `;
+          pad.title = `${r.label} - 第 ${barIdx + 1} 小節 ${barIdx + 1}.${beatInBar}.${subInBeat} (力度: ${existingNote.velocity})，點擊清除`;
+        } else {
+          pad.title = `${r.label} - 第 ${barIdx + 1} 小節 ${barIdx + 1}.${beatInBar}.${subInBeat}，點擊點亮`;
+        }
+
+        pad.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.toggleDrumStep(r.note, s);
+        });
+
+        rowEl.appendChild(pad);
+      }
+
+      body.appendChild(rowEl);
+    });
+
+    matrixWrap.appendChild(body);
+    scrollWrap.appendChild(matrixWrap);
+  }
+
+  /**
+   * 🥁 切換 16-Step 鼓機步進格子開關 (點擊點亮 / 熄滅)
+   * 支援即時試聽、歷史紀錄 (Ctrl+Z) 與播放器排程同步
+   */
+  public toggleDrumStep(noteNumber: number, stepIndex: number): boolean {
+    const beatsPerBar = this.timeSignature.numerator || 4;
+    const stepsPerBar = beatsPerBar * 4;
+    const totalSteps = this.totalBars * stepsPerBar;
+    const ticksPerStep = Math.round(this.totalTicks / Math.max(1, totalSteps));
+    const stepTick = stepIndex * ticksPerStep;
+
+    const existingIdx = this.events.findIndex(
+      e => e.noteNumber === noteNumber && Math.round(e.relTick / ticksPerStep) === stepIndex
+    );
+
+    const row = this.rows.find(r => r.note === noteNumber) || { label: `Note ${noteNumber}` };
+    const barNum = Math.floor(stepIndex / stepsPerBar) + 1;
+    const beatInBar = Math.floor((stepIndex % stepsPerBar) / 4) + 1;
+    const subInBeat = ((stepIndex % stepsPerBar) % 4) + 1;
+    const beforeSnapshot = this.events.map(e => ({ ...e }));
+
+    if (existingIdx !== -1) {
+      // 亮燈 -> 熄滅 (刪除音符)
+      this.events.splice(existingIdx, 1);
+      this.notifyEventsChanged();
+      this.pushHistory(`刪除鼓點: ${row.label} (第 ${barNum} 小節 ${barNum}.${beatInBar}.${subInBeat})`, beforeSnapshot, this.events);
+      this.render();
+      if (this.velStatus) {
+        this.velStatus.textContent = `🗑️ 已清除 ${row.label} (第 ${barNum} 小節 ${barNum}.${beatInBar}.${subInBeat})`;
+      }
+      return false;
+    } else {
+      // 暗燈 -> 點亮 (新增音符)
+      const newNote: PlaybackNoteEvent = {
+        channel: this.channel,
+        sourceChannel: this.channel,
+        noteNumber,
+        velocity: this.defaultVelocity,
+        relTick: stepTick,
+        durationTicks: ticksPerStep,
+        durationMs: 0,
+      };
+
+      this.events.push(newNote);
+      this.events.sort((a, b) => a.relTick - b.relTick || a.noteNumber - b.noteNumber);
+      this.notifyEventsChanged();
+      this.pushHistory(`新增鼓點: ${row.label} (第 ${barNum} 小節 ${barNum}.${beatInBar}.${subInBeat})`, beforeSnapshot, this.events);
+      this.render();
+
+      try {
+        styPlaybackEngine.previewNote(this.channel, noteNumber, this.defaultVelocity, 180);
+      } catch {
+        // 略過無音訊輸出環境
+      }
+
+      if (this.velStatus) {
+        this.velStatus.textContent = `🥁 已加入 ${row.label} (第 ${barNum} 小節 ${barNum}.${beatInBar}.${subInBeat}，力度: ${this.defaultVelocity})`;
+      }
+      return true;
+    }
+  }
+
+  /**
+   * 取得當前視圖模式
+   */
+  public getViewMode(): 'piano-roll' | 'drum-grid' {
+    return this.viewMode;
+  }
+
+  /**
+   * 切換視圖模式 (僅在鼓組/打擊樂聲部支援 drum-grid)
+   */
+  public setViewMode(mode: 'piano-roll' | 'drum-grid') {
+    const isDrum = styPlaybackEngine.isChannelDrum(this.channel);
+    if (mode === 'drum-grid' && !isDrum) {
+      if (this.velStatus) {
+        this.velStatus.textContent = '⚠️ 僅打擊樂 / 鼓組聲部支援 16-Step 步進矩陣模式';
+      }
+      return;
+    }
+    if (this.viewMode === mode) return;
+    this.viewMode = mode;
+    this.render();
   }
 
   /**
@@ -1767,6 +2140,7 @@ export class SingleTrackEditor {
       if (this.velStatus) {
         this.velStatus.textContent = `量化解析度已設為 ${this.quantizeGrid}`;
       }
+      this.render();
     });
 
     // ⚡ 立即量化按鈕 (Q)
@@ -1812,6 +2186,22 @@ export class SingleTrackEditor {
       this.quantizeLengths = chkQLengths.checked;
     });
 
+    // 🔁 複製第 1 小節填滿全段按鈕
+    const btnFillBars = this.container.querySelector('#ed-btn-fill-bars');
+    btnFillBars?.addEventListener('click', () => {
+      this.fillRemainingBarsFromBar1();
+    });
+
+    // 🥁 視圖切換 (鋼琴卷軸 vs 16-Step 鼓機矩陣)
+    const btnPianoRoll = this.container.querySelector('#ed-view-pianoroll');
+    const btnDrumGrid = this.container.querySelector('#ed-view-drumgrid');
+    btnPianoRoll?.addEventListener('click', () => {
+      this.setViewMode('piano-roll');
+    });
+    btnDrumGrid?.addEventListener('click', () => {
+      this.setViewMode('drum-grid');
+    });
+
     // ↩️ 復原 / ↪️ 重做按鈕
     const btnUndo = this.container.querySelector('#ed-btn-undo');
     const btnRedo = this.container.querySelector('#ed-btn-redo');
@@ -1849,7 +2239,13 @@ export class SingleTrackEditor {
       }
     });
 
-    // 縮放按鈕
+    // 縮放按鈕與高對比格線按鈕
+    const btnGridContrast = this.container.querySelector('#ed-btn-grid-contrast');
+    btnGridContrast?.addEventListener('click', () => {
+      this.isHighContrastGrid = !this.isHighContrastGrid;
+      this.render();
+    });
+
     const btnFit4 = this.container.querySelector('#ed-btn-fit-4');
     const btnFitAll = this.container.querySelector('#ed-btn-fit-all');
     const btnZoomIn = this.container.querySelector('#ed-btn-zoom-in');
@@ -1994,6 +2390,39 @@ export class SingleTrackEditor {
    * 即時平滑更新播放游標 (GPU 加速，零 Layout Reflow，永不卡頓)
    */
   public updatePlayhead(currentTick: number) {
+    if (this.viewMode === 'drum-grid') {
+      const beatsPerBar = this.timeSignature.numerator || 4;
+      const stepsPerBar = beatsPerBar * 4;
+      const totalSteps = this.totalBars * stepsPerBar;
+      const currentStep = Math.min(totalSteps - 1, Math.floor((currentTick / this.totalTicks) * totalSteps));
+
+      if (this.lastPlayheadStep !== currentStep) {
+        this.lastPlayheadStep = currentStep;
+        this.container.querySelectorAll('.drum-step-pad.is-playhead-step, .drum-header-step.is-playhead-step')
+          .forEach(el => el.classList.remove('is-playhead-step'));
+        if (currentStep >= 0 && currentTick > 0) {
+          this.container.querySelectorAll(`[data-step="${currentStep}"]`)
+            .forEach(el => el.classList.add('is-playhead-step'));
+        }
+      }
+
+      // 播放跑燈跟隨水平捲動
+      if (this.gridScrollEl && currentTick > 0) {
+        const stepPad = this.container.querySelector(`.drum-step-pad[data-step="${currentStep}"]`) as HTMLElement | null;
+        if (stepPad) {
+          const padLeft = stepPad.offsetLeft;
+          const scrollLeft = this.gridScrollEl.scrollLeft;
+          const clientWidth = this.gridScrollEl.clientWidth;
+          if (padLeft > scrollLeft + clientWidth - 100) {
+            this.gridScrollEl.scrollLeft = padLeft - 150;
+          } else if (padLeft < scrollLeft) {
+            this.gridScrollEl.scrollLeft = Math.max(0, padLeft - 50);
+          }
+        }
+      }
+      return;
+    }
+
     if (!this.playheadEl) return;
     const totalWidthPx = this.totalBars * this.pixelsPerBar;
     const progress = Math.max(0, Math.min(1.0, currentTick / this.totalTicks));
@@ -2087,6 +2516,11 @@ export class SingleTrackEditor {
   public setQuantizeGrid(g: QuantizeGridType) {
     this.quantizeGrid = g;
   }
+  public isHighContrast(): boolean { return this.isHighContrastGrid; }
+  public setHighContrast(val: boolean) {
+    this.isHighContrastGrid = val;
+    this.render();
+  }
   public getQuantizeStrength(): number { return this.quantizeStrength; }
   public setQuantizeStrength(s: number) { this.quantizeStrength = s; }
   public getQuantizeSwing(): number { return this.quantizeSwing; }
@@ -2177,6 +2611,91 @@ export class SingleTrackEditor {
       } catch {
         // 略過無音訊輸出環境
       }
+    }
+
+    return true;
+  }
+
+  /**
+   * 🔁 複製第 1 小節音符並填滿後續所有小節 (清空覆蓋策略)
+   * 快速鍵: Ctrl+D，支援 Ctrl+Z 完整復原
+   */
+  public fillRemainingBarsFromBar1(): boolean {
+    if (this.totalBars <= 1) {
+      if (this.velStatus) {
+        this.velStatus.textContent = '⚠️ 當前段落僅有 1 小節，無需填滿後續小節';
+      }
+      return false;
+    }
+
+    const ticksPerBar = Math.round(this.totalTicks / Math.max(1, this.totalBars));
+    // 篩選第 1 小節起點範圍內的音符 [0, ticksPerBar)
+    const bar1Notes = this.events.filter(e => e.relTick >= 0 && e.relTick < ticksPerBar);
+
+    if (bar1Notes.length === 0) {
+      if (this.velStatus) {
+        this.velStatus.textContent = '⚠️ 第 1 小節沒有任何音符可供複製填滿';
+      }
+      return false;
+    }
+
+    // 拍下快照以供 Ctrl+Z 完整復原
+    const beforeSnapshot = this.events.map(e => ({ ...e }));
+
+    // 生成後續小節的平移音符 (Bar 2 到 Bar totalBars)
+    const replicatedNotes: PlaybackNoteEvent[] = [];
+    for (let bar = 1; bar < this.totalBars; bar++) {
+      const offset = bar * ticksPerBar;
+      for (const note of bar1Notes) {
+        const newRelTick = note.relTick + offset;
+        if (newRelTick < this.totalTicks) {
+          // 確保音符時值不超出段落總長度
+          const maxDuration = Math.max(10, this.totalTicks - newRelTick);
+          const durationTicks = Math.min(note.durationTicks, maxDuration);
+          const durationMs = note.durationTicks > 0
+            ? Math.round((durationTicks / note.durationTicks) * note.durationMs)
+            : note.durationMs;
+
+          replicatedNotes.push({
+            ...note,
+            relTick: newRelTick,
+            durationTicks,
+            durationMs,
+          });
+        }
+      }
+    }
+
+    // 依使用者偏好的「清空覆蓋策略」：保留第 1 小節原有音符，並填入第 2~N 小節平移音符
+    const newEvents = [
+      ...bar1Notes.map(e => ({ ...e })),
+      ...replicatedNotes,
+    ];
+    newEvents.sort((a, b) => a.relTick - b.relTick || a.noteNumber - b.noteNumber);
+
+    this.events = newEvents;
+    this.selectedEvents.clear();
+    this.initialVelocities.clear();
+    this.notifyEventsChanged();
+
+    const historyDesc = `複製第 1 小節填滿全段 (${bar1Notes.length} 音符 × ${this.totalBars} 小節)`;
+    this.pushHistory(historyDesc, beforeSnapshot, this.events);
+
+    this.calculateRows(); // 自適應音域
+    this.render();
+    this.updateSelectionUI(false);
+
+    // 試聽回饋：播放第 1 小節第一個音符
+    if (bar1Notes.length > 0) {
+      try {
+        styPlaybackEngine.previewNote(this.channel, bar1Notes[0].noteNumber, bar1Notes[0].velocity, 180);
+      } catch {
+        // 略過無音訊環境
+      }
+    }
+
+    if (this.velStatus) {
+      this.velStatus.textContent = `🔁 已複製第 1 小節 (${bar1Notes.length} 個音符) 填滿後續 ${this.totalBars - 1} 個小節 (覆蓋原有內容，可按 Ctrl+Z 復原)`;
     }
 
     return true;
@@ -2575,6 +3094,8 @@ export class SingleTrackEditor {
         <option value="11" ${this.activeController === 11 ? 'selected' : ''}>CC 11 Expression (表情動態)</option>
         <option value="7" ${this.activeController === 7 ? 'selected' : ''}>CC 7 Volume (聲部音量)</option>
         <option value="10" ${this.activeController === 10 ? 'selected' : ''}>CC 10 Pan (聲像平衡)</option>
+        <option value="91" ${this.activeController === 91 ? 'selected' : ''}>CC 91 Reverb (殘響深度)</option>
+        <option value="93" ${this.activeController === 93 ? 'selected' : ''}>CC 93 Chorus (合唱深度)</option>
         <option value="1" ${this.activeController === 1 ? 'selected' : ''}>CC 1 Modulation (顫音)</option>
         <option value="64" ${this.activeController === 64 ? 'selected' : ''}>CC 64 Sustain (延音踏板)</option>
       </select>
@@ -2669,7 +3190,7 @@ export class SingleTrackEditor {
       this.activeController = parseInt(ccSelect.value, 10);
       let events = this.ccEventsMap.get(this.activeController);
       if (!events || events.length === 0) {
-        const defVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : 0));
+        const defVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : (this.activeController === 91 ? 40 : 0)));
         this.ensureDefaultCCPoint(this.activeController, defVal);
       }
       this.drawAutomationLaneSVG(totalWidthPx);
@@ -2727,7 +3248,7 @@ export class SingleTrackEditor {
     // 🔄 重設快捷預設 (原廠平直基準值)
     this.container.querySelector('#ed-lane-btn-reset')?.addEventListener('click', () => {
       const before = (this.ccEventsMap.get(this.activeController) || []).map(c => ({ ...c }));
-      const defaultVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : 0));
+      const defaultVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : (this.activeController === 91 ? 40 : 0)));
       const newEvents: PlaybackCCEvent[] = [
         {
           channel: this.channel,
@@ -2815,7 +3336,7 @@ export class SingleTrackEditor {
     let currentEvents = this.ccEventsMap.get(this.activeController) || [];
     currentEvents.sort((a, b) => a.relTick - b.relTick);
     if (currentEvents.length === 0) {
-      const defVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : 0));
+      const defVal = this.activeController === 11 ? 127 : (this.activeController === 10 ? 64 : (this.activeController === 7 ? 100 : (this.activeController === 91 ? 40 : 0)));
       this.ensureDefaultCCPoint(this.activeController, defVal);
       currentEvents = this.ccEventsMap.get(this.activeController) || [];
     }

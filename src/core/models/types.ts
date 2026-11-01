@@ -55,6 +55,16 @@ export interface YamahaTrackInfo {
   chorus?: number;
 }
 
+export interface CasmChannelEntry {
+  srcCh: number;
+  destCh: number;
+  partName: string;
+  chordRoot: number;   // 0=C, 1=C#, etc.
+  chordType: number;   // 0=Maj, 2=Maj7, 8=min, 14=7th, etc.
+  ntr?: number;        // 0=Root Transpose, 1=Root Fixed, 2=Guitar
+  ntt?: number;        // 0=Bypass, 1=Melody, 2=Chord, etc.
+}
+
 export interface YamahaCustomChunk {
   id: string;            // 例如 'CASM', 'OTS ', 'FVK ', 'MH  '
   data: Uint8Array;
@@ -82,6 +92,7 @@ export interface YamahaFileParsed {
   parts: YamahaTrackInfo[];
   customChunks: YamahaCustomChunk[];
   casmMappings?: Record<string, Record<number, number>>; // 段落名稱 (小寫) -> { sourceChannel: destinationChannel }
+  casmEntries?: Record<string, CasmChannelEntry[]>;      // 段落名稱 (小寫) -> CASM 聲部條目清單 (含 ChordRoot, ChordType, NTR, NTT)
   hasCasm: boolean;
   hasOts: boolean;
   padConfig?: YamahaPadConfig;
