@@ -1303,6 +1303,7 @@ export class StyPlaybackEngine {
           const activeCasm = this.getActiveCasmEntry(event.channel, currentChord);
           const ntr = activeCasm?.ntr;
           const ntt = activeCasm?.ntt;
+          const sourceChordType = activeCasm?.chordType;
 
           const noteToPlay = isDrum
             ? event.noteNumber
@@ -1314,7 +1315,8 @@ export class StyPlaybackEngine {
                 0,
                 127,
                 ntr,
-                ntt
+                ntt,
+                sourceChordType
               );
 
           if (this.outputMode === 'webaudio') {
