@@ -723,21 +723,14 @@ export class StyPlaybackEngine {
     }
 
     const chordType = chord.type;
-    const isMajor = chordType === 'maj' || chordType === 'maj7';
     const isMinor = chordType === 'm' || chordType === 'm7';
     const is7th = chordType === '7';
-    const isSus4 = chordType === 'sus4';
     const isDim = chordType === 'dim';
 
     // 3. 若只有單一來源條目
     if (destEntries.length === 1) {
       const single = destEntries[0];
       const ct = single.chordType;
-      // 若該軌條目為專屬 7th 軌道 (14~23, 29, 30)，但在 Major/Minor 和弦下，依 Yamaha CASM 規範應靜音
-      const isTrack7thOnly = (ct >= 14 && ct <= 23) || ct === 29 || ct === 30;
-      if (isTrack7thOnly && !is7th) {
-        return undefined;
-      }
       // 若該軌條目為專屬 Minor 軌道 (8~13, 33, 34)：
       // 若當前段落完全沒有任何 Major 伴奏軌 (如純小調專屬錄製之段落)，則作為基準軌放行發聲並由轉調引擎位移；
       // 若當前段落已有其他 Major 軌道，則依規範僅在 Minor 和弦下發聲
@@ -748,34 +741,44 @@ export class StyPlaybackEngine {
           return undefined;
         }
       }
-      // 通用/Major 軌道 (0~7) 或與當前和弦匹配之軌道：正常發聲
       return single.srcCh;
     }
 
-    // 4. 多來源條目競合仲裁 (例如 Main A 中 srcCh=2 為 Major，srcCh=11 為 7th；或 Intro B 中 srcCh=2 為 Minor，srcCh=11 為 Major)
+    // 4. 多來源條目競合仲裁 (例如 Intro B 中 srcCh=2 為 Minor，srcCh=11 為 Major；或 Main A 中 srcCh=2 為 Piano rt，srcCh=11 為 Piano)
+    // 優先排除僅為根音標記的輔助軌 (如 'Piano rt' / '... rt')，避免單音輔助軌搶佔真正的主和弦伴奏
+    const mainDestEntries = destEntries.filter(e => !e.partName.toLowerCase().endsWith('rt') && !e.partName.toLowerCase().includes(' rt'));
+    const candidates = mainDestEntries.length > 0 ? mainDestEntries : destEntries;
+
     if (isMinor || isDim) {
+      // 小調優先尋找專屬 Minor 條目 (例如 Intro B 中的 srcCh=2)
       const minorEntry = destEntries.find(e => (e.chordType >= 8 && e.chordType <= 13) || e.chordType === 33 || e.chordType === 34);
       if (minorEntry) return minorEntry.srcCh;
-      const majEntry = destEntries.find(e => e.chordType <= 7);
+      // 若無專屬 Minor 條目，優先使用主要原生候選軌 (例如 Piano Ch 11)
+      const nativeEntry = candidates.find(e => e.srcCh === destCh);
+      if (nativeEntry) return nativeEntry.srcCh;
+      const majEntry = candidates.find(e => e.chordType <= 7);
       if (majEntry) return majEntry.srcCh;
+      return candidates[0].srcCh;
     } else if (is7th) {
-      const seventhEntry = destEntries.find(e => (e.chordType >= 14 && e.chordType <= 23) || e.chordType === 29 || e.chordType === 30);
+      // 屬七和弦優先尋找專屬 7th 條目 (優先候選軌)
+      const seventhEntry = candidates.find(e => (e.chordType >= 14 && e.chordType <= 23) || e.chordType === 29 || e.chordType === 30);
       if (seventhEntry) return seventhEntry.srcCh;
-      const majEntry = destEntries.find(e => e.chordType <= 7);
+      const nativeEntry = candidates.find(e => e.srcCh === destCh);
+      if (nativeEntry) return nativeEntry.srcCh;
+      const majEntry = candidates.find(e => e.chordType <= 7);
       if (majEntry) return majEntry.srcCh;
-    } else if (isMajor) {
-      const majEntry = destEntries.find(e => e.chordType <= 7);
+      return candidates[0].srcCh;
+    } else {
+      // 大調 (Major / Maj7) 或 Sus4：
+      // 1. 若候選軌有原生同名主伴奏軌 (如 srcCh === destCh === 11 的 Piano)，以包含完整和弦的主伴奏軌為最高優先！
+      const nativeEntry = candidates.find(e => e.srcCh === destCh);
+      if (nativeEntry) return nativeEntry.srcCh;
+      // 2. 尋找標準大調條目
+      const majEntry = candidates.find(e => e.chordType <= 7);
       if (majEntry) return majEntry.srcCh;
-    } else if (isSus4) {
-      const susEntry = destEntries.find(e => e.chordType === 24 || e.chordType === 23) || destEntries.find(e => e.chordType <= 7);
-      if (susEntry) return susEntry.srcCh;
+      // 3. 回退第一條有效候選軌
+      return candidates[0].srcCh;
     }
-
-    // 若未能精確匹配，退回 Major 基礎軌道
-    const fallbackMaj = destEntries.find(e => e.chordType <= 7);
-    if (fallbackMaj) return fallbackMaj.srcCh;
-
-    return undefined;
   }
 
   /**

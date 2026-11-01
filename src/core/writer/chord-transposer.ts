@@ -461,11 +461,11 @@ export class ChordTransposer {
     }
 
     // 2. 若為 C 大三和弦且半音位移為 0，且非特殊變形，直接回傳
-    if (targetChord.semitonesFromC === 0 && targetChord.type === 'maj' && ntr !== 'Root Fixed') {
+    if (targetChord.semitonesFromC === 0 && targetChord.type === 'maj') {
       return pitch;
     }
 
-    const rootShift = ntr === 'Root Fixed' ? 0 : targetChord.semitonesFromC;
+    const rootShift = targetChord.semitonesFromC;
     const isBass = channel === 10; // Ch 10 為 Bass 聲部
     const isChordPart = channel === 11 || channel === 12; // Ch 11/12 為 Chord 1/2
 
