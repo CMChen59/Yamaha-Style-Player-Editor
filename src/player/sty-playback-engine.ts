@@ -1,4 +1,4 @@
-import type { YamahaFileParsed, YamahaSection, MidiEvent } from '../core/models/types';
+import type { YamahaFileParsed, YamahaSection, MidiEvent, CasmChannelEntry } from '../core/models/types';
 import { getSharedAudioContext } from '../creator/shared-audio-context';
 import { drumSynth } from '../creator/drum-synth';
 import { bassSynth } from '../creator/bass-synth';
@@ -778,6 +778,21 @@ export class StyPlaybackEngine {
     return undefined;
   }
 
+  /**
+   * 取得特定目標聲部於當前和弦與段落下的有效 CASM 條目 (含 NTR / NTT 參數)
+   */
+  public getActiveCasmEntry(destCh: number, chord: ChordDefinition): CasmChannelEntry | undefined {
+    if (!this.parsed?.casmEntries || !this.currentSection) return undefined;
+    const secKey = this.currentSection.name.toLowerCase();
+    const entries = this.parsed.casmEntries[secKey];
+    if (!entries || entries.length === 0) return undefined;
+
+    const activeSrc = this.getActiveSourceChannel(destCh, chord);
+    if (activeSrc === undefined) return undefined;
+
+    return entries.find(e => e.destCh === destCh && e.srcCh === activeSrc);
+  }
+
   private filterActiveEventsForChord(events: PlaybackNoteEvent[], chord: ChordDefinition): PlaybackNoteEvent[] {
     return events.filter(e => {
       const activeSrc = this.getActiveSourceChannel(e.channel, chord);
@@ -1282,13 +1297,21 @@ export class StyPlaybackEngine {
           this.activeChannelsInWindow.add(event.channel);
 
           const isDrum = this.isChannelDrum(event.channel);
+          const activeCasm = this.getActiveCasmEntry(event.channel, currentChord);
+          const ntr = activeCasm?.ntr;
+          const ntt = activeCasm?.ntt;
+
           const noteToPlay = isDrum
             ? event.noteNumber
             : ChordTransposer.transposeSingleNote(
                 event.noteNumber,
                 currentChord,
                 event.channel,
-                isDrum
+                isDrum,
+                0,
+                127,
+                ntr,
+                ntt
               );
 
           if (this.outputMode === 'webaudio') {

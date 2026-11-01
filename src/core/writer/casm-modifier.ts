@@ -7,7 +7,7 @@ import { BinaryWriter } from './binary-writer';
 import type { YamahaFileParsed, YamahaCustomChunk } from '../models/types';
 import { DEFAULT_STYLE_PARTS, type StylePartId } from '../models/style-types';
 
-export type NtrRule = 'Root Transpose' | 'Root Fixed';
+export type NtrRule = 'Root Transpose' | 'Root Fixed' | 'Guitar';
 export type NttRule = 'Bypass' | 'Chord' | 'Bass' | 'Melody';
 export type RetriggerRule = 'Stop' | 'Pitch Shift' | 'Retrigger';
 
@@ -163,7 +163,7 @@ export class CasmModifier {
                 const highLim = ctb[32];
                 const rtrByte = ctb[33];
 
-                existing.ntr = ntrByte === 1 ? 'Root Fixed' : 'Root Transpose';
+                existing.ntr = ntrByte === 2 ? 'Guitar' : (ntrByte === 1 ? 'Root Fixed' : 'Root Transpose');
                 if (nttByte === 0) existing.ntt = 'Bypass';
                 else if (nttByte === 0x81 || ctb[30] === 5) existing.ntt = 'Bass';
                 else if (nttByte === 3) existing.ntt = 'Melody';
@@ -277,7 +277,7 @@ export class CasmModifier {
     // Byte 26~46: 轉調規則
     ctbData[26] = 0x00;
     ctbData[27] = 0x02;
-    ctbData[28] = rule.ntr === 'Root Fixed' ? 0x01 : 0x00; // NTR
+    ctbData[28] = rule.ntr === 'Guitar' ? 0x02 : (rule.ntr === 'Root Fixed' ? 0x01 : 0x00); // NTR: 0=Root Trans, 1=Root Fixed, 2=Guitar
 
     // NTT
     if (rule.ntt === 'Bypass') {
