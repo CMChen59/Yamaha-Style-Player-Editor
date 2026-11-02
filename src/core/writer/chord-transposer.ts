@@ -532,6 +532,10 @@ export class ChordTransposer {
           if (targetChord.type === 'dim' && pitchClass === 7) {
             scaleShift = -1;
           }
+          // ★ 關鍵消除 G# 衝突 (Minor Harmonization) ★
+          if (pitchClass === 11) {
+            scaleShift = -1; // 消除 G# (8) 衝突，調和為自然小七度 (在 Am 下轉為純淨 G 音)
+          }
         } else if (targetChord.type === 'sus4') {
           // 掛留四和弦：將大三度音 (E, pitchClass=4) 升為純四度 (F, pitchClass=5)
           if (pitchClass === 4) {
@@ -546,17 +550,33 @@ export class ChordTransposer {
       }
     }
 
+    const isRootFixed = ntr === 1 || ntr === 'Root Fixed';
+    const rootShift = targetChord.semitonesFromC;
+
     // 若半音位移為 0 且無音階調整，直接回傳原音
-    if (targetChord.semitonesFromC === 0 && scaleShift === 0) {
+    const isChordNtt = ntt === 2 || ntt === 130 || ntt === 'Chord';
+    const isStrictTriad = targetChord.type === 'maj' || targetChord.type === 'm';
+    if (rootShift === 0 && scaleShift === 0 && (!isChordNtt || !isStrictTriad || pitchClass !== 11)) {
       return pitch;
     }
 
-    const rootShift = targetChord.semitonesFromC;
     const isBass = channel === 10; // Ch 10 為 Bass 聲部
     const isChordPart = channel === 11 || channel === 12; // Ch 11/12 為 Chord 1/2
 
     // 3. 疊加根音位移與音階調整
     let newPitch = pitch + rootShift + scaleShift;
+    // 4. NTT = 2 / 130 (Chord) 和弦音智慧吸附保護 (Chord Tone Snapping)
+    if (isChordNtt && !isDrum && channel !== 9 && channel !== 10) {
+      const targetRootPc = ((targetChord.semitonesFromC % 12) + 12) % 12;
+      const notePc = ((newPitch % 12) + 12) % 12;
+      const relPc = ((notePc - targetRootPc) + 12) % 12;
+      if (targetChord.type === 'maj') {
+        if (relPc === 11) newPitch += 1; // 大七度吸附至根音 (+1 半音)
+      } else if (targetChord.type === 'm') {
+        if (relPc === 8) newPitch -= 1;  // 雙重保險：消除 G# (8) -> 吸附至五度音 (7)
+        else if (relPc === 11) newPitch -= 1; // 大七度 (11) 吸附至小七度 (10)
+      }
+    }
 
     // 4. 八度保護與音域防護 (Octave Wrap & Note Limits)
     if (isBass) {
@@ -570,7 +590,7 @@ export class ChordTransposer {
       while (newPitch > effectiveHigh && newPitch - 12 >= effectiveLow) {
         newPitch -= 12;
       }
-    } else if (isChordPart) {
+    } else if (isChordPart && !isRootFixed) {
       // 和弦吉他/鋼琴最佳音域：40 (E2) ~ 90 (F#6)
       while (newPitch < 40) newPitch += 12;
       while (newPitch > 90) newPitch -= 12;
