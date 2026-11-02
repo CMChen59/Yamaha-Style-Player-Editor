@@ -6,7 +6,9 @@ import { StyPlaybackEngine } from '../src/player/sty-playback-engine';
 describe('Phase 2 Verification: Engine Mixing, Voice Routing & Break Support', () => {
   it('correctly resolves Main A, Ending A and Break for 容易受傷的女人.sty', () => {
     const engine = new StyPlaybackEngine();
-    const filePath = 'd:/Keyboard/節奏檔/容易受傷的女人/容易受傷的女人.sty';
+    const filePath = fs.existsSync('d:/Keyboard/節奏檔/容易受傷的女人/容易受傷的女人.sty')
+      ? 'd:/Keyboard/節奏檔/容易受傷的女人/容易受傷的女人.sty'
+      : (fs.existsSync('samples/容易受傷的女人_keyboard.sty') ? 'samples/容易受傷的女人_keyboard.sty' : 'public/samples/1024_容易受傷的女人.sty');
     const buf = fs.readFileSync(filePath);
     const u8 = new Uint8Array(buf);
     const parsed = YamahaParser.parse(u8);

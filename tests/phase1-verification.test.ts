@@ -4,7 +4,9 @@ import { YamahaParser } from '../src/core/parser/yamaha-parser';
 
 describe('Phase 1 Verification: SInt Isolation & Section Initial Controllers', () => {
   it('correctly isolates SInt baseline and captures section initial controllers in 容易受傷的女人.sty', () => {
-    const filePath = 'd:/Keyboard/節奏檔/容易受傷的女人/容易受傷的女人.sty';
+    const filePath = fs.existsSync('d:/Keyboard/節奏檔/容易受傷的女人/容易受傷的女人.sty')
+      ? 'd:/Keyboard/節奏檔/容易受傷的女人/容易受傷的女人.sty'
+      : (fs.existsSync('samples/容易受傷的女人_keyboard.sty') ? 'samples/容易受傷的女人_keyboard.sty' : 'public/samples/1024_容易受傷的女人.sty');
     const buf = fs.readFileSync(filePath);
     const parsed = YamahaParser.parse(new Uint8Array(buf), 'STY');
 
