@@ -6,6 +6,7 @@ import { ChordSynth } from '../creator/chord-synth';
 import { midiManager } from '../core/audio/midi-manager';
 import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
 import { ChordTransposer, type ChordDefinition } from '../core/writer/chord-transposer';
+import { isIntroOrEndingSection } from '../core/models/style-types';
 
 export function formatYamahaPan(pan: number): string {
   if (pan === 64) return 'C';
@@ -85,6 +86,7 @@ export class StyPlaybackEngine {
 
   // 智慧多小節和弦進行輪播 (Chord Progression Auto-Advance)
   private chordAutoAdvance: boolean = false;
+  private isProgressionSuspended: boolean = false; // 是否因 Intro / Ending 智慧掛起 (原調保護)
   private chordProgression: ChordDefinition[] = ChordTransposer.getProgressionPreset('pop-1564');
   private currentProgressionPresetId: string = 'pop-1564';
   private selectedProgressionBarIndex: number = 0;
@@ -158,6 +160,7 @@ export class StyPlaybackEngine {
     this.customVoiceOverrides.clear();
     this.parsed = parsed;
     this.bpm = parsed.bpm || 120;
+    this.isProgressionSuspended = false;
     this.currentSection = null;
     this.sectionEvents = [];
     this.sectionCCEvents = [];
@@ -424,6 +427,17 @@ export class StyPlaybackEngine {
     if (wasPlaying) this.stop();
 
     this.currentSection = target;
+
+    // 智慧段落判斷 (Smart Progression Suspend)：
+    // 若為 Intro 或 Ending，且使用者開啟了自動輪播，則自動掛起保護原曲旋律
+    if (isIntroOrEndingSection(target.name)) {
+      if (this.chordAutoAdvance) {
+        this.isProgressionSuspended = true;
+      }
+    } else {
+      // 切換回 Main、Fill In、Break 等段落時，自動解除掛起恢復輪播
+      this.isProgressionSuspended = false;
+    }
     const division = this.parsed.division || 480;
     const num = this.parsed.timeSignature.numerator || 4;
     const den = this.parsed.timeSignature.denominator || 4;
@@ -1355,7 +1369,7 @@ export class StyPlaybackEngine {
       const beatInBar = (curTick % ticksPerBar) / ticksPerBeat + 1;
 
       const barIndex0 = currentBar - 1;
-      if (this.chordAutoAdvance && this.activeProgressionBar !== barIndex0) {
+      if (this.isEffectiveChordAutoAdvance() && this.activeProgressionBar !== barIndex0) {
         this.activeProgressionBar = barIndex0;
         const currentProgChord = this.getChordForBar(barIndex0);
         if (this.onProgressionBarChangeCallback) {
@@ -1450,6 +1464,12 @@ export class StyPlaybackEngine {
    */
   public setChordAutoAdvance(enabled: boolean) {
     this.chordAutoAdvance = enabled;
+    // 使用者手動操作開關時，若在 Intro/Ending 且手動打開，代表使用者明確覆寫要求輪播，解除掛起；若手動關閉亦解除掛起
+    if (enabled && isIntroOrEndingSection(this.currentSection?.name)) {
+      this.isProgressionSuspended = false;
+    } else if (!enabled) {
+      this.isProgressionSuspended = false;
+    }
     if (!enabled) {
       this.activeProgressionBar = -1;
       if (this.onProgressionBarChangeCallback) {
@@ -1465,6 +1485,24 @@ export class StyPlaybackEngine {
 
   public getChordAutoAdvance(): boolean {
     return this.chordAutoAdvance;
+  }
+
+  /**
+   * 取得當前是否因 Intro / Ending 處於自動輪播智慧掛起狀態 (原調保護)
+   */
+  public getIsProgressionSuspended(): boolean {
+    return this.isProgressionSuspended;
+  }
+
+  /**
+   * 取得當前實際生效的自動輪播狀態 (未被掛起且已啟用)
+   */
+  public getActiveProgressionBar(): number {
+    return this.activeProgressionBar;
+  }
+
+  public isEffectiveChordAutoAdvance(): boolean {
+    return this.chordAutoAdvance && !this.isProgressionSuspended;
   }
 
   /**
@@ -1514,7 +1552,7 @@ export class StyPlaybackEngine {
    * 取得指定 Tick 所屬小節應發聲的和弦
    */
   public getChordForTick(relTick: number): ChordDefinition {
-    if (!this.chordAutoAdvance || this.chordProgression.length === 0) {
+    if (!this.isEffectiveChordAutoAdvance() || this.chordProgression.length === 0) {
       return this.auditionChord;
     }
     const num = this.parsed?.timeSignature.numerator || 4;

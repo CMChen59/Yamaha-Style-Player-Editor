@@ -38,6 +38,15 @@ export interface StandardSectionInfo {
   defaultBars: number;
 }
 
+/**
+ * 判斷指定段落是否為前奏 (Intro) 或尾奏 (Ending) 段落
+ */
+export function isIntroOrEndingSection(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const trimmed = name.trim().toLowerCase();
+  return trimmed.startsWith('intro') || trimmed.startsWith('ending');
+}
+
 export const ALL_STANDARD_SECTIONS: StandardSectionInfo[] = [
   { name: 'Intro A', label: '前奏 A', category: 'Intro', defaultBars: 4 },
   { name: 'Intro B', label: '前奏 B', category: 'Intro', defaultBars: 4 },

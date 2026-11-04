@@ -32,7 +32,7 @@ flowchart LR
 ### 🎯 階段一：原廠規格校準與體驗防呆（Phase 1: Factory Spec Alignment）
 > **定位**：花費最少開發時間，將剛剛獲得的原廠手冊黑科技注入現有系統，徹底杜絕怪音與段落操作痛點。
 
-- [ ] **【任務 1-1】Intro / Ending 輪播智慧掛起防呆 (Smart Progression Suspend)**
+- [x] **【任務 1-1】Intro / Ending 輪播智慧掛起防呆 (Smart Progression Suspend)** (✅ 已完成)
   - **背景與依據**：手冊第 16、26、32 頁指出，Intro 與 Ending 具有獨立 `Section Key`，是以原曲旋律為導向的單次播放段落，不應隨意套用伴奏轉調。
   - **具體實作**：
     - 切換至 `Intro A~C` 或 `Ending A~C` 時，自動掛起「多小節自動輪播」，維持單一原調（C）。

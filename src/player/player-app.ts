@@ -707,6 +707,9 @@ export class PlayerApp {
     this.syncMixerVolumes();
     this.syncSectionResizeUI();
     this.renderProgressionCards();
+    if (styPlaybackEngine.getIsProgressionSuspended()) {
+      this.updateChordAuditionUI(styPlaybackEngine.getAuditionChord());
+    }
 
     // 更新當前聚焦聲部的音符統計與資訊
     this.updateFocusedBanner();
@@ -927,13 +930,14 @@ export class PlayerApp {
 
     // 監聽播放進程輪播即時更新
     styPlaybackEngine.onProgressionBarChange((barIndex, chord) => {
+      const isEffective = styPlaybackEngine.isEffectiveChordAutoAdvance();
       const cards = this.progressionCardsContainer?.querySelectorAll('.progression-bar-card');
       cards?.forEach((card) => {
         const idx = parseInt((card as HTMLElement).dataset.barIndex || '-1', 10);
-        card.classList.toggle('is-playing-card', idx === barIndex);
+        card.classList.toggle('is-playing-card', isEffective && idx === barIndex);
       });
 
-      if (barIndex >= 0 && styPlaybackEngine.getChordAutoAdvance()) {
+      if (barIndex >= 0 && isEffective) {
         if (this.labelCurrentChordName) {
           this.labelCurrentChordName.textContent = `${chord.displayName} (第 ${barIndex + 1} 小節)`;
         }
@@ -962,11 +966,23 @@ export class PlayerApp {
 
     const totalBars = Math.max(1, styPlaybackEngine.getTotalBars());
     const selectedBar = styPlaybackEngine.getSelectedProgressionBarIndex();
+    const isSuspended = styPlaybackEngine.getIsProgressionSuspended();
+
+    // 更新原調保護掛起標籤與容器樣式
+    const suspendedBadge = document.getElementById('progression-suspended-badge');
+    if (suspendedBadge) {
+      suspendedBadge.style.display = isSuspended ? 'inline-flex' : 'none';
+    }
+    this.progressionCardsContainer.classList.toggle('is-suspended', isSuspended);
 
     // 更新下方操作提示說明
     const hintEl = document.getElementById('progression-hint-text');
     if (hintEl) {
-      hintEl.textContent = `🎯 正在編輯【第 ${selectedBar + 1} 小節】：可直接在卡片上下拉選取，或點擊上方 12 顆和弦按鈕立即替換！`;
+      if (isSuspended) {
+        hintEl.innerHTML = `🛡️ <strong>【原調保護已啟動】</strong>：目前為前奏/尾奏段落，系統已自動掛起和弦輪播以保護原曲旋律；切換回 Main 段落時將自動無縫恢復！`;
+      } else {
+        hintEl.textContent = `🎯 正在編輯【第 ${selectedBar + 1} 小節】：可直接在卡片上下拉選取，或點擊上方 12 顆和弦按鈕立即替換！`;
+      }
     }
 
     const commonChords = [
@@ -983,6 +999,9 @@ export class PlayerApp {
 
       if (barIdx === selectedBar) {
         card.classList.add('is-selected-card');
+      }
+      if (!isSuspended && styPlaybackEngine.isEffectiveChordAutoAdvance() && barIdx === styPlaybackEngine.getActiveProgressionBar()) {
+        card.classList.add('is-playing-card');
       }
 
       const barNum = document.createElement('div');

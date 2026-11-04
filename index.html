@@ -751,6 +751,31 @@
       background: rgba(245, 158, 11, 0.15);
     }
 
+    .progression-suspended-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #38bdf8;
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      padding: 3px 10px;
+      border-radius: 12px;
+      animation: pulse-suspended-badge 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-suspended-badge {
+      0%, 100% { opacity: 0.9; box-shadow: 0 0 4px rgba(56, 189, 248, 0.3); }
+      50% { opacity: 1; box-shadow: 0 0 10px rgba(56, 189, 248, 0.7); }
+    }
+
+    .progression-cards-container.is-suspended {
+      opacity: 0.6;
+      filter: grayscale(40%);
+      transition: opacity 0.3s ease, filter 0.3s ease;
+    }
+
     .progression-cards-container {
       display: flex;
       gap: 10px;
@@ -5134,6 +5159,7 @@
                 <span class="progression-toggle-switch"></span>
                 <span class="progression-toggle-text">自動輪播</span>
               </label>
+              <span id="progression-suspended-badge" class="progression-suspended-badge" style="display: none;">🛡️ 原調保護中 (輪播暫停)</span>
             </div>
             <div class="progression-preset-wrap">
               <span class="progression-preset-label">🎵 進行預設:</span>
