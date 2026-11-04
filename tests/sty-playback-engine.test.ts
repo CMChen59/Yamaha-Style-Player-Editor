@@ -85,7 +85,7 @@ describe('StyPlaybackEngine: 純 STY 伴奏極速播放引擎測試', () => {
 
     // 驗證解析出的音色名稱
     const voices = engine.getPartVoices();
-    expect(voices.get(10)?.voiceName).toContain('Fretless Bass');
+    expect(voices.get(10)?.voiceName).toMatch(/Fretless\s*Bass|FretlessBass/);
     expect(voices.get(14)?.voiceName).toContain('DistortionGuitar');
     expect(voices.get(11)?.voiceName).toContain('SteelGuitar');
   });

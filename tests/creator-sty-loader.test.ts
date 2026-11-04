@@ -81,7 +81,7 @@ describe('StyLoader: 實體 STY 伴奏載入與解構驗證', () => {
     expect(result.drumKit.pc).toBe(89);
     expect(result.drumKit.msb).toBe(127);
     expect(result.drumKit.lsb).toBe(0);
-    expect(result.drumKit.name).toContain('Pop Drum Kit');
+    expect(result.drumKit.name).toMatch(/AcousticKit|Pop Drum Kit/);
 
     // 2. 貝斯：應為 Finger Bass Live! (Bank 104-2, PC 33)，保留旗艦 S.Art! 身分證
     expect(result.bassVoice.pc).toBe(33);

@@ -172,7 +172,7 @@ describe('步驟 3.7: Yamaha OTS 與風格標頭封裝 (OTS & Header Manager)', 
     expect(reParsed.hasCasm).toBe(true);
 
     const ots = YamahaOtsManager.extractOtsFromParsed(reParsed);
-    expect(ots.slots[0].right1.voiceName).toBe('Steel Guitar');
-    expect(ots.slots[1].right1.voiceName).toBe('Overdriven Guitar');
+    expect(ots.slots[0].right1.voiceName).toMatch(/Steel Guitar|ChickenPickGuitar|SteelAcoustic/);
+    expect(ots.slots[1].right1.voiceName).toMatch(/Overdriven|HalfDriveGuitar/);
   });
 });

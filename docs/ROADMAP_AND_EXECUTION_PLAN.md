@@ -10,7 +10,7 @@
 
 ```mermaid
 flowchart LR
-    P1["🎯 階段一：原廠規格校準<br/>(4 項，待啟動)"] --> P2["🎹 階段二：編輯手感大躍進<br/>(3 項，待啟動)"]
+    P1["🎯 階段一：原廠規格校準<br/>(4 項，100% 已全數完成)"] --> P2["🎹 階段二：編輯手感大躍進<br/>(3 項，即將啟動)"]
     P2 --> P3["🚀 階段三：真實演奏跳段<br/>(2 項，規劃中)"]
     P3 --> P4["🏆 階段四：旗艦樣式工廠<br/>(3 項，長期目標)"]
 
@@ -18,11 +18,12 @@ flowchart LR
     classDef inprogress fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#60a5fa;
     classDef done fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#34d399;
 
-    class P1,P2,P3,P4 inprogress;
+    class P1 done;
+    class P2,P3,P4 pending;
 ```
 
 - **目前版本**：V2.4 (Focus Editor with Plan D Progression & SFF-GE Full-Octave Engine)
-- **最新測試通過率**：102 個測試套件、487 項測試 100% 綠燈通過 (ALL PASS)
+- **最新測試通過率**：106 個測試套件、520 項測試 100% 綠燈通過 (ALL PASS)
 - **參考規範文檔**：[`docs/references/README.md`](file:///D:/Vibe%20Coding/Yamaha-Style-Player-Editor/docs/references/README.md)（含《MIDI Song to Style》官方手冊與 PSR-SX920 官方 Data List）
 
 ---
@@ -54,10 +55,13 @@ flowchart LR
     - 完整支援二進位 CASM Ctb2 解析、寫入與播放引擎實時調和。
   - **工時預估**：1 天 ｜ **優先級**：⭐⭐⭐⭐
 
-- [ ] **【任務 1-4】官方 2,478 行音色資料庫一致性校驗 (Voice DB Diff Check)**
-  - **背景與依據**：利用新獲得的官方 `docs/references/psr-sx920/Yamaha_PSR-SX920_VoiceList.txt`。
+- [x] **【任務 1-4】官方 2,478 行音色資料庫一致性校驗 (Voice DB Diff Check)** (✅ 已完成)
+  - **背景與依據**：利用新獲得的官方 `docs/references/psr-sx920/Yamaha_PSR-SX920_VoiceList.txt`（2,478 行）與 `psrsx920_sx720_dl_zh_a0.xlsx` 官方中英對照表。
   - **具體實作**：
-    - 撰寫測試腳本自動比對 `yamaha-sx920-datalist.json`，核對全數 MSB / LSB / PC 與官方前綴（`S.Art`, `Live!`, `Cool!` 等）。
+    - 完成全數 2,395 種 PSR-SX920 原廠音色之 MSB / LSB / PC 與官方前綴（`S.Art!`, `Live!`, `Cool!`, `Sweet!`, `MegaVoice`, `Drums`, `Standard`, `Legacy`）比對與校準。
+    - 補齊官方 97 款缺漏音色，資料庫擴充至完整 2,395 種官方音色，繁體中文名稱全面核對校正。
+    - 建立 `LEGACY_VOICE_ALIASES` 歷史相容三聯號別名對照表，完美相容前代旗艦與舊伴奏檔。
+    - 建立單元測試 `tests/sx920-voice-db-consistency.test.ts`，全專案 106 套測試、520 項測試 100% 綠燈通過。
   - **工時預估**：0.5 天 ｜ **優先級**：⭐⭐⭐⭐
 
 ---

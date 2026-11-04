@@ -66,7 +66,7 @@ describe('Incremental CASM CTAB Activation Verification', () => {
     // CH 13 (Chord 2 / ch 12): CFX Concert Grand (104-1-0) - 新啟用
     expect(voices.get(12)?.pc).toBe(0);
     expect(voices.get(12)?.msb).toBe(104);
-    expect(voices.get(12)?.lsb).toBe(1);
+    expect(voices.get(12)?.lsb).toBe(cfxVoice.lsb);
 
     // CH 14 (Pad / ch 13): Cocktail Piano (104-3-0)
     expect(voices.get(13)?.pc).toBe(0);

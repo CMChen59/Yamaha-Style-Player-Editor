@@ -20,15 +20,15 @@ describe('Yamaha PSR-SX920 音色資料庫與搜尋引擎測試 (Voice DB)', () 
     expect(voice?.icon).toBe('S809');
   });
 
-  it('能精準識別樣品檔案中的 Pad 1 弦樂 (Bank 8-33, PC 49)', () => {
+  it('能精準識別樣品檔案中的 Pad 1 旗艦西雅圖弦樂 (Bank 8-33, PC 49)', () => {
     const voice = findYamahaVoice(8, 33, 49);
     expect(voice).toBeDefined();
-    expect(voice?.name).toBe('Live! Strings');
+    expect(voice?.name).toBe('Seattle Strings');
     expect(voice?.icon).toBe('S809');
   });
 
-  it('能精準識別 Yamaha 旗艦大鋼琴 CFX (Bank 104-1, PC 0)', () => {
-    const voice = findYamahaVoice(104, 1, 0);
+  it('能精準識別 Yamaha 旗艦大鋼琴 CFX (Bank 104-21, PC 0)', () => {
+    const voice = findYamahaVoice(104, 21, 0);
     expect(voice).toBeDefined();
     expect(voice?.name).toBe('CFX Concert Grand');
     expect(voice?.category).toBe('Piano');
@@ -58,8 +58,8 @@ describe('Yamaha PSR-SX920 音色資料庫與搜尋引擎測試 (Voice DB)', () 
     expect(results[0].name).toBe('Pizzicato Strings');
   });
 
-  it('資料庫擴充至 2,000+ 完整 Data List 音色', () => {
-    expect(YAMAHA_SX920_VOICES.length).toBeGreaterThan(2000);
+  it('資料庫擴充至 2,395 種官方 100% 完整 Data List 音色', () => {
+    expect(YAMAHA_SX920_VOICES.length).toBe(2395);
   });
 
   it('支援 Multi Pad 推薦篩選 (RECOMMENDED)', () => {
