@@ -17,6 +17,7 @@ export interface TransposeOptions {
   allowDrumTranspose?: boolean; // 鼓軌是否允許移調 (預設 false)
   channel?: number;             // 聲部 Channel (8, 9 為打擊樂 Rhythm 1, 2)
   isDrum?: boolean;             // 是否為打擊樂聲部 (動態音色判定)
+  isMegaVoice?: boolean;        // 是否為 Yamaha MegaVoice 聲部 (C6+ 雜音特效保護)
 }
 
 export interface TransposableNote {
@@ -98,10 +99,23 @@ export class PitchTransposer {
     const minLimit = options?.minNote ?? this.DEFAULT_MIN_NOTE;
     const maxLimit = options?.maxNote ?? this.DEFAULT_MAX_NOTE;
 
+    // 若為 MegaVoice，排除 C6 (96) 以上特效雜音區計算音樂音高邊界
+    const musicalNotes = options?.isMegaVoice ? notes.filter(n => n.noteNumber < 96) : notes;
+    if (options?.isMegaVoice && musicalNotes.length === 0) {
+      return {
+        success: true,
+        notes: notes.map(n => ({ ...n })),
+        actualShift: 0,
+        isLimited: false,
+        isDrumWarning: false,
+        message: '⚡ 選取之音符均為 MegaVoice C6+ 特效雜音區，已自動保持原音不變',
+      };
+    }
+
     // 找出群組內的最高音與最低音
     let groupMin = 127;
     let groupMax = 0;
-    for (const n of notes) {
+    for (const n of musicalNotes) {
       if (n.noteNumber < groupMin) groupMin = n.noteNumber;
       if (n.noteNumber > groupMax) groupMax = n.noteNumber;
     }
@@ -125,10 +139,15 @@ export class PitchTransposer {
       };
     }
 
-    const shiftedNotes = notes.map(n => ({
-      ...n,
-      noteNumber: n.noteNumber + actualShift,
-    }));
+    const shiftedNotes = notes.map(n => {
+      if (options?.isMegaVoice && n.noteNumber >= 96) {
+        return { ...n };
+      }
+      return {
+        ...n,
+        noteNumber: n.noteNumber + actualShift,
+      };
+    });
 
     return {
       success: true,

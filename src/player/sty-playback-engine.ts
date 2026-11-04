@@ -4,7 +4,7 @@ import { drumSynth } from '../creator/drum-synth';
 import { bassSynth } from '../creator/bass-synth';
 import { ChordSynth } from '../creator/chord-synth';
 import { midiManager } from '../core/audio/midi-manager';
-import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
+import { findYamahaVoice, isMegaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
 import { ChordTransposer, type ChordDefinition } from '../core/writer/chord-transposer';
 import { isIntroOrEndingSection } from '../core/models/style-types';
 
@@ -139,6 +139,26 @@ export class StyPlaybackEngine {
     }
     // 預設兜底：只有 Channel 9 (Rh2, 標準打擊樂通道) 預設為鼓
     return channel === 9;
+  }
+
+  /**
+   * 判斷指定聲部是否使用 Yamaha MegaVoice (兆級音色)
+   * 依據 Yamaha 伴奏規格 (手冊 P.31)，MegaVoice 在 C6 (音高 ≥ 96) 為特殊雜音/演奏法觸發區，嚴禁轉調！
+   */
+  public isChannelMegaVoice(channel: number): boolean {
+    const overrideVoice = this.customVoiceOverrides.get(channel);
+    if (overrideVoice) {
+      return isMegaVoice(overrideVoice.msb, overrideVoice.lsb, overrideVoice.pc, overrideVoice.name);
+    }
+    const pv = this.partVoices.get(channel);
+    if (pv) {
+      return isMegaVoice(pv.msb, pv.lsb, pv.pc, pv.voiceName);
+    }
+    const part = this.getPartInfo(channel);
+    if (part) {
+      return isMegaVoice(part.bankMsb, part.bankLsb, part.programChange, part.voiceName);
+    }
+    return false;
   }
 
   public getPartInfo(c: number): any {
@@ -1314,6 +1334,7 @@ export class StyPlaybackEngine {
           this.activeChannelsInWindow.add(event.channel);
 
           const isDrum = this.isChannelDrum(event.channel);
+          const isMega = this.isChannelMegaVoice(event.channel);
           const activeCasm = this.getActiveCasmEntry(event.channel, currentChord);
           const ntr = activeCasm?.ntr;
           const ntt = activeCasm?.ntt;
@@ -1330,7 +1351,8 @@ export class StyPlaybackEngine {
                 127,
                 ntr,
                 ntt,
-                sourceChordType
+                sourceChordType,
+                isMega
               );
 
           if (this.outputMode === 'webaudio') {

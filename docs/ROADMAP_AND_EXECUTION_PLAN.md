@@ -40,7 +40,7 @@ flowchart LR
     - 切回 `Main A~D` 時，自動無縫恢復使用者設定的多小節和弦輪播。
   - **工時預估**：0.5 天 ｜ **優先級**：⭐⭐⭐⭐⭐ (極高)
 
-- [ ] **【任務 1-2】MegaVoice C6 (Pitch ≥ 96) 全音軌雜音直通防護**
+- [x] **【任務 1-2】MegaVoice C6 (Pitch ≥ 96) 全音軌雜音直通防護** (✅ 已完成)
   - **背景與依據**：手冊第 31 頁載明 `Hi Zone Mega Voice (C6 or higher will not be converted)`。C6 以上映射吉他滑弦、琴弦摩擦、敲琴板音效，嚴禁轉調。
   - **具體實作**：
     - 在 `ChordTransposer.transposeSingleNote` 開頭加入通用防護：凡是屬於 MegaVoice 且音高 ≥ 96（C6）之音符，一律直通回傳原音。

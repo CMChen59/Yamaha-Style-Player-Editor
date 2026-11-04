@@ -453,7 +453,8 @@ export class ChordTransposer {
     highLimit: number = 127,
     ntr?: NtrRule | number,
     ntt?: NttRule | number,
-    sourceChordType?: number
+    sourceChordType?: number,
+    isMegaVoice: boolean = false
   ): number {
     // 0. Yamaha SFF-GE 吉他專利弦碼轉譯 (NTR = 2 / Guitar)
     if (ntr === 2 || ntr === 'Guitar') {
@@ -462,6 +463,11 @@ export class ChordTransposer {
         targetChord,
         typeof ntt === 'number' ? ntt : undefined
       );
+    }
+    // 0.5. Yamaha MegaVoice 高音區特殊雜音與演奏法直通防護 (Hi Zone Mega Voice: C6 or higher will not be converted)
+    // 依據手冊第 31 頁與 Yamaha 官方 Data List，MegaVoice 在 C6 (音高 ≥ 96) 映射滑弦、琴弦摩擦、敲琴板、打弦等音效，嚴禁轉調！
+    if (isMegaVoice && pitch >= 96) {
+      return pitch;
     }
     // 1. 打擊樂 / 鼓組 (isDrum=true 或標準鼓軌 Ch 9) 或設定為 Root Fixed + Bypass (原音直通) 之聲部: 保持原音不變
     // 注意：Yamaha STY 的 Rhythm 1 (Ch 8) 經常配置旋律樂器 (如 Pizzicato Strings / 馬林巴)，必須支援動態判定是否為鼓組！
@@ -642,7 +648,8 @@ export class ChordTransposer {
     highLimit: number = 127,
     ntr?: NtrRule | number,
     ntt?: NttRule | number,
-    sourceChordType?: number
+    sourceChordType?: number,
+    isMegaVoice: boolean = false
   ): NoteEvent[] {
     return notes.map((origNote) => ({
       ...origNote,
@@ -655,7 +662,8 @@ export class ChordTransposer {
         highLimit,
         ntr,
         ntt,
-        sourceChordType
+        sourceChordType,
+        isMegaVoice
       ),
     }));
   }

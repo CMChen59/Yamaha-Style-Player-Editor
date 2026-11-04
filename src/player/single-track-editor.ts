@@ -641,6 +641,7 @@ export class SingleTrackEditor {
         <span class="editor-voice-tag clickable-voice-tag" title="${this.voiceInfo ? this.voiceInfo.voiceName + ' (點擊更換音色)' : '點擊更換音色'}">${this.voiceInfo?.voiceName || (this.isChannelActive ? '預設音色' : '未配置音色')} ✏️</span>
         <span class="editor-meta-pill">拍號: ${this.timeSignature.numerator}/${this.timeSignature.denominator} | 總計: ${this.totalBars} 小節 | PPQ: ${this.division}</span>
         <span id="ed-note-count-pill" class="editor-meta-pill">音符總數: ${this.events.length}</span>
+        ${styPlaybackEngine.isChannelMegaVoice(this.channel) ? '<span id="ed-megavoice-pill" class="editor-meta-pill" style="border-color: #f59e0b; color: #fbbf24; background: rgba(245, 158, 11, 0.1);" title="Yamaha 兆級音色 (C6 ≥ 96 特效雜音直通保護已啟動)">⚡ MegaVoice (C6+ 原音直通)</span>' : ''}
 
         ${isDrum ? `
           <div class="editor-view-toggle">
@@ -865,6 +866,8 @@ export class SingleTrackEditor {
     // 渲染各行琴鍵 / 樂器名稱
     this.rows.forEach(r => {
       const isC = !isDrum && (r.note % 12 === 0);
+      const isMega = !isDrum && styPlaybackEngine.isChannelMegaVoice(this.channel);
+      const isMegaNoise = isMega && r.note >= 96;
       const rowLabel = document.createElement('div');
       rowLabel.className = `editor-key-row ${r.isBlack ? 'is-black-key' : 'is-white-key'}${isC ? ' is-c-key' : ''}`;
       rowLabel.style.height = `${this.rowHeight}px`;
@@ -878,7 +881,7 @@ export class SingleTrackEditor {
       } else {
         rowLabel.innerHTML = `
           <span class="key-name ${r.subLabel ? 'is-root' : ''}">${r.label}</span>
-          ${r.subLabel ? '<span class="key-badge">根音</span>' : ''}
+          ${r.subLabel ? '<span class="key-badge">根音</span>' : (isMegaNoise ? '<span class="key-badge" style="background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5);" title="Yamaha 兆級音色 C6+ 特效雜音直通區">FX</span>' : '')}
         `;
       }
 
@@ -1062,8 +1065,14 @@ export class SingleTrackEditor {
       noteEl.style.opacity = `${0.5 + 0.5 * velRatio}`;
 
       const row = this.rows[rowIndex];
+      const isMegaTrack = !isDrum && styPlaybackEngine.isChannelMegaVoice(this.channel);
+      const isMegaNoiseNote = isMegaTrack && ev.noteNumber >= 96;
+      if (isMegaNoiseNote) {
+        noteEl.title = '⚡ MegaVoice C6+ 特效雜音 (播放時原音直通)';
+        noteEl.style.outline = '1px dashed #fbbf24';
+      }
       noteEl.innerHTML = `
-        <span class="note-block-text">${row.label} (${ev.velocity})</span>
+        <span class="note-block-text">${isMegaNoiseNote ? '⚡ ' : ''}${row.label} (${ev.velocity})</span>
         <div class="note-resize-handle" title="拖曳調整音符長度"></div>
       `;
 
@@ -2553,6 +2562,7 @@ export class SingleTrackEditor {
       channel: this.channel,
       minNote: 0,
       maxNote: 127,
+      isMegaVoice: styPlaybackEngine.isChannelMegaVoice(this.channel),
     });
 
     if (!result.success) {
