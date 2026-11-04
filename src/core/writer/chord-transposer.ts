@@ -432,6 +432,22 @@ export class ChordTransposer {
   }
 
   /**
+   * 依據 Yamaha CASM HiKey (High Key: 0~11: C to B) 規範動態計算目標和弦之根音位移量
+   * 
+   * Yamaha 官方手冊 (P.30~31) 規範：
+   * - 當目標和弦根音 <= hiKey 時，向上移調 (+rootPitchClass)
+   * - 當目標和弦根音 > hiKey 時，強制向下翻八度移調 (-(12 - rootPitchClass))
+   * 
+   * @param rootPitchClass 目標和弦根音音名代碼 (0=C, 1=C#, 2=D, ... 11=B)
+   * @param hiKey 該軌/聲部之 High Key 分界點 (預設 6 為 F#，Bass 官方推薦為 5 即 F)
+   */
+  public static calculateHiKeyShift(rootPitchClass: number, hiKey: number = 6): number {
+    const pc = ((rootPitchClass % 12) + 12) % 12;
+    const hk = Math.max(0, Math.min(11, Math.round(hiKey)));
+    return pc <= hk ? pc : pc - 12;
+  }
+
+  /**
    * 依據 Yamaha CASM 規則將單顆 C 基準音符轉換至目標和弦
    * 
    * @param pitch 來源音高 (0~127，假設以 C 基準錄製)
@@ -443,6 +459,8 @@ export class ChordTransposer {
    * @param ntr 轉調規則 (Root Transpose / Root Fixed / Guitar)
    * @param ntt 音符變換表 (Bypass / Chord / Bass / Melody)
    * @param sourceChordType 來源和弦類型 (0=Maj, 2=Maj7, 8=min, 14=7th 等)
+   * @param isMegaVoice 是否為 MegaVoice 樂色 (音高 >= 96 雜音與特殊效果直通)
+   * @param hiKey 該聲部之 High Key 分界點 (0~11，預設 6；Bass 建議 5)
    */
   public static transposeSingleNote(
     pitch: number,
@@ -454,7 +472,8 @@ export class ChordTransposer {
     ntr?: NtrRule | number,
     ntt?: NttRule | number,
     sourceChordType?: number,
-    isMegaVoice: boolean = false
+    isMegaVoice: boolean = false,
+    hiKey?: number
   ): number {
     // 0. Yamaha SFF-GE 吉他專利弦碼轉譯 (NTR = 2 / Guitar)
     if (ntr === 2 || ntr === 'Guitar') {
@@ -565,7 +584,9 @@ export class ChordTransposer {
     }
 
     const isRootFixed = ntr === 1 || ntr === 'Root Fixed';
-    const rootShift = targetChord.semitonesFromC;
+    // 動態讀取 CASM 該軌專屬之 HiKey (0~11) 決定八度折返分界；未指定時預設 6 (F#)
+    const effectiveHiKey = hiKey !== undefined ? hiKey : 6;
+    const rootShift = ChordTransposer.calculateHiKeyShift(targetChord.rootPitchClass, effectiveHiKey);
 
     // 若半音位移為 0 且無音階調整，直接回傳原音
     const isChordNtt = ntt === 2 || ntt === 130 || ntt === 'Chord';
@@ -649,7 +670,8 @@ export class ChordTransposer {
     ntr?: NtrRule | number,
     ntt?: NttRule | number,
     sourceChordType?: number,
-    isMegaVoice: boolean = false
+    isMegaVoice: boolean = false,
+    hiKey?: number
   ): NoteEvent[] {
     return notes.map((origNote) => ({
       ...origNote,
@@ -663,7 +685,8 @@ export class ChordTransposer {
         ntr,
         ntt,
         sourceChordType,
-        isMegaVoice
+        isMegaVoice,
+        hiKey
       ),
     }));
   }

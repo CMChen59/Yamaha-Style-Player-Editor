@@ -507,6 +507,11 @@ export class YamahaParser {
             const chordType = data.length > 19 ? data[19] : 0;
             const ntr = data.length > 28 ? data[28] : (data.length > 20 ? data[20] : undefined);
             const ntt = data.length > 29 ? data[29] : (data.length > 21 ? data[21] : undefined);
+            // Yamaha CASM High Key (HiKey: 0~11, 決定八度折返點分界)，未設定時預設 6 (F#)
+            const hiKey = data.length > 30 && data[30] <= 11 ? data[30] : 6;
+            const lowLimit = data.length > 31 ? data[31] : 0;
+            const highLimit = data.length > 32 ? data[32] : 127;
+            const retriggerRule = data.length > 33 ? data[33] : undefined;
 
             if (srcCh !== undefined && destCh !== undefined && destCh >= 8 && destCh <= 15) {
               entries.push({
@@ -517,6 +522,10 @@ export class YamahaParser {
                 chordType,
                 ntr,
                 ntt,
+                hiKey,
+                lowLimit,
+                highLimit,
+                retriggerRule,
               });
             }
           }

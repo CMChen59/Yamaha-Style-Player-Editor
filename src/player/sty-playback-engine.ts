@@ -1339,6 +1339,9 @@ export class StyPlaybackEngine {
           const ntr = activeCasm?.ntr;
           const ntt = activeCasm?.ntt;
           const sourceChordType = activeCasm?.chordType;
+          const hiKey = activeCasm?.hiKey;
+          const lowLimit = activeCasm?.lowLimit ?? 0;
+          const highLimit = activeCasm?.highLimit ?? 127;
 
           const noteToPlay = isDrum
             ? event.noteNumber
@@ -1347,12 +1350,13 @@ export class StyPlaybackEngine {
                 currentChord,
                 event.channel,
                 isDrum,
-                0,
-                127,
+                lowLimit,
+                highLimit,
                 ntr,
                 ntt,
                 sourceChordType,
-                isMega
+                isMega,
+                hiKey
               );
 
           if (this.outputMode === 'webaudio') {

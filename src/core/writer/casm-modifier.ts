@@ -21,6 +21,7 @@ export interface CasmPartRule {
   noteHighLimit: number;        // 0 ~ 127
   retriggerRule: RetriggerRule; // RTR: 'Stop', 'Pitch Shift', 'Retrigger'
   isDrum: boolean;
+  hiKey?: number;               // 0 ~ 11 (C to B), default 6 (F#), Bass default 5 (F)
 }
 
 export const CASM_STANDARD_PRESETS: Record<string, { label: string; rules: Partial<Record<StylePartId, Partial<CasmPartRule>>> }> = {
@@ -29,7 +30,7 @@ export const CASM_STANDARD_PRESETS: Record<string, { label: string; rules: Parti
     rules: {
       Rhythm1: { ntr: 'Root Fixed', ntt: 'Bypass', noteLowLimit: 0, noteHighLimit: 127, retriggerRule: 'Stop' },
       Rhythm2: { ntr: 'Root Fixed', ntt: 'Bypass', noteLowLimit: 0, noteHighLimit: 127, retriggerRule: 'Stop' },
-      Bass: { ntr: 'Root Transpose', ntt: 'Bass', noteLowLimit: 28, noteHighLimit: 55, retriggerRule: 'Retrigger' },
+      Bass: { ntr: 'Root Transpose', ntt: 'Bass', noteLowLimit: 28, noteHighLimit: 55, retriggerRule: 'Retrigger', hiKey: 5 },
       Chord1: { ntr: 'Root Transpose', ntt: 'Chord', noteLowLimit: 36, noteHighLimit: 84, retriggerRule: 'Retrigger' },
       Chord2: { ntr: 'Root Transpose', ntt: 'Chord', noteLowLimit: 36, noteHighLimit: 84, retriggerRule: 'Retrigger' },
       Pad: { ntr: 'Root Transpose', ntt: 'Chord', noteLowLimit: 48, noteHighLimit: 96, retriggerRule: 'Pitch Shift' },
@@ -90,6 +91,7 @@ export class CasmModifier {
         noteHighLimit: rulePreset.noteHighLimit ?? (isDrum ? 127 : partId === 'Bass' ? 55 : 84),
         retriggerRule: rulePreset.retriggerRule ?? (isDrum ? 'Stop' : 'Retrigger'),
         isDrum,
+        hiKey: rulePreset.hiKey ?? (partId === 'Bass' ? 5 : 6),
       };
     });
   }
@@ -159,16 +161,18 @@ export class CasmModifier {
                 }
                 const ntrByte = ctb[28];
                 const nttByte = ctb[29];
+                const hiKeyByte = ctb.length > 30 && ctb[30] <= 11 ? ctb[30] : (existing.partId === 'Bass' ? 5 : 6);
                 const lowLim = ctb[31];
                 const highLim = ctb[32];
                 const rtrByte = ctb[33];
 
                 existing.ntr = ntrByte === 2 ? 'Guitar' : (ntrByte === 1 ? 'Root Fixed' : 'Root Transpose');
                 if (nttByte === 0) existing.ntt = 'Bypass';
-                else if (nttByte === 0x81 || ctb[30] === 5) existing.ntt = 'Bass';
+                else if (nttByte === 0x81 || hiKeyByte === 5) existing.ntt = 'Bass';
                 else if (nttByte === 3) existing.ntt = 'Melody';
                 else existing.ntt = 'Chord';
 
+                existing.hiKey = hiKeyByte;
                 existing.noteLowLimit = lowLim;
                 existing.noteHighLimit = highLim;
                 existing.retriggerRule = rtrByte === 0 ? 'Stop' : rtrByte === 1 ? 'Pitch Shift' : 'Retrigger';
@@ -279,20 +283,22 @@ export class CasmModifier {
     ctbData[27] = 0x02;
     ctbData[28] = rule.ntr === 'Guitar' ? 0x02 : (rule.ntr === 'Root Fixed' ? 0x01 : 0x00); // NTR: 0=Root Trans, 1=Root Fixed, 2=Guitar
 
-    // NTT
+    // NTT (Byte 29)
     if (rule.ntt === 'Bypass') {
       ctbData[29] = 0x00;
-      ctbData[30] = 0x07;
     } else if (rule.ntt === 'Bass') {
       ctbData[29] = 0x81;
-      ctbData[30] = 0x05;
     } else if (rule.ntt === 'Melody') {
       ctbData[29] = 0x03;
-      ctbData[30] = 0x03;
     } else {
       ctbData[29] = 0x01;
-      ctbData[30] = 0x03;
     }
+
+    // HiKey (Byte 30): 0~11 (C to B). Bass 預設 5 (F)，其餘預設 6 (F#)
+    const effectiveHiKey = rule.hiKey !== undefined 
+      ? Math.max(0, Math.min(11, rule.hiKey)) 
+      : (rule.ntt === 'Bass' ? 5 : 6);
+    ctbData[30] = effectiveHiKey;
 
     ctbData[31] = Math.max(0, Math.min(127, rule.noteLowLimit));  // Low Limit
     ctbData[32] = Math.max(0, Math.min(127, rule.noteHighLimit)); // High Limit
@@ -302,7 +308,7 @@ export class CasmModifier {
     if (rule.ntr === 'Root Fixed') {
       ctbData[34] = 0x01; // 小和弦同為 Root Fixed 固定音高，徹底杜絕大小和弦切換時跳八度
       ctbData[35] = rule.ntt === 'Bypass' ? 0x00 : 0x01;
-      ctbData[36] = rule.ntt === 'Bypass' ? 0x07 : 0x07;
+      ctbData[36] = effectiveHiKey;
       ctbData[37] = ctbData[31];
       ctbData[38] = ctbData[32];
       ctbData[39] = ctbData[33];
@@ -310,17 +316,14 @@ export class CasmModifier {
       ctbData[34] = 0x00; // Root Transpose 跟隨根音
       if (rule.ntt === 'Bypass') {
         ctbData[35] = 0x00;
-        ctbData[36] = 0x07;
       } else if (rule.ntt === 'Bass') {
         ctbData[35] = 0x81;
-        ctbData[36] = 0x03;
       } else if (rule.ntt === 'Melody') {
         ctbData[35] = 0x03;
-        ctbData[36] = 0x07;
       } else {
         ctbData[35] = 0x01;
-        ctbData[36] = 0x07;
       }
+      ctbData[36] = effectiveHiKey;
       ctbData[37] = ctbData[31];
       ctbData[38] = ctbData[32];
       ctbData[39] = ctbData[33];

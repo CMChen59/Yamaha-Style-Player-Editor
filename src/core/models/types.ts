@@ -63,6 +63,10 @@ export interface CasmChannelEntry {
   chordType: number;   // 0=Maj, 2=Maj7, 8=min, 14=7th, etc.
   ntr?: number;        // 0=Root Transpose, 1=Root Fixed, 2=Guitar
   ntt?: number;        // 0=Bypass, 1=Melody, 2=Chord, etc.
+  hiKey?: number;      // 0=C, 1=C#, 2=D, ... 11=B (Yamaha SFF CASM High Key 八度折返分界)
+  lowLimit?: number;   // 0~127
+  highLimit?: number;  // 0~127
+  retriggerRule?: number; // 0=Stop, 1=Pitch Shift, 2=Retrigger
 }
 
 export interface YamahaCustomChunk {
