@@ -80,6 +80,7 @@ npm run build
 
 - 📖 **[使用者常見問答集 (User Q&A Knowledge Base)](docs/USER_QA_KNOWLEDGE_BASE.md)**：彙整各聲部延音設定、SFF 原廠和弦轉調、吉他弦位解碼、效果器混音與 Yamaha PSR-SX920 琴機連線疑難排解。
 - 🎹 **[PSR-SX920 真機驗證指南](docs/PSR_SX920_PURE_PLAYER_VERIFICATION_GUIDE.md)**：硬體連線、Web MIDI 與伴奏檔試聽指南。
+- 🏛️ **[Yamaha 官方參考資料庫 (Official References)](docs/references/README.md)**：收錄《MIDI Song to Style》官方手冊、PSR-SX920 全音色定義表（2,478行）、中文 Data List 與紅利演奏清單。
 
 ---
 

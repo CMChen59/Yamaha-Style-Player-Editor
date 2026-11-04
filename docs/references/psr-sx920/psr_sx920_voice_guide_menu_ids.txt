@@ -1,0 +1,222 @@
+PSR-SX920, PSR-SX720 Voice Guide Tutorial Manual
+
+In this text manual, certain marks “<” and “>” are used as heading indications. In addition, “[ ]” (brackets) are used for the names of buttons on the operation panel and operation icon names on the screen. If you are reading this manual using a screen reader, we recommend that you read this manual by turning on symbol reading, punctuation marks and bracket reading, etc., on the screen reader.
+In addition, the signs used in this manual are as follows.
+<Level 1>: The first level headline. This is the heading of each chapter.
+<Level 2>: The second level headline.
+To jump to each title, enter “Level,” “Level 1” or “Level 2,” etc., when searching.
+
+In this manual, the position on the screen is described with divided coordinates like the cells on a spreadsheet. It is made up of eight horizontal divisions and seven vertical divisions.
+A-H indicates the horizontal position from the left end of the screen.
+1-7 indicates the vertical position from the top of the screen.
+
+For example, <<C5>> indicates the cell located 3rd from the left end and 5th from the top.
+
+If the designated position is not exactly on a particular cell, “upper/lower/left/right” is added to the description.
+For example, <<B3 upper right>> indicates the upper right position in the cell located 2nd from the left end and 3rd from top.
+
+Contents
+<Level 1> What is Voice Guide?
+<Level 1> Setting Up
+<Level 2> Saving a downloaded Voice Guide (audio) file to a USB flash drive
+<Level 1> Activating the Voice Guide function
+<Level 1> Basic Operations
+<Level 2> Finding the desired item without executing it (Preview Reading)
+<Level 2> Difference of Pan (stereo localization) between Preview Reading and operation execution
+<Level 2> How to close a pop-up window while using the Voice Guide function
+<Level 1> Operation Example 1: Selecting a Voice
+<Level 1> Operation Example 2: Adjusting the Metronome Volume
+<Level 1> Making detailed settings for the Voice Guide
+<Level 2> Calling up the detailed settings display of the Voice Guide
+<Level 2> Voice Guide
+<Level 2> Voice Guide Controller
+<Level 2> Voice Guide Volume
+<Level 2> Exiting from the detailed settings display
+<Level 1> Customizing the Voice Guide (audio) file
+<Level 2> About the Voice Guide (audio) file
+<Level 2> Compatible file formats for playback on the Voice Guide function
+<Level 2> Folder paths in the USB flash drive and language selection
+<Level 1> Other notes on usage
+
+This is the end of the Contents.
+
+Main Section
+<Level 1> What is Voice Guide?
+When Voice Guide is active, the instrument gives audible information on the current display or operation being executed, allowing those who have visual impairments to enjoy playing and using the instrument. The following information can be heard when using the Voice Guide function.
+
+- You can operate the instrument while listening to the information shown in the display.
+- You can recognize the display called up, the function being executed, and the parameter value you’ve set.
+- You can recognize the preset Voice names, preset Style names, preset Song names, and preset Registration Bank names, etc.
+- You can recognize display messages.
+- You can recognize the button names on the control panel.
+
+<NOTE> Items are read aloud only if they correspond to the Voice Guide. For details of which items are read aloud, refer to the file “Voice Guide File List” bundled with the Voice Guide file described later.
+<END of NOTE> 
+
+<Level 1> Setting Up
+<Level 2> Saving a downloaded Voice Guide (audio) file to a USB flash drive
+
+(1) Extract the downloaded Voice Guide file on your computer.
+The Voice Guide file can be downloaded from the URL below.
+The size of the Voice Guide file is approximately 500 MB.
+
+PSR-SX920 Voice Guide file:
+https://download.yamaha.com/files/tcm:39-2314796/
+
+PSR-SX720 Voice Guide file:
+https://download.yamaha.com/files/tcm:39-2314795/
+
+(2) Save the extracted files (.wav) into the root directory (highest level folder) of the USB flash drive. Make sure that there is a “PSR-SX920” folder or "PSR-SX720" folder in the root directory and a “Voice Guide” folder in the “PSR-SX920” folder or "PSR-SX720" folder.
+
+<NOTE> Make sure that the USB flash drive has enough memory (at least 1 GB).
+Also, make sure to check the latest information on file size from the download site. 
+Before purchasing a USB flash drive for use with this instrument, visit the following URL. On that page, select your country, go to the Documents and Data page, and then enter “PSR-SX920” or "PSR-SX720" to find the Compatible USB Device List.
+https://download.yamaha.com
+<END of NOTE> 
+
+<Level 1> Activating the Voice Guide function
+(1) Press the Standby/On switch (to the immediate left of the Volume dial at the left of the control panel) to turn the power on.
+(2) Connect the USB flash drive containing the Voice Guide files (described in “Setting Up” above) into one of the [USB TO DEVICE] terminals on the instrument. The terminals are on the rear panel. If you remove the USB flash drive, the Voice Guide function will not be active.
+
+<NOTE>
+・For information on the display layout examples, refer to the separate appendix “PSR-SX920, PSR-SX720 Display Samples” (English only).
+・To properly use the Voice Guide function and keep it active, these two conditions must be met: the “Voice Guide” setting must be set to “On,” and the USB flash drive containing the Voice Guide files must be connected to one of the [USB TO DEVICE] terminals. 
+・The factory default of the “Voice Guide” setting is “On.” For details, refer to the “Making detailed settings for the Voice Guide” described later.
+<END of NOTE> 
+
+<Level 1> Basic Operations
+<Level 2> Finding the desired item without executing it (Preview Reading)
+The Preview Reading function conveniently lets you find the desired item without executing it but simply having it announced. To use this, simultaneously hold down the [DIRECT ACCESS] button, and touch the display or press the button on the control panel. Repeat this until you find the desired item and hear it announced.
+
+After recognizing the location of the desired item, release the [DIRECT ACCESS] button, and then touch the desired item to execute the operation. After executing, the display called up or the function executed will be announced.
+
+<NOTE>
+・The [DIRECT ACCESS] button is near the lower left corner of the display.
+・While Voice Guide is active, the [DIRECT ACCESS] button functions only as the Preview Reading controller. The original function of the button is invalid.
+・Alternately, you can use foot pedal 2 for Preview Reading, by changing a setting. For details, refer to “Voice Guide Controller” described later. However, throughout this manual, the [DIRECT ACCESS] button is used in the instructions.
+・The Standby/On switch will not be announced even if the Voice Guide is active.
+<END of NOTE>
+
+
+
+
+
+<Level 2> Difference of Pan (stereo localization) between Preview Reading and operation execution
+Preview Readings are panned to the center, while guidance announcements when operations are executed are panned to the right. 
+
+<Level 2> How to close a pop-up window while using the Voice Guide function
+The pop-up window is a small window shown overlapping on the display. The method for closing the window differs depending on whether Voice Guide is active or not.
+
+When Voice Guide is inactive (the “Voice Guide” setting is off or the Voice Guide files are not available), touching anywhere on the display outside the border of a pop-up window closes the window.
+When Voice Guide is active, the pop-up window stays open unless you touch the upper right corner of the display.
+
+<NOTE> If you cannot return to the previous display and cannot close the pop-up window by touching the upper right corner, use the [EXIT] button to return the previous display. The [EXIT] button is located at the right of the display, beneath the [DATA] dial and the [DEC] (Decrement) / [INC] (Increment) buttons. <END of NOTE> 
+
+<NOTE> Depending on the pop-up window, touch the button near the center of the display to select or execute the desired action and exit the pop-up window.
+<END of NOTE>
+
+<Level 1> Operation Example 1: Selecting a Voice
+Here, we’ll select the Voice “Rock Piano” for the Right 1 part using Voice Guide.
+
+(1) Make Voice Guide active, following instruction steps (1) to (2) in the “Activate the Voice Guide function” above.
+
+(2) On the Home display, find the location of the “Right 1 Voice” by using the Preview Reading function. The Voice name currently selected is announced following “Right 1 Voice.” When you operate this immediately after powering on, the “Concert Grand” (default setting) will be announced.
+
+(3) Release the [DIRECT ACCESS] button, and then touch “Right 1 Voice” again (done first in step 2 above) to execute the operation. The “Right 1 Voice Selection” display appears. The category name is announced, followed by the Voice name. Under the default setting, “Piano” is announced, followed by “Concert Grand.”
+
+(4) Change the “CFX Concert Grand” Voice to “CFX Ambient Grand.” While holding down the [DIRECT ACCESS] button, touch the display to find the location of “CFX Ambient Grand.” (The name is announced.) 
+
+(5) Release the [DIRECT ACCESS] button, find “CFX Ambient Grand” on the display, and then touch it again. The “CFX Ambient Grand” Voice will actually be selected.
+
+(6) Play the keyboard to hear the “CFX Ambient Grand” Voice.
+
+<Level 1> Operation Example 2: Adjusting the Metronome Volume
+Here, we’ll try a more advanced operation by adjusting the metronome volume.
+
+(1) Press the [MENU] button to call up the Menu display.
+The display actually called up either from the “Menu 1” or “Menu 2” displays is announced.
+If “Menu 2” is announced, press the [MENU] button again to call up the “Menu 1” display.
+
+(2) Find the “Metronome” icon by using the Preview Reading function. The “Metronome” icon is located at <<G5>> of the Menu 1 display. After “Metronome” is announced and you’ve recognized the location, release the [DIRECT ACCESS] button, and then touch the “Metronome” icon again to call up the “Metronome” display. The tab selected previously in the Metronome display will be announced. The “Metronome” and “Tap Tempo” tabs are located on the left of the display. If “Metronome” is announced as the tab, go on to step 5.
+
+(3) (When “Tap Tempo” is announced)
+Find the “Metronome” tab by using Preview Reading. After recognizing the location, release the [DIRECT ACCESS] button, and then touch “Metronome” again to call up the Metronome tab.
+
+(4) Find the “Volume” setting by using Preview Reading. After recognizing the location, release the [DIRECT ACCESS] button, and then touch “Volume” again to shift the focus to the setting, letting you adjust the volume.
+
+(5) Use the DATA DIAL to set the value. The value you set is announced.  
+Touch the “Metronome Off (On)” icon on the display to start the metronome, which lets you set the value while playing back the metronome. The “Metronome Off (On)” icon is located at <<G2>> of the same display, and it can also be found by using Preview Reading.
+
+(6) After setting, press the [HOME] button to call up the Home display. To return to the Menu 1 display, touch the upper right corner on the display.
+
+The metronome volume has been set.
+
+<Level 1> Making detailed settings for the Voice Guide
+Global settings for Voice Guide can be set in the Utility display. Here you can enable/disable Voice Guide, select the desired controller for Preview Reading ([DIRECT ACCESS] button or foot pedal 2), and set the Voice Guide volume.
+
+
+<Level 2> Calling up the detailed settings display of the Voice Guide
+The display actually called up, from either the “Menu 1” or “Menu 2” displays, is announced.
+If “Menu 1” is announced, press the [MENU] button again to call up the “Menu 2” display.
+
+(3) Find the “Utility” icon by using the Preview Reading function. The “Utility” icon is located at <<C5>> of the Menu 2 display. After “Utility” is announced and you’ve recognized the location, release the [DIRECT ACCESS] button, and then touch the “Utility” icon again to call up the “Utility” display. The tab selected previously in the Utility display will be announced. 
+
+(4) Find the System tab located on the left of the display by using Preview Reading. After recognizing the location, release the [DIRECT ACCESS] button, and then touch the “System” tab again to call up the tab. Page 1 of 2 in the System tab will be shown.
+
+(5) Find “Next page” located on the bottom right of the display by using Preview Reading.
+There are page switching icons in each tab around <<H5>> of the Utility display. To call up the next page, confirm the button position, release the [DIRECT ACCESS] button, and then touch the icon again to go to the next page. 
+Page 2 of 2 (the page for the Voice Guide settings), will be called up.
+
+(6) The setting display has been called up. It contains three settings: Voice Guide, Voice Guide Controller, and Voice Guide Volume. Use Preview Reading to find the desired item, and change the setting if desired.
+
+<Level 2> Voice Guide
+Specify whether you want to use Voice Guide (“On”) or not use it (“Off”), when the USB flash drive containing the Voice Guide files is connected to the instrument.” The factory default is “On.”
+
+<NOTE> On the “Assignable” display, you can assign On/Off switching of this setting to one of the ASSIGNABLE buttons or the foot pedals. <END of NOTE>
+
+<Level 2> Voice Guide Controller
+This lets you select the controller for the Preview Reading function, switching between the [DIRECT ACCESS] button and foot pedal 2. The default setting is “Direct Access.”
+
+<NOTE> While Voice Guide is active, the controller set here functions only as the Preview Reading function, making the original function of the controller invalid.
+<END of NOTE>
+
+<Level 2> Voice Guide Volume
+Adjusts the Voice Guide Volume. The default setting is “80.”
+
+<Level 2> Exiting from the detailed settings display
+After setting, press the [HOME] button to call up the Home display. To return to the Menu display, touch the upper right corner on the display.
+
+<Level 1> Customizing the Voice Guide (audio) file
+<Level 2> About the Voice Guide (audio) file
+The Voice Guide function uses audio files (WAV format) stored to a USB flash drive. Each announcement has a corresponding audio file and file name stored to a specific location in the USB flash drive. If you do not need a specific announcement, you can delete the corresponding file or change the file/folder name. Moreover, you can replace audio files as well, if you want to change the contents of a particular announcement or use a different voice.
+
+<NOTE> Deleting, renaming or replacing files can only be done from a computer. <END of NOTE>
+
+<NOTE> For details on which items are read aloud, refer to the file “Voice Guide File List” bundled with the Voice Guide file.
+<END of NOTE>
+
+<Level 2> Compatible file formats for playback with the Voice Guide function
+Only WAV format audio files (file extension of “.wav” with 44.1 kHz sample rate, 16-bit resolution, mono/stereo) can be used.
+
+<Level 2> Folder paths in the USB flash drive and language selection
+Voice Guide announcements are spoken in the language specified in the “Language” setting on pages 1/2 of the System tab in the Utility display. 
+ 
+Folder paths of the Voice Guide file in the USB flash drive for each model are shown below.
+
+for PSR-SX920 (English):
+/PSR-SX920/Voice Guide/EN
+
+for PSR-SX720 (English):
+/PSR-SX720/Voice Guide/EN
+
+<NOTE> If there is no folder corresponding to the language you’ve selected on the instrument (in the Voice Guide folder) in the USB flash drive, announcements will be taken from one of the folders selected in this order: EN, JA, DE, FR, ES, IT. <END of NOTE>
+
+<Level 1> Other notes on usage
+- When using Voice Guide, make sure that the USB flash drive containing the Voice Guide files is connected to the instrument.
+- Settings for Voice Guide on/off, Voice Guide controller, and Voice Guide volume are retained even when the power is turned off.
+- The recorded audio files have been made by using text-to-speech technology. The actual announcements may not reflect natural native usage and may differ slightly from the displayed words.
+- The supported Voice Guide language is English only. 
+- If audio via wireless LAN is played back or recorded while a Voice Guide announcement is in progress, the Voice Guide announcement will stop. Also, if the announcement of Voice Guide is read aloud during playback of wireless LAN audio, the playback of wireless LAN audio will stop.
+
+
+This is the end of the file.

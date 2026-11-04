@@ -1,0 +1,2478 @@
+[midi song to style parse file]
+[parser version 0001]
+[comment] Created by Yamaha Corporation
+[device manufacturer] Yamaha
+[device name] Yamaha PSR-SX920
+[script name] Yamaha PSR-SX920 VOICES
+[script version] 1
+
+[define patchnames]
+
+[mode] PSR-SX920 VOICES
+
+[g1]Piano&E.Piano
+[p2,0,104,21]S.Art CFX ConcertGrand
+[p2,0,104,10]S.Art CFX StageGrand
+[p2,0,104,9]S.Art CFX AmbientGrand
+[p2,5,104,19]S.Art CFX BalladMix1
+[p2,5,104,22]S.Art CFX BalladMix2
+[p2,20,8,41]S.Art 70sSuitcaseClean
+[p2,20,8,46]S.Art 70sSuitcaseAmped
+[p2,20,8,39]S.Art 70sSuitcaseWarm1
+[p2,20,8,47]S.Art 70sSuitcasePhase
+[p2,20,8,44]S.Art 70sSuitcaseBallad
+[p2,0,104,22]S.Art C7 StudioGrand
+[p2,0,104,11]S.Art C7 PopGrand
+[p2,0,104,33]S.Art C7 WarmGrand
+[p2,5,104,24]S.Art C7 Atmosphere
+[p2,0,104,35]S.Art C7 PadProduction
+[p2,20,8,45]S.Art 70sSuitcasePan
+[p2,20,8,42]S.Art 70sSuitcaseTremolo
+[p2,20,8,48]S.Art 70sSuitcaseWarm2
+[p2,20,8,43]S.Art 70sAmbienceEP
+[p2,20,8,51]S.Art 70sMeditationEP
+[p2,0,104,25]S.Art CFX WarmPad
+[p2,5,104,23]S.Art CFX Shimmer
+[p2,3,104,1]S.Art CFX CocktailGrand
+[p2,3,104,2]S.Art CFX OneOctave
+[p2,3,104,3]S.Art CFX TwoOctaves
+[p2,0,104,34]S.Art C7 SuperstarGrand
+[p2,0,104,36]S.Art C7 Celestial
+[p2,0,104,37]S.Art C7 CarillonPad
+[p2,112,8,32]S.Art Harpsichord JS
+[p2,6,0,113]Live! GrandHarpsichord
+[p2,5,104,20]S.Art DX Production
+[p2,5,104,21]Regular DX Padded
+[p2,5,104,10]Cool! TX Bright
+[p2,5,104,11]Cool! TX Mellow
+[p2,5,104,12]Cool! TX Warm
+[p2,5,104,1]Cool! DX Midnight
+[p2,5,104,3]Cool! DX Dream
+[p2,5,104,2]Cool! DX BalladBells
+[p2,5,0,123]Cool! DX Dynamic
+[p2,5,104,0]Cool! DX Sweet
+[p2,0,104,13]S.Art U3 Upright
+[p2,1,104,13]S.Art U3 PopUpright
+[p2,0,104,14]S.Art 70sBalladUpright
+[p2,3,104,13]S.Art HonkyTonkUpright
+[p2,1,104,14]S.Art SaloonUpright
+[p2,3,104,14]S.Art UprightOneOctave
+[p2,3,104,15]S.Art UprightTwoOctaves
+[p2,0,104,15]S.Art ChilloutUpright
+[p2,0,104,30]S.Art CFX PadProduction
+[p2,88,104,19]Regular Pianosphere
+[p2,20,8,40]S.Art 70sVintageEP
+[p2,20,8,49]S.Art 70sVintageDriveEP
+[p2,20,8,50]S.Art 70sVintagePhaseEP
+[p2,2,104,10]S.Art CP80 ElectricGrand
+[p2,2,104,11]S.Art CP80 Production
+[p2,5,0,124]Cool! DX Ballad
+[p2,4,104,9]Cool! SuitcaseBallad
+[p2,4,104,11]Cool! SuitcaseDrive
+[p2,4,104,16]Cool! SuitcaseHard
+[p2,4,104,13]Cool! SuitcaseJazz
+[p2,5,0,121]Cool! DX Sparkle
+[p2,4,104,10]Cool! SuitcasePhaser
+[p2,4,104,7]Cool! SuitcaseSoft
+[p2,4,104,12]Cool! SuitcaseTremolo
+[p2,4,104,14]Cool! SuitcaseWarmth
+[p2,20,8,33]S.Art Clavi JS
+[p2,20,8,34]S.Art ClaviFunk JS
+[p2,20,8,36]S.Art ClaviAmped JS
+[g1]Organ&Accordion
+[p2,113,8,32]S.Art JazzRotary JS
+[p2,29,8,32]S.Art WhiterBars JS
+[p2,30,8,32]S.Art AllBarsOut JS
+[p2,29,8,34]S.Art ClassicBars JS
+[p2,29,8,33]S.Art ProgRockOrgan JS
+[p2,21,104,25]Live! SuperMusette
+[p2,21,104,28]Live! JazzCassotto
+[p2,23,104,4]Live! BajanAccordion
+[p2,23,104,5]Live! ScotsAccordion
+[p2,21,104,27]Live! SteirischeHarmonika
+[p2,22,0,112]Sweet! Harmonica
+[p2,0,10,0]OrganFlutes JazzStandard
+[p2,0,10,1]OrganFlutes UpsideDownSmile
+[p2,0,10,2]OrganFlutes OrganPops
+[p2,0,10,3]OrganFlutes RockOrgan
+[p2,22,0,114]Regular BluesHarmonica
+[p2,0,10,4]OrganFlutes GospelOrgan
+[p2,0,10,5]OrganFlutes BalladOrgan
+[p2,0,10,6]OrganFlutes OrganClarinet
+[p2,0,10,7]OrganFlutes JazzSquabble
+[p2,16,0,121]Cool! CurvedBars
+[p2,16,0,111]Cool! EvenBars
+[p2,16,0,117]Cool! ClassicJazz
+[p2,18,0,118]Cool! ClassicScanner
+[p2,16,0,127]Cool! HollowBars
+[p2,21,104,26]Live! SuperMusetteBass
+[p2,21,104,30]Live! JazzCassottoBass
+[p2,23,104,6]Live! BajanAccordionBass
+[p2,23,104,7]Live! ScotsAccordionBass
+[p2,21,104,29]Live! SteirischerBass
+[p2,2,10,0]OrganFlutes EuroPercussion
+[p2,2,10,1]OrganFlutes EuroBallad
+[p2,2,10,2]OrganFlutes EuroReeds
+[p2,2,10,3]OrganFlutes EuroEvenWarmth
+[p2,2,10,4]OrganFlutes EuroBright
+[p2,2,10,5]OrganFlutes EuroPops
+[p2,2,10,6]OrganFlutes EuroFull
+[p2,2,10,7]OrganFlutes EuroMelodic
+[p2,21,104,6]Regular CajunAccordionBass
+[p2,23,0,115]Regular TangoAccordionBass
+[p2,19,104,6]Regular LieblichGedackt
+[p2,19,104,4]Regular Diapason
+[p2,19,104,5]Regular Claribel&Flute
+[p2,19,104,7]Regular SoftReeds
+[p2,19,104,1]Live! GrandJeu
+[p2,19,104,2]Live! FondsEtAnches
+[p2,19,104,3]Live! OrganoPleno
+[p2,19,104,0]Live! ConcertOrganTutti
+[p2,19,0,113]Regular ChapelOrgan1
+[p2,19,0,115]Regular ChapelOrgan2
+[p2,1,10,0]OrganFlutes HomeOrganBallad
+[p2,1,10,1]OrganFlutes Home16&Odds
+[p2,1,10,2]OrganFlutes HomeTheatreOrgan
+[p2,1,10,3]OrganFlutes HomeOrganJazz
+[p2,18,104,37]Regular HomeAccomp1
+[p2,1,10,4]OrganFlutes HomeHollowTibias
+[p2,1,10,5]OrganFlutes HomeOrganEvens
+[p2,1,10,6]OrganFlutes HomeOrganWarmth
+[p2,1,10,7]OrganFlutes HomeOrganFull
+[p2,18,104,38]Regular HomeAccomp2
+[p2,17,0,108]Regular VintageAccomp1
+[p2,17,0,107]Regular VintageAccomp2
+[p2,17,0,106]Regular VintageAccomp3
+[p2,17,0,105]Regular VintageAccomp4
+[p2,17,0,104]Regular VintageAccomp5
+[p2,17,104,33]Regular EuroAccomp1
+[p2,17,104,34]Regular EuroAccomp2
+[p2,17,104,35]Regular EuroAccomp3
+[p2,20,0,114]Regular Harmonium1
+[p2,20,0,115]Regular Harmonium2
+[p2,16,104,32]Cool! 60sComboOrgan1
+[p2,16,104,33]Cool! 60sComboOrgan2
+[p2,16,104,34]Cool! 60sComboOrgan3
+[p2,16,104,35]Cool! 60sComboOrgan4
+[p2,16,104,0]Cool! OrganAGoGo
+[p2,18,104,28]Regular TheatreTibia&Vox
+[p2,18,104,29]Regular TheatreOpenTibias
+[p2,18,104,31]Regular TheatreOrganMix1
+[p2,18,104,32]Regular TheatreOrganMix2
+[p2,18,104,33]Regular TheatreOrganMix3
+[p2,18,104,30]Regular TheatreGambCeleste
+[p2,18,104,26]Regular TheatreSeaside
+[p2,18,104,34]Regular TheatreFluteAccomp
+[p2,18,104,36]Regular TheatreChrysAccomp
+[p2,18,104,35]Regular TheatreStringsAcmp
+[p2,16,0,124]Regular TheatreTrumpet
+[p2,17,104,28]Regular TheatreChrysoglott
+[p2,17,104,29]Regular TheatreGlockenspiel
+[p2,17,104,30]Regular TheatreXylophone
+[p2,17,104,31]Regular TheatreOrganChime
+[p2,17,104,32]Regular TheatreWoodenHarp
+[p2,18,104,16]Regular TheatrePedal1
+[p2,18,104,17]Regular TheatrePedal2
+[p2,18,104,19]Regular HomeOrganTrombone
+[p2,18,104,20]Regular HomeOrganClarinet
+[p2,18,104,21]Regular HomeOrganCello
+[p2,18,104,22]Regular HomeOrganHorn
+[p2,18,104,23]Regular HomeOrganCornet
+[p2,18,104,24]Regular HomeOrganViolin
+[p2,18,104,25]Regular HomeOrganKinura
+[p2,21,0,118]Regular MasterAccordion
+[p2,21,104,3]Regular CajunAccordion
+[p2,21,104,1]Regular AccordionClarinet
+[p2,23,0,114]Regular TangoAccordion
+[p2,23,0,113]Regular Bandoneon
+[p2,22,0,113]Regular ModernHarp
+[g1]Strings
+[p2,48,8,64]S.Art2 JazzViolin
+[p2,49,12,1]S.Art+ KinoStrings
+[p2,49,8,51]S.Art KinoStringsWarm
+[p2,49,8,52]S.Art KinoStringsLow
+[p2,49,8,55]S.Art KinoStringsSlow
+[p2,48,8,65]S.Art2 CelticViolin
+[p2,43,8,35]S.Art KinoStringsViolins
+[p2,45,8,35]S.Art KinoStringsViolas
+[p2,46,8,35]S.Art KinoStringsCellos
+[p2,47,8,35]S.Art KinoStringsBasses
+[p2,49,8,46]S.Art KinoStringsNatural
+[p2,49,8,45]S.Art KinoStringsVnVaVc
+[p2,49,8,54]S.Art KinoStringsWarmVc
+[p2,49,8,48]S.Art KinoStringsVnVc
+[p2,49,8,49]S.Art KinoStrings1Oct
+[p2,43,8,33]S.Art Orchestral1stViolin
+[p2,44,8,33]S.Art Orchestral2ndViolin
+[p2,45,8,33]S.Art OrchestralViola
+[p2,46,8,33]S.Art OrchestralCello
+[p2,49,8,53]S.Art KinoStrings2Oct
+[p2,43,8,36]S.Art KinoStringsTremVn
+[p2,45,8,36]S.Art KinoStringsTremVa
+[p2,46,8,36]S.Art KinoStringsTremVc
+[p2,47,8,36]S.Art KinoStringsTremCb
+[p2,49,8,44]S.Art KinoStringsTremolo
+[p2,40,104,4]Live! KinoStringsSpiccVn
+[p2,41,104,2]Live! KinoStringsSpiccVa
+[p2,42,104,2]Live! KinoStringsSpiccVc
+[p2,43,104,2]Live! KinoStringsSpiccCb
+[p2,48,104,20]Live! KinoStringsSpiccSct
+[p2,49,12,0]S.Art+ SeattleStrings
+[p2,48,8,36]S.Art SeattleClassical
+[p2,49,8,43]S.Art SeattleRomance
+[p2,48,8,39]S.Art SeattleWarm
+[p2,48,8,42]S.Art SeattleChamber
+[p2,49,8,35]S.Art SeattleSlowStrings
+[p2,48,8,41]S.Art SeattleLushStrings
+[p2,44,104,0]Live! SeattleTremolo
+[p2,48,104,6]Live! SeattleSpiccato
+[p2,47,8,34]S.Art SeattleQuartet
+[p2,43,8,32]S.Art Seattle1stViolins
+[p2,44,8,32]S.Art Seattle2ndViolins
+[p2,45,8,32]S.Art SeattleViolas
+[p2,46,8,32]S.Art SeattleCellos
+[p2,47,8,32]S.Art SeattleBasses
+[p2,49,8,50]S.Art KinoStringsTension
+[p2,45,0,113]Live! PizzicatoStrings
+[p2,45,0,115]Live! PizzicatoGlocken
+[p2,49,8,47]S.Art KinoStrings
+[p2,49,8,33]S.Art SeattleStrings
+[p2,49,104,1]Regular TheatreOrchestra
+[p2,49,0,120]Regular OrchestraTutti
+[p2,49,0,123]Live! DiscoStrings1
+[p2,49,0,124]Live! DiscoStrings2
+[p2,50,0,112]Regular SynthStrings1
+[p2,50,0,113]Regular SynthStrings2
+[p2,51,0,113]Regular OberStrings
+[p2,48,0,125]Regular Watariyat
+[p2,110,0,113]Regular ErHu
+[g1]Brass
+[p2,65,8,64]S.Art2 SoftTrumpet
+[p2,65,8,65]S.Art2 ClassicTrumpet
+[p2,64,8,37]S.Art BigBandTrumpet
+[p2,64,8,32]S.Art BrightTrumpet
+[p2,57,104,0]Sweet! BrightTrombone
+[p2,59,12,0]S.Art+ PopHorns
+[p2,61,104,4]Live! PopHornsShake
+[p2,56,8,43]S.Art PopHornsMellow
+[p2,56,8,44]S.Art PopHornsBright
+[p2,61,104,3]Live! PopHornsAccent
+[p2,64,8,34]S.Art GoldenTrumpet
+[p2,64,8,33]S.Art SilverTrumpet
+[p2,59,0,114]Sweet! MutedTrumpet
+[p2,56,0,118]Sweet! Flugelhorn
+[p2,56,0,119]Sweet! Cornet
+[p2,56,104,3]Live! OrchTrumpets
+[p2,57,104,3]Live! OrchTrombones
+[p2,60,104,0]Live! OrchestralHorns
+[p2,61,104,9]Live! OrchTpts&Tbns1
+[p2,61,104,10]Live! OrchTpts&Tbns2
+[p2,59,104,0]Sweet! MutedCornet
+[p2,57,0,117]Sweet! SweetTrombone
+[p2,56,8,41]S.Art WarmPopHorns
+[p2,61,104,1]Live! WarmSwingHorns
+[p2,61,104,2]Live! MuteSwingHorns
+[p2,60,104,1]Live! SymphonyHorns
+[p2,60,104,2]Live! SymphonyHornsOct
+[p2,61,104,8]Live! SymphonyBrass
+[p2,60,8,33]S.Art WarmOrchHorns
+[p2,60,104,3]Live! StoppedOrchHorns
+[p2,56,8,37]S.Art BigBandBrass SW
+[p2,61,104,5]Live! PopHornsCresc
+[p2,61,104,6]Live! BalladBrass
+[p2,61,104,14]Live! BrassBand
+[p2,56,8,36]S.Art SmoothBrass
+[p2,56,8,45]S.Art PopHornsCresc JS
+[p2,56,8,46]S.Art PopHornsDoit SW
+[p2,56,8,47]S.Art PopHornsFall SW
+[p2,56,8,48]S.Art PopHornsSwell JS
+[p2,61,0,107]Live! SforzandoFall
+[p2,62,104,9]Regular 80sSynthBrassStab
+[p2,62,104,10]Regular 80sSynthBrassTack
+[p2,62,104,0]Regular 80sSynthBrassThin
+[p2,62,104,1]Regular 80sSynthBrassProfit
+[p2,81,104,44]Regular 80sStackBrass
+[p2,95,104,14]Regular 80sSynthProSwell
+[p2,95,104,15]Regular 80sSynthSlowSwell
+[p2,63,0,115]Regular OberHorns
+[p2,63,0,112]Regular AnalogBrass
+[p2,62,0,114]Regular TechnoBrass
+[p2,56,104,4]Live! OrchTrumpetsFast
+[p2,57,104,4]Live! OrchTrombonesFast
+[p2,61,104,13]Live! OrchHorns&Tbns
+[p2,61,104,12]Live! OrchBrassOctave
+[p2,60,104,4]Live! OrchHornsFast
+[p2,62,104,2]Regular SlowPWM Brass
+[p2,62,104,6]Regular FastPWM Brass
+[p2,61,104,11]Live! OrchHornsPad
+[p2,60,8,32]S.Art SoftOrchHorns
+[p2,56,8,42]S.Art BrightHornSection
+[p2,60,104,10]Regular BaritoneHornShort
+[p2,60,104,11]Regular BaritoneHornLong
+[p2,60,104,12]Regular BaritoneHornStacc
+[p2,60,104,13]Regular BaritoneHornTen
+[p2,58,104,0]Regular Tuba
+[p2,57,104,2]Regular BassTrombStacc
+[p2,57,104,1]Regular BassTrombTenuto
+[p2,56,8,34]S.Art BrassFalls&Doits JS
+[p2,61,104,0]Live! PopHorns
+[p2,61,104,15]Live! SymphonyHornsFast
+[g1]Woodwind
+[p2,84,8,65]S.Art2 BalladSopranoSax
+[p2,84,8,64]S.Art2 PopSopranoSax
+[p2,80,8,66]S.Art2 TenorSax
+[p2,82,8,64]S.Art2 FunkTenorSax
+[p2,82,8,65]S.Art2 PopTenorSax
+[p2,92,8,65]S.Art2 Clarinet
+[p2,92,8,64]S.Art2 BalladClarinet
+[p2,92,8,66]S.Art2 RomanceClarinet
+[p2,71,104,2]Regular GermanClarinet
+[p2,73,0,114]Sweet! JazzFlute
+[p2,73,8,32]S.Art OrchestralFlute
+[p2,71,104,0]Live! OrchestralClarinet
+[p2,70,104,0]Sweet! OrchestralBassoon
+[p2,68,0,113]Sweet! ClassicalOboe
+[p2,68,8,32]S.Art MOR Oboe
+[p2,73,0,115]Sweet! ClassicalFlute
+[p2,72,0,112]Regular Piccolo
+[p2,69,0,112]Regular EnglishHorn
+[p2,75,0,113]Sweet! PanPipes
+[p2,78,0,112]Regular Whistle
+[p2,66,0,116]Live! SaxSection
+[p2,66,0,122]Live! SaxSectionHard
+[p2,66,0,121]Live! SaxSectionSoft
+[p2,82,8,38]S.Art SmoothSaxes1
+[p2,82,8,36]S.Art SmoothSaxes2
+[p2,82,8,35]S.Art BigBandSax
+[p2,66,0,126]Sweet! BalladTenorSax
+[p2,66,0,111]Sweet! GrowlSax
+[p2,67,104,0]Regular BaritoneSax
+[p2,82,8,39]S.Art MellowSaxes
+[p2,64,0,113]Sweet! SopranoSax
+[p2,66,8,32]S.Art CleanAltoSax
+[p2,66,8,34]S.Art SoftAltoSax
+[p2,66,0,110]Live! BigBandHorns1
+[p2,66,0,109]Live! BigBandHorns2
+[p2,71,104,1]Regular Clarinet&Flutes
+[p2,68,104,1]Regular Clarinet&Oboe
+[p2,68,104,2]Regular DoubleReeds
+[p2,73,104,2]Regular Flutes&Oboes
+[p2,73,0,116]Regular FluteEnsemble
+[p2,73,104,1]Regular FluteSection
+[p2,70,104,1]Regular OrchWoodwind
+[p2,82,8,37]S.Art SmoothSaxesOctave
+[p2,66,0,108]Live! BigBandOctave
+[p2,71,0,115]Regular Moonlight
+[p2,77,0,112]Regular Shakuhachi
+[p2,109,0,112]Regular Bagpipe
+[p2,77,0,114]Regular Nay
+[p2,73,0,118]Regular DiZi
+[p2,109,0,116]Regular Sheng
+[p2,79,0,112]Regular Ocarina
+[p2,74,0,112]Regular Recorder
+[g1]A.Guitar
+[p2,0,12,0]S.Art+ ConcertGuitar
+[p2,1,8,35]S.Art FlamencoGuitar
+[p2,1,12,0]S.Art+ SteelAcousticFinger
+[p2,1,8,37]S.Art SteelAcousticPick
+[p2,1,8,54]S.Art SteelThumbPick
+[p2,1,8,34]S.Art SpanishGuitar
+[p2,1,8,45]S.Art ResonatorGuitar
+[p2,1,8,58]S.Art ResonatorSlapBack
+[p2,1,8,59]S.Art ResonatorBluesAmp
+[p2,1,8,46]S.Art ResonatorMuteVel
+[p2,13,8,33]S.Art Ukulele
+[p2,13,8,34]S.Art UkuleleStrum
+[p2,13,8,35]S.Art UkuleleUnisonDuo
+[p2,1,8,47]S.Art D-FolkGuitar
+[p2,1,8,55]S.Art D-FolkGuitarAmped
+[p2,1,8,48]S.Art D-FolkGuitarStrum
+[p2,1,8,56]S.Art SteelAcousticAmp
+[p2,1,8,50]S.Art SteelAcousticStrum
+[p2,1,8,53]S.Art 12StringFingered
+[p2,1,8,39]S.Art 12StringPicked
+[p2,1,8,40]S.Art 12StringStrum SW
+[p2,25,104,11]Live! ChickenPickGuitar
+[p2,1,8,51]S.Art FolkGuitarDoubled
+[p2,105,104,0]Regular Banjo1
+[p2,12,8,41]S.Art Mandolin
+[p2,12,8,42]S.Art MandolinMuteVel
+[p2,24,104,19]Live! MandolinTremolo
+[p2,24,104,20]Live! MandolinSlide
+[p2,1,8,36]S.Art SpanishElectro
+[p2,0,8,35]S.Art ElectroAcoustic
+[p2,1,8,57]S.Art LatinAmpedGuitar
+[p2,1,8,38]S.Art ChickenPick SW
+[p2,1,8,49]S.Art SteelAcousticFinger
+[p2,25,104,19]Live! ResonatorSlideVel
+[p2,0,8,34]S.Art NylonGuitar SW
+[p2,0,8,32]S.Art ConcertGuitar
+[p2,106,0,112]Regular Shamisen
+[p2,105,0,112]Regular Banjo2
+[p2,104,104,0]Regular Sitar1
+[p2,104,0,113]Regular Sitar2
+[p2,105,0,113]Regular Oud
+[p2,15,104,1]Regular Zither1
+[p2,15,104,0]Regular Zither2
+[p2,46,104,2]Regular Hackbrett1
+[p2,46,0,113]Regular Hackbrett2
+[p2,105,0,119]Regular PiPa
+[g1]E.Guitar
+[p2,7,12,1]S.Art+ 60sShadowLead
+[p2,7,8,33]S.Art 60sBalladGuitar
+[p2,7,8,34]S.Art 60sVintageBlues
+[p2,8,12,1]S.Art+ 60sRockHero
+[p2,7,8,38]S.Art 60sGuitarHero
+[p2,7,8,36]S.Art 60sVintageClean
+[p2,7,8,37]S.Art 60sChickenPick
+[p2,7,8,40]S.Art 60sBluesRock
+[p2,7,8,43]S.Art 60sTexasBlues
+[p2,7,8,45]S.Art 60sVintagePalm
+[p2,7,8,44]S.Art 60sVintageEcho
+[p2,7,8,46]S.Art 60sShadowMute
+[p2,7,8,47]S.Art 60sCountryMute
+[p2,7,8,48]S.Art 60sFunkPick
+[p2,7,12,0]S.Art+ 50sVintageFull
+[p2,8,12,0]S.Art+ 50sVintageSolo
+[p2,5,8,45]S.Art 50sVintageStage
+[p2,5,8,47]S.Art 50sHeavyRock
+[p2,5,8,48]S.Art 50sVintageDelay
+[p2,5,8,42]S.Art 50sVintagePure
+[p2,5,8,46]S.Art 50sDriveWahWah
+[p2,5,8,37]S.Art 50sVintageBlues
+[p2,5,8,36]S.Art 50sVintageRock
+[p2,5,8,49]S.Art 50sVintageWarm
+[p2,3,8,41]S.Art 50sVintageAmp
+[p2,3,8,54]S.Art 50sVintageSpring
+[p2,3,8,56]S.Art ShadowedGuitar
+[p2,3,8,43]S.Art FingerAmp
+[p2,3,8,46]S.Art BalladDelay
+[p2,3,8,42]S.Art FingerChorus
+[p2,3,8,45]S.Art BrightChorus
+[p2,5,8,35]S.Art RockHero
+[p2,5,8,50]S.Art SoloAce
+[p2,5,8,53]S.Art RhythmAce
+[p2,5,8,34]S.Art RockLegend
+[p2,5,8,38]S.Art StageLeadGuitar
+[p2,4,8,32]S.Art HeavyRockGuitar
+[p2,5,8,51]S.Art BigAmpCombo
+[p2,5,8,41]S.Art ClassicAmpStack
+[p2,5,8,40]S.Art GrungeGuitar
+[p2,5,8,39]S.Art OverdriveWahWah
+[p2,4,8,34]S.Art WarmBlues
+[p2,4,8,35]S.Art BrightBlues
+[p2,4,8,37]S.Art BluesyFinger
+[p2,3,8,55]S.Art BluesyNight
+[p2,4,8,36]S.Art BluesySlapSlide SW
+[p2,5,8,55]S.Art HalfWahLead
+[p2,5,8,56]S.Art WahWahGuitar
+[p2,5,8,52]S.Art OldiesGuitar
+[p2,3,8,39]S.Art SingleCoilClean
+[p2,3,8,53]S.Art LightChorus
+[p2,4,8,39]S.Art RoughFingers
+[p2,3,8,51]S.Art FingerSlapSlide SW
+[p2,4,8,38]S.Art CleanFingers
+[p2,3,8,49]S.Art FunkSlap
+[p2,3,8,50]S.Art FingerBright
+[p2,4,8,40]S.Art CountryPickDrive
+[p2,4,8,41]S.Art CountryPickVintage
+[p2,3,8,44]S.Art CountryPick
+[p2,3,8,58]S.Art SeventiesChorus
+[p2,3,8,57]S.Art SixtiesGuitar
+[p2,6,8,32]S.Art JazzGuitarClean
+[p2,6,8,38]S.Art JazzGuitarAmp
+[p2,6,8,39]S.Art JazzArtistGuitar
+[p2,6,8,35]S.Art JazzGtSmooth SW
+[p2,5,8,54]S.Art 70sJazzCombo
+[p2,6,8,40]S.Art SolidJazzGuitar
+[p2,6,8,33]S.Art SemiAcoustic
+[p2,3,8,61]S.Art PedalSteelGuitar1
+[p2,27,104,25]Regular PedalSteelGuitar2
+[p2,26,0,118]Regular AlohaGuitar
+[p2,7,8,32]S.Art 60sShadowLead
+[p2,7,8,35]S.Art 60sRockHero
+[p2,5,8,43]S.Art 50sVintageFull
+[p2,5,8,44]S.Art 50sVintageSolo
+[g1]Bass
+[p2,17,12,1]S.Art+ ActiveBassFinger
+[p2,18,12,1]S.Art+ ActiveBassPick
+[p2,17,8,38]S.Art ActiveBassFngrMute
+[p2,18,8,37]S.Art ActiveBassPickMute
+[p2,17,8,39]S.Art ActiveBassSlap
+[p2,38,104,25]Regular EDM ClassicOctBass
+[p2,38,104,26]Regular EDM DanceBass1
+[p2,39,104,25]Regular EDM DanceBass2
+[p2,38,104,27]Regular EDM DX Bass
+[p2,38,104,28]Regular EDM ElectroHardBass
+[p2,19,8,32]S.Art FretlessBass
+[p2,17,12,0]S.Art+ VintageRoundFinger
+[p2,18,12,0]S.Art+ VintageRoundPick
+[p2,18,8,32]S.Art VintageMuteBass
+[p2,17,8,33]S.Art VintageFlatBass
+[p2,38,104,29]Regular EDM TransistorBass
+[p2,38,104,30]Regular EDM PitchyPulseBass
+[p2,39,104,26]Regular EDM FatSquareBass
+[p2,39,104,27]Regular EDM GarageBass
+[p2,39,104,28]Regular EDM HeavyDubBass
+[p2,16,8,33]S.Art SoftAcousticBass
+[p2,16,8,32]S.Art AcousticBass
+[p2,34,0,112]Regular PickBass
+[p2,36,0,113]Regular FusionBass
+[p2,34,0,113]Cool! PickDynoBass
+[p2,38,104,24]Regular BerlinDroneBass
+[p2,38,104,31]Regular MonolanBass
+[p2,38,104,32]Regular MonolanCombiSolid
+[p2,38,104,33]Regular Q HouseBass
+[p2,38,104,34]Regular VM SawBass
+[p2,33,104,4]Regular ActiveBassFinger
+[p2,33,104,5]Regular ActiveBassFngrMute
+[p2,34,104,3]Regular ActiveBassPick
+[p2,34,104,4]Regular ActiveBassPickMute
+[p2,36,104,0]Regular ActiveBassSlap
+[p2,39,104,23]Regular ClassicBassEnvelope
+[p2,39,104,24]Regular ClassicBassSustain
+[p2,39,104,29]Regular OrganHouseBass
+[p2,39,104,30]Regular PluckHouseBass
+[p2,39,104,31]Regular ReggaeBass
+[p2,34,104,2]Cool! VintageDynoBass
+[p2,37,0,112]Regular FunkBass
+[p2,34,0,114]Regular RockBass
+[p2,33,0,112]Regular MellowFingerBass
+[p2,33,0,115]Cool! HalfMuteBass
+[p2,35,0,113]Regular SuperFretlessBass
+[p2,33,0,114]Cool! ElectricBass
+[p2,16,8,34]S.Art AcousticJazzBass
+[p2,39,104,32]Regular BasicBass
+[p2,39,104,33]Regular SawClickBass
+[p2,39,104,34]Regular SolidBass
+[p2,38,104,12]Regular 80sDynFilterBass
+[p2,38,104,13]Regular 80sFM MetalBass
+[p2,38,104,14]Regular 80sEX PulseBass
+[p2,38,104,15]Regular 80sArpPulseBass
+[p2,38,104,17]Regular 80sSynthPopBass
+[p2,38,104,18]Regular 80sSeqBass
+[p2,38,104,19]Regular 80sArnoldBass
+[p2,38,104,20]Regular 80sRetroPulseBass
+[p2,38,104,21]Regular VeloTaureanBass
+[p2,38,104,22]Regular 80sUnisonBass
+[p2,38,104,23]Regular Powerdrone
+[p2,122,8,32]S.Art BPF Buzz JS
+[p2,122,8,33]S.Art Wobble JS
+[p2,122,8,34]S.Art RampBass JS
+[p2,122,8,35]S.Art SquarePluck JS
+[p2,87,104,18]Regular DeepSub
+[p2,87,104,19]Regular ModernPop
+[p2,87,104,20]Regular MultiSawBass
+[p2,87,104,21]Regular BriteDubBass
+[p2,87,104,22]Regular Pulse&Saw
+[p2,87,104,23]Regular TwentyFive
+[p2,87,104,24]Regular PunchySquare
+[p2,87,104,25]Regular Softwood
+[p2,87,104,26]Regular PunchyDX
+[p2,87,104,27]Regular DarkSeqBass
+[p2,87,104,28]Regular PumpingSaw
+[p2,87,104,29]Regular PumpingSquare
+[p2,39,0,114]Regular SubBass
+[p2,17,8,37]S.Art ActiveBassFinger
+[p2,18,8,36]S.Art ActiveBassPick
+[p2,17,8,32]S.Art VintageRoundBass
+[p2,34,104,1]Regular VintagePickBass
+[g1]Choir&Pad
+[p2,55,8,42]S.Art JazzScatVocals SW
+[p2,55,8,50]S.Art JazzScatLegato
+[p2,51,8,32]S.Art BoysChoirOoh
+[p2,51,8,33]S.Art BoysChoirAah
+[p2,55,12,1]S.Art+ Do-Be-Do-BeLeg SW
+[p2,99,104,4]Regular 80sHarpvox
+[p2,50,104,14]Regular 80sDreamStrings
+[p2,51,104,13]Regular 80sMiamiStrings
+[p2,50,104,15]Regular 80sPopStrings
+[p2,50,104,16]Regular 80sBalladPad
+[p2,55,8,45]S.Art JazzScatShoo SW
+[p2,55,8,46]S.Art JazzScatDwee SW
+[p2,55,8,32]S.Art Shoo-Bee-Doo-Bah1 SW
+[p2,55,12,0]S.Art+ Shoo-Bee-Doo-Bah2Leg SW
+[p2,55,8,55]S.Art Shoo-Ba-Doo-Ba SW
+[p2,89,104,10]Regular 80sSoftPad
+[p2,95,104,13]Regular 80sFifthSlow
+[p2,54,104,0]Regular 80sBreathyVoice
+[p2,54,104,1]Regular 80sDreamyVox
+[p2,89,104,11]Regular 80sWarmVCF Pad
+[p2,51,8,37]S.Art BoysChoirOoh f
+[p2,51,8,38]S.Art BoysChoirAah f
+[p2,51,8,35]S.Art BoysChoirOoh p
+[p2,51,8,36]S.Art BoysChoirAah p
+[p2,51,8,34]S.Art BoysChoir JS
+[p2,88,104,37]Regular 80sGlassyHook
+[p2,88,104,10]Regular NewHeaven
+[p2,88,104,11]Regular FantasyBells
+[p2,88,104,13]Regular ItopiaBells
+[p2,88,104,18]Regular Sinesphere
+[p2,55,8,40]S.Art PopVocals
+[p2,55,8,41]S.Art LatinVocals SW
+[p2,54,8,32]S.Art GospelVocalsHmm
+[p2,54,8,33]S.Art GospelVocalsWow
+[p2,54,8,34]S.Art GospelVocalsHey
+[p2,91,104,3]Regular HeavenPad
+[p2,88,104,15]Regular BreathBells
+[p2,88,104,12]Regular OrganBells
+[p2,88,104,16]Regular SkyBells
+[p2,94,104,5]Regular SpectrumPad
+[p2,55,8,51]S.Art Ya-Ba-Da-Ba SW
+[p2,55,8,52]S.Art Do-We-Yo-Be SW
+[p2,55,8,53]S.Art What-Should-We-Do SW
+[p2,55,8,54]S.Art Who-Are-You SW
+[p2,55,8,35]S.Art Shoo-BeeDynamic SW
+[p2,55,8,49]S.Art BoysChoirOh-Ah SW
+[p2,54,8,35]S.Art GospelWow-Hey SW
+[p2,54,8,37]S.Art GospelWow-Hey JS
+[p2,54,8,36]S.Art GospelHmm-Aah JS
+[p2,55,8,36]S.Art Ba-Da-Yah
+[p2,50,104,10]Regular MedDetunedStrings
+[p2,88,104,1]Regular NobleMan
+[p2,89,104,3]Regular DarkLight
+[p2,50,104,4]Regular OctaveStrings
+[p2,88,104,0]Regular AmbientPad
+[p2,89,104,2]Regular DarkFatSaw
+[p2,95,104,0]Regular Trance
+[p2,89,0,120]Regular AnalogPad
+[p2,94,104,0]Regular MorningDew
+[p2,101,104,0]Regular PercPad
+[p2,40,8,34]S.Art BoysOoh
+[p2,40,8,40]S.Art BoysDoo
+[p2,39,8,34]S.Art BoysHaa
+[p2,40,8,35]S.Art BoysOohVibrato
+[p2,39,8,38]S.Art Wah
+[p2,40,8,36]S.Art GirlsOoh
+[p2,40,8,41]S.Art GirlsDoo
+[p2,39,8,35]S.Art GirlsHaa
+[p2,40,8,37]S.Art GirlsOohVibrato
+[p2,39,8,39]S.Art WahVibrato
+[p2,88,104,14]Regular SpectrumTheme
+[p2,51,104,9]Regular NextGeneration
+[p2,88,104,20]Regular AmbientTheme
+[p2,91,104,4]Regular HybridLines
+[p2,89,104,0]Regular VP Soft
+[p2,95,104,3]Regular DouxFlange
+[p2,51,104,2]Regular LightPad
+[p2,50,104,2]Regular ButterStrings
+[p2,50,104,0]Regular MediumTunePad
+[p2,90,104,4]Regular BrightPadTrance
+[p2,40,8,32]S.Art Ooh
+[p2,39,8,45]S.Art Daa
+[p2,39,8,41]S.Art Baa
+[p2,40,8,38]S.Art Doo
+[p2,39,8,32]S.Art Haa
+[p2,40,8,33]S.Art OohVibrato
+[p2,39,8,46]S.Art DaaVibrato
+[p2,39,8,42]S.Art BaaVibrato
+[p2,40,8,39]S.Art DooVibrato
+[p2,39,8,33]S.Art HaaVibrato
+[p2,40,8,42]S.Art Yoo
+[p2,93,104,0]Regular EarlyDigital
+[p2,101,104,7]Regular Digisweeper
+[p2,94,104,6]Regular MysticPad
+[p2,95,104,4]Regular DeepMotion
+[p2,40,8,43]S.Art YooVibrato
+[p2,95,104,6]Live! PadVoices
+[p2,101,104,1]Regular CrossPhase
+[p2,89,104,4]Regular NewAtmosphere
+[p2,95,104,2]Regular HotSwell
+[p2,95,104,1]Regular SpaceRider
+[p2,91,104,0]Regular BreathPad
+[p2,51,104,6]Regular ChillinChords
+[p2,50,104,3]Regular BrightPopPad
+[p2,50,104,1]Regular SoftEnsemble
+[p2,90,104,5]Regular BrightFatSaw
+[p2,89,0,122]Regular LitePad
+[p2,90,0,112]Regular PopPad
+[p2,101,104,6]Regular AllOrNothing
+[p2,51,104,3]Regular AnaDayz
+[p2,92,104,0]Regular WhisperGallery
+[p2,88,104,3]Regular GalaxyPad
+[p2,94,104,1]Regular Aerosphere
+[p2,94,104,3]Regular SoundPictures
+[p2,101,104,11]Regular Atlantis
+[p2,99,104,2]Regular NylonHeaven
+[p2,88,104,17]Regular AiryHarp
+[p2,55,8,39]S.Art Hoo-Wah SW
+[p2,55,8,56]S.Art Hoo-WeeAuto SW
+[p2,40,8,49]S.Art Ahh-OohAuto SW
+[p2,39,8,40]S.Art SoftWah
+[p2,52,104,15]Live! AahAccomp
+[p2,53,104,15]Live! OohAccomp
+[p2,55,8,48]S.Art Do-Be-Do-Be SW
+[p2,55,8,47]S.Art Shoo-Bee-Doo-Bah2 SW
+[g1]Synth
+[p2,80,104,28]Regular MiniClassic
+[p2,80,104,29]Regular MiniClassicVelo+
+[p2,80,104,30]Regular MiniClassicSoft
+[p2,80,104,31]Regular MiniClassicOpen
+[p2,80,104,27]Regular MiniClassicUnison
+[p2,80,104,35]Regular MiniSawVelo
+[p2,80,104,32]Regular StratusPulse
+[p2,80,104,33]Regular FunkyVeloMini
+[p2,80,104,25]Regular WireLeadMillennial
+[p2,80,104,34]Regular ClassicDiamonds
+[p2,80,104,26]Regular FusionWire
+[p2,80,104,36]Regular ScoopFanfare
+[p2,84,104,16]Regular DanceSurvivor
+[p2,84,104,17]Regular HyperTrance
+[p2,84,104,20]Regular TranceGates
+[p2,90,104,35]Regular MonsterVCOs
+[p2,83,104,11]Regular ChampArpeggio
+[p2,83,104,14]Regular MegaStack
+[p2,83,104,8]Regular PWM ChordArpeggio
+[p2,83,104,10]Regular PowerChords
+[p2,83,104,17]Regular ParisAtNight
+[p2,83,104,6]Regular PowerOfEmotion
+[p2,80,104,19]Regular TranceArpeggio
+[p2,84,104,19]Regular GreenFlash
+[p2,80,104,20]Regular DJ Montage
+[p2,80,104,21]Regular BigIncrease
+[p2,80,104,22]Regular TrancePicks
+[p2,80,104,23]Regular VA-Attacks
+[p2,80,104,24]Regular PearlyGates
+[p2,83,104,0]Regular VintageArpeggio
+[p2,83,104,12]Regular PWM UnisonArpeggio
+[p2,83,104,1]Regular PearlFishers
+[p2,83,104,13]Regular BigSpender
+[p2,83,104,2]Regular HouseOfChordz
+[p2,83,104,3]Regular SawEightDetune
+[p2,83,104,4]Regular PizzyDanceChords
+[p2,83,104,16]Regular FestivalOfHarmony
+[p2,83,104,7]Regular DreaminOfU
+[p2,83,104,15]Regular ThinkingOfYou
+[p2,83,104,9]Regular WaveDancer
+[p2,85,104,0]Regular GlassCeiling
+[p2,84,104,18]Regular FreakyDancer
+[p2,83,104,5]Regular BizzChordArpeggio
+[p2,81,104,41]Regular 80sArnoldLead
+[p2,81,104,42]Regular 80sBigLines
+[p2,81,104,43]Regular 80sSmartStack
+[p2,81,104,45]Regular 80sPitchySaw
+[p2,84,104,14]Regular 80sUnisonLead
+[p2,81,104,46]Regular 80sSmallPulse
+[p2,81,104,47]Regular 80sCheapModulation
+[p2,81,104,50]Regular 80sUnisonFat
+[p2,81,104,51]Regular 80sUnisonPoly
+[p2,87,104,42]Regular 80sInterlude
+[p2,80,104,18]Regular 80sBitSquareArp
+[p2,87,104,50]Regular 80sSawAttackArp
+[p2,80,104,16]Regular 80sLFO PulseLead
+[p2,90,104,19]Regular Crowds
+[p2,90,104,20]Regular Gemini
+[p2,90,104,21]Regular HandsUp!
+[p2,90,104,22]Regular StraightRaver
+[p2,90,104,23]Regular TranceArtist
+[p2,90,104,10]Regular NastySaw
+[p2,90,104,11]Regular GrowlingHook
+[p2,123,8,36]S.Art WheelTech JS
+[p2,81,0,120]Regular WireLead
+[p2,87,0,114]Regular CryingLead
+[p2,81,104,7]Regular PunchLead
+[p2,62,104,3]Regular ClubLead
+[p2,90,104,0]Regular HPF Dance
+[p2,81,104,9]Regular DancyHook
+[p2,81,104,20]Regular 1984Synth
+[p2,84,104,2]Regular LektroCodes
+[p2,86,104,2]Regular 80sUnisonFifth
+[p2,81,104,40]Regular 80sPowerEnvelope
+[p2,81,104,48]Regular 80sTakeMeOut
+[p2,81,104,49]Regular 80sPolyPop
+[p2,87,104,37]Regular 80sResoPercSynth
+[p2,87,104,39]Regular 80sBellSynthStick
+[p2,87,104,40]Regular 80sPercSynth&Bell
+[p2,80,104,17]Regular 80sSmallPulsePoly
+[p2,87,104,43]Regular 80s5thDigiSequence
+[p2,87,104,44]Regular 80sGlassyComp
+[p2,87,104,47]Regular 80sSharpPerc
+[p2,87,104,48]Regular 80sShortStepper
+[p2,87,104,49]Regular 80sSyncMove
+[p2,87,104,38]Regular 80sPunchySynth
+[p2,87,104,45]Regular 80sWoodenArp
+[p2,87,104,41]Regular 80sStaccatoComp
+[p2,84,104,8]Regular PitchyPatch
+[p2,84,104,9]Regular SoftChordSynth
+[p2,88,104,26]Regular SquareStepz
+[p2,88,104,28]Regular TriPicks
+[p2,88,104,29]Regular Cracky
+[p2,88,104,6]Regular BalladComp
+[p2,88,104,7]Regular BrightPadBell
+[p2,84,104,15]Regular 80sFM Polystar
+[g1]Perc.&Drums
+[p2,11,104,1]Sweet! Vibraphone
+[p2,13,104,0]Regular Xylophone
+[p2,12,104,0]Regular Marimba
+[p2,46,104,1]Regular OrchestralHarp
+[p2,114,0,112]Regular SteelDrums
+[p2,17,127,0]Live!Drums RockDrumKit
+[p2,73,127,0]Live!Drums PopDrumKit
+[p2,74,127,0]Live!Drums VintageOpenKit
+[p2,77,127,0]Live!Drums VintageMutedKit
+[p2,78,127,0]Live!Drums JazzStickKit
+[p2,9,104,0]Regular Glockenspiel
+[p2,8,0,112]Regular Celesta
+[p2,10,0,112]Regular MusicBox
+[p2,46,104,0]Regular MellowHarp
+[p2,14,0,112]Regular TubularBells
+[p2,76,127,0]Live!Drums JazzBrushExpanded
+[p2,75,127,0]Live!Drums JazzBrushKitComp
+[p2,42,126,0]Live!SFX AfroCubanKit
+[p2,119,126,0]Live!SFX BrazilianKit
+[p2,45,126,0]Live!SFX PopPercussionKit
+[p2,47,0,112]Regular Timpani
+[p2,108,0,112]Regular Kalimba
+[p2,107,0,113]Regular Kanoun
+[p2,15,0,112]Regular Dulcimer
+[p2,107,0,112]Regular Koto
+[p2,69,127,0]Drums EDM Kit
+[p2,66,127,0]Drums 80sPopKit
+[p2,67,127,0]Drums 80sR&B Kit
+[p2,68,127,0]Drums DubstepKit
+[p2,70,127,0]Drums ElectroKit
+[p2,11,0,114]Regular Vibes&Flutes
+[p2,11,8,33]S.Art Vibes&JazzGuitar
+[p2,55,0,112]Regular OrchestraHit
+[p2,109,126,0]Live!SFX VocalEffectsKit
+[p2,106,126,0]Live!SFX VocalBeatbox
+[p2,46,126,0]Live!SFX PopLatinKit2Comp
+[p2,67,126,0]Live!SFX TurkishKit
+[p2,114,126,0]SFX IndianKit
+[p2,36,126,0]SFX ArabicKit1
+[p2,64,126,0]SFX ArabicMixKit
+[p2,124,126,0]SFX ChineseKit
+[p2,127,127,0]Drums ChineseMixKit
+[p2,40,126,0]Live!SFX CubanKit
+[p2,43,126,0]Live!SFX PopLatinKit1
+[p2,44,126,0]Live!SFX PopLatinKit2
+[p2,72,127,0]Drums SchlagerKit
+[p2,71,127,0]Drums TrapKit
+[p2,20,126,0]SFX BassDrumKit
+[p2,91,127,0]Live!Drums RealDrumKit
+[p2,41,127,0]Live!Drums RealBrushesKit
+[p2,89,127,0]Live!Drums AcousticKit
+[p2,90,127,0]Live!Drums RockKit
+[p2,86,127,0]Live!Drums StudioKit
+[p2,87,127,0]Live!Drums PowerKit1
+[p2,88,127,0]Live!Drums PowerKit2
+[p2,8,127,0]Drums RoomKit
+[p2,32,127,0]Drums JazzKit
+[p2,0,127,0]Live!Drums StandardKit
+[p2,58,127,0]Drums AnalogT8Kit
+[p2,59,127,0]Drums AnalogT9Kit
+[p2,57,127,0]Drums BreakKit
+[p2,56,127,0]Drums HipHopKit
+[p2,27,127,0]Drums DanceKit
+[p2,25,127,0]Drums AnalogKit
+[p2,60,127,0]Drums HouseKit
+[p2,61,127,0]Drums DrumMachine
+[p2,4,127,0]Drums HitKit
+[p2,21,126,0]SFX ReverseBD Kit
+[p2,48,127,0]Live!Drums SymphonyKit
+[p2,110,126,0]Live!SFX GospelAdLibs
+[p2,2,126,0]Live!SFX NewSFX Kit1
+[p2,3,126,0]Live!SFX NewSFX Kit2
+[g1]Legacy
+[g2]Piano
+[p3,0,0,122]S.Art ConcertGrand1
+[p3,0,0,115]Live! ConcertGrand2
+[p3,0,0,113]Live! GrandPiano
+[p3,1,0,112]Live! BrightPiano
+[p3,0,104,3]Live! AmbientPiano
+[p3,3,104,0]Live! CocktailPiano
+[p3,0,104,5]Live! PopGrand
+[p3,0,104,4]Live! RockPiano
+[p3,0,0,114]Live! WarmGrand
+[p3,3,0,112]Regular HonkyTonk
+[p3,3,0,113]Live! OctavePiano1
+[p3,3,0,114]Live! OctavePiano2
+[p3,2,104,2]S.Art MIDI Grand1
+[p3,2,104,0]Live! MIDI Grand2
+[p3,2,0,112]Regular MIDI Grand3
+[p3,2,104,3]S.Art MIDI GrandPad1
+[p3,2,104,1]Live! MIDI GrandPad2
+[p3,0,104,8]S.Art MIDI GrandSyn1
+[p3,0,104,1]Live! MIDI GrandSyn2
+[p3,0,104,12]S.Art Piano&Orchestra
+[p3,0,104,2]Live! PianoOrchestra
+[p3,99,104,3]Regular PianoSweeper
+[p3,6,0,112]Live! Harpsichord
+[g2]E.Piano
+[p3,2,0,114]Regular BalladStack
+[p3,5,0,120]Regular ChorusBell
+[p3,4,0,119]Cool! ElectricPiano
+[p3,4,0,112]Regular FunkEP
+[p3,5,0,113]Regular HyperTines
+[p3,5,0,118]Regular JazzChorus
+[p3,5,0,115]Regular ModernEP
+[p3,5,0,116]Regular NewTines
+[p3,4,0,120]Regular PhaseEP
+[p3,5,0,119]Regular SmoothTine
+[p3,4,0,117]Regular StageEP
+[p3,4,0,118]Cool! SuitcaseEP
+[p3,4,0,113]Cool! TremoloSuitcase
+[p3,4,104,8]Cool! VintageEP1
+[p3,4,0,116]Regular VintageEP2
+[p3,4,104,15]Cool! VintageEP Drive
+[p3,2,0,113]Regular CP80 Stage
+[p3,5,0,112]Regular DX Modern
+[p3,4,0,114]Cool! GalaxyEP
+[p3,4,0,115]Regular PolarisEP
+[p3,5,0,117]Regular SuperDX
+[p3,5,0,114]Regular VenusEP
+[p3,7,0,112]Regular ClaviBright
+[p3,7,0,115]Regular PhaseClavi
+[p3,7,0,114]Regular StereoClavi
+[p3,7,0,113]Regular WahClavi
+[g2]Organ
+[p3,113,8,33]S.Art RockOrgan JS
+[p3,18,104,0]Cool! AllBarsOutFast
+[p3,18,104,1]Cool! AllBarsOutSlow
+[p3,18,104,2]Cool! AllBarsPhase
+[p3,16,0,116]Regular BrightDrawbar
+[p3,17,0,112]Regular ClickOrgan
+[p3,17,0,113]Regular DanceOrgan
+[p3,17,0,120]Regular DrawbarOrgan1
+[p3,16,0,115]Regular DrawbarOrgan2
+[p3,17,0,118]Regular ElectricOrgan
+[p3,18,104,3]Cool! FullRocker1
+[p3,18,0,115]Cool! FullRocker2
+[p3,16,0,119]Regular GospelOrgan
+[p3,17,0,111]Cool! HoldItFast
+[p3,17,0,127]Cool! JazzFast
+[p3,16,0,112]Regular JazzOrgan1
+[p3,16,0,113]Regular JazzOrgan2
+[p3,16,0,120]Regular JazzOrgan3
+[p3,17,0,126]Cool! JazzSlow
+[p3,17,0,115]Regular MellowVintage
+[p3,17,0,119]Regular PercOrgan
+[p3,18,0,114]Regular PurpleOrgan
+[p3,18,0,112]Regular RockOrgan1
+[p3,18,0,119]Regular RockOrgan2
+[p3,18,0,113]Regular RockOrgan3
+[p3,18,0,111]Cool! R&B TremoloOrgan
+[p3,18,0,116]Regular RotaryDriveOrgan
+[p3,18,0,117]Cool! RotaryOrgan
+[p3,17,0,110]Cool! RotarySwitch
+[p3,17,0,109]Cool! TwoChannels
+[p3,17,104,0]Cool! WhiterBarsFast
+[p3,17,104,1]Cool! WhiterBarsSlow
+[p3,3,0,115]Regular BallroomOrgan
+[p3,16,0,118]Regular EuroOrgan
+[p3,18,0,127]Regular FullTheatre
+[p3,16,0,123]Regular Kinura8'
+[p3,20,0,112]Regular ReedOrgan
+[p3,18,0,126]Regular SweetTheatre
+[p3,17,104,6]Regular Tibia8'
+[p3,17,0,122]Regular Tibia8'Accomp
+[p3,16,104,9]Regular Tibia8'&4'
+[p3,16,0,122]Regular Tibia8'&4'Accomp
+[p3,16,104,8]Regular Tibia16'&4'
+[p3,16,0,114]Regular Tibia16'&4'Accomp
+[p3,17,104,5]Regular TibiaChorus
+[p3,17,0,114]Regular TibiaFullAccomp
+[p3,17,0,125]Regular Trumpet&Kinura
+[p3,17,0,124]Regular Trumpet16'&8'
+[p3,16,104,10]Regular Vox&Tibia
+[p3,16,0,125]Regular Vox&TibiaAccomp
+[p3,17,0,123]Regular Vox8'Accomp
+[p3,17,104,7]Regular VoxHumana8'
+[p3,19,0,112]Regular FullOrgan
+[p3,19,0,114]Regular HymnOrgan
+[p3,17,0,116]Regular 60sOrgan
+[p3,16,0,126]OrganFlutes ClassicJazz
+[p3,8,10,0]OrganFlutes OrganFlutes
+[p3,8,10,1]OrganFlutes UpsideDownSmile
+[p3,8,10,2]OrganFlutes ReggaeBars
+[p3,8,10,3]OrganFlutes WarmTheatre
+[p3,8,10,4]OrganFlutes OrganPops
+[p3,8,10,5]OrganFlutes RockOrgan
+[p3,8,10,6]OrganFlutes SoulPercussion
+[p3,8,10,7]OrganFlutes GospelTruth
+[p3,8,10,8]OrganFlutes PadOrgan
+[p3,8,10,9]OrganFlutes FullOrgan
+[p3,9,10,0]OrganFlutes StringBars
+[p3,9,10,1]OrganFlutes LatinSpin
+[p3,9,10,2]OrganFlutes ShadyBars
+[p3,9,10,3]OrganFlutes FunkOrgan
+[p3,9,10,4]OrganFlutes BalladOrgan
+[p3,9,10,5]OrganFlutes RichBars
+[p3,9,10,6]OrganFlutes TrumpetBars
+[p3,9,10,7]OrganFlutes SoulBars
+[p3,9,10,8]OrganFlutes ClariBars
+[p3,9,10,9]OrganFlutes JazzSquabble
+[p3,10,10,0]OrganFlutes EuroPerc
+[p3,10,10,1]OrganFlutes BalladEuro
+[p3,10,10,2]OrganFlutes EuroReeds
+[p3,10,10,3]OrganFlutes EvenWarmth
+[p3,10,10,4]OrganFlutes BrightEuro
+[p3,10,10,5]OrganFlutes EuroPops
+[p3,10,10,6]OrganFlutes FullEuro
+[p3,10,10,7]OrganFlutes EuroAccomp1
+[p3,10,10,8]OrganFlutes EuroAccomp2
+[p3,10,10,9]OrganFlutes EuroAccomp3
+[g2]Accordion
+[p3,21,0,116]Regular Accordion
+[p3,21,0,121]Regular AccordionBass
+[p3,23,0,112]Regular BallroomAccordion
+[p3,21,104,0]Regular Cassotto
+[p3,21,0,119]Regular FrenchMusette
+[p3,21,104,2]Regular FullRegister
+[p3,21,104,5]Regular FullRegisterBass
+[p3,21,0,120]Regular JazzAccordion
+[p3,21,0,122]Regular MasterBass
+[p3,21,0,112]Regular MusetteAccordion
+[p3,21,0,123]Regular MusetteBass
+[p3,21,0,115]Regular SmallAccordion
+[p3,21,0,114]Regular SoftAccordion
+[p3,21,0,117]Regular Steirische
+[p3,21,0,113]Regular TuttiAccordion
+[g2]Strings
+[p3,40,0,113]Sweet! Violin
+[p3,40,0,112]Regular SoloViolin
+[p3,110,0,112]Regular Fiddle
+[p3,41,0,112]Regular Viola
+[p3,42,0,112]Regular Cello
+[p3,43,8,34]S.Art Classic1stVns
+[p3,44,8,34]S.Art Classic2ndVns
+[p3,45,8,34]S.Art ClassicViolas
+[p3,46,8,34]S.Art ClassicCellos
+[p3,43,0,112]Regular Contrabass
+[p3,49,8,40]S.Art SeattleStrings f
+[p3,49,104,4]Live! SeattleStrings f
+[p3,49,8,41]S.Art SeattleStrings mf
+[p3,49,104,5]Live! SeattleStrings mf
+[p3,49,8,42]S.Art SeattleStrings p
+[p3,49,104,6]Live! SeattleStrings p
+[p3,44,104,1]Live! SeattleStrings sfz
+[p3,48,8,43]S.Art SeattleStringsPad
+[p3,49,0,122]Live! Allegro
+[p3,49,8,34]S.Art BalladStrings
+[p3,48,8,40]S.Art BigStrings
+[p3,48,0,116]Regular BowStrings
+[p3,49,0,112]Regular ChamberStrings
+[p3,48,0,115]Regular ConcertoStrings
+[p3,49,8,32]S.Art ConcertStrings
+[p3,48,0,124]Live! DynamicStrings
+[p3,48,0,123]Live! MovieStrings
+[p3,49,0,116]Live! OrchestraStrings1
+[p3,48,0,113]Regular OrchestraStrings2
+[p3,49,0,113]Regular SlowStrings
+[p3,48,0,121]Live! StringFalls
+[p3,49,0,114]Regular StringQuartet
+[p3,48,0,119]Live! Strings f
+[p3,48,0,118]Live! Strings mf
+[p3,48,0,117]Live! Strings p
+[p3,48,0,112]Regular Strings
+[p3,49,0,117]Live! StringsPad
+[p3,48,8,32]S.Art StudioStrings
+[p3,48,0,114]Regular Symphonic
+[p3,48,8,37]S.Art TheatreStrings
+[p3,49,0,115]Regular Marcato
+[p3,45,0,112]Regular Pizzicato
+[p3,48,8,33]S.Art SpiccatoStrings1
+[p3,48,0,120]Live! SpiccatoStrings2
+[p3,48,8,34]S.Art TremoloBowing JS
+[p3,44,0,113]Live! TremoloStrings1
+[p3,44,0,112]Regular TremoloStrings2
+[p3,49,0,119]Regular Orchestra&Flute
+[p3,49,0,121]Regular Orchestra&Oboe
+[p3,49,0,118]Regular Orchestra&Horns
+[p3,49,104,0]Regular SymphonicUnison
+[g2]Brass
+[p3,56,0,122]Sweet! GoldenTrumpet2
+[p3,56,0,121]Sweet! SilverTrumpet2
+[p3,56,0,120]Sweet! MellowTrumpet
+[p3,56,0,112]Regular SoloTrumpet
+[p3,56,0,116]Regular JazzTrumpet
+[p3,64,8,38]S.Art TrumpetFall JS
+[p3,64,8,35]S.Art TrumpetShake JS
+[p3,56,0,115]Sweet! Trumpet
+[p3,59,0,112]Regular MutedTrumpet2
+[p3,56,0,113]Regular Flugelhorn2
+[p3,57,0,114]Regular MellowTrombone
+[p3,57,0,118]Regular SmoothTrombone
+[p3,57,0,115]Regular SoftTrombone
+[p3,57,0,112]Regular SoloTrombone
+[p3,57,0,116]Regular Trombone2
+[p3,33,0,113]Regular AlpBass
+[p3,58,0,114]Regular BaritoneHit
+[p3,58,0,113]Regular BaritoneHorn
+[p3,58,0,112]Regular Tuba2
+[p3,60,0,112]Live! FrenchHorns
+[p3,61,0,119]Regular MellowHorns
+[p3,60,8,34]S.Art MutedHorns
+[p3,60,0,117]Live! SoftHorns
+[p3,60,0,115]Live! SymphonyHorns2
+[p3,60,0,118]Live! SoftTrombones
+[p3,57,0,113]Regular TromboneSection
+[p3,61,0,109]Live! AccentBrass
+[p3,56,8,38]S.Art AccentFalls JS
+[p3,59,0,113]Regular BallroomBrass
+[p3,61,0,113]Regular BigBandBrass
+[p3,61,0,108]Live! Brass f
+[p3,61,0,110]Live! Brass mf
+[p3,61,0,111]Live! Brass p
+[p3,61,0,121]Regular BigBrass
+[p3,56,0,123]Live! BrassBand2
+[p3,66,0,115]Regular BrassCombo
+[p3,61,0,106]Live! BrassDynamics
+[p3,56,8,35]S.Art BrassFalls mf JS
+[p3,61,0,112]Regular BrassSection
+[p3,60,0,116]Regular BreathBrass
+[p3,61,0,120]Regular BrightBrass
+[p3,61,0,127]Live! DynamicBrass
+[p3,61,0,114]Regular FullHorns
+[p3,61,0,115]Regular HighBrass
+[p3,62,0,118]Live! HyperBrass
+[p3,61,0,124]Regular NaturalBrass
+[p3,62,0,116]Live! OctaveBrass
+[p3,62,0,117]Live! PopBrass
+[p3,56,8,32]S.Art BrassShake JS
+[p3,62,0,121]Live! PowerBrass
+[p3,61,0,105]Live! Sforzando1
+[p3,61,0,125]Regular Sforzando2
+[p3,60,0,120]Live! SmallBrass1
+[p3,61,0,117]Regular SmallBrass2
+[p3,61,0,123]Regular SoftBrass
+[p3,60,0,119]Live! SymphonyBrass2
+[p3,61,0,122]Regular TrumpetEns
+[p3,61,0,126]Regular BrassHit
+[p3,62,0,113]Regular 80sBrass
+[p3,63,0,116]Regular FatSynthBrass
+[p3,62,0,115]Regular FunkyAnalog
+[p3,62,0,119]Regular HybridComp
+[p3,60,0,113]Regular Hybrihorn
+[p3,60,0,114]Regular Hybripad
+[p3,61,0,116]Regular MellowBrass
+[p3,63,0,113]Regular OberBrass
+[p3,61,0,118]Regular PopBrass
+[p3,63,0,114]Regular SoftAnalog
+[p3,62,0,120]Regular SoftVelocityBrass
+[p3,62,0,112]Regular SynthBrass
+[g2]Woodwind
+[p3,73,104,0]Sweet! OrchestralFlute2
+[p3,73,0,112]Regular Flute
+[p3,68,104,0]Sweet! OrchestralOboe
+[p3,68,0,112]Regular Oboe
+[p3,71,0,114]Sweet! JazzClarinet
+[p3,71,0,112]Regular Clarinet2
+[p3,70,0,112]Regular Bassoon
+[p3,64,0,112]Regular SopranoSax2
+[p3,65,0,114]Sweet! AltoSax2
+[p3,65,0,112]Regular AltoSax3
+[p3,65,104,0]Sweet! PopAltoSax
+[p3,66,0,127]Sweet! PopTenorSax
+[p3,82,8,33]S.Art RockSax JS
+[p3,82,8,32]S.Art Saxophone
+[p3,66,104,0]Sweet! Saxophone2
+[p3,66,0,118]Regular GrowlSax2
+[p3,66,0,117]Sweet! TenorSax2
+[p3,66,0,112]Regular TenorSax3
+[p3,66,0,125]Sweet! SweetTenorSax
+[p3,67,0,112]Regular BaritoneSax2
+[p3,66,0,113]Regular WoodwindsEns
+[p3,66,0,119]Regular BalladSection
+[p3,66,0,123]Live! SaxAppeal
+[p3,66,0,124]Regular SaxStack
+[p3,66,0,120]Regular SaxyMood
+[p3,73,0,113]Regular ChiffPanFlute
+[p3,75,0,112]Regular EthnicFlute
+[g2]Choir
+[p3,55,8,43]S.Art BaroqueScat SW
+[p3,52,104,4]Live! BeeVibrato
+[p3,52,104,12]Live! Baa
+[p3,52,104,13]Live! Daa
+[p3,53,104,16]Live! Doo
+[p3,52,104,9]Live! Haa
+[p3,53,104,17]Live! Ooh
+[p3,52,104,10]Live! Wah
+[p3,53,104,18]Live! Yoo
+[p3,52,104,8]Live! BoysChoirAah
+[p3,53,104,8]Live! BoysChoirOoh
+[p3,53,104,12]Live! GospelHmm
+[p3,52,104,7]Live! GospelHey
+[p3,53,104,13]Live! GospelWow
+[p3,52,0,116]Live! GospelVoices
+[p3,52,0,117]Live! Mmh
+[p3,54,0,112]Regular AirChoir
+[p3,52,0,114]Regular HahChoir
+[p3,52,0,115]Regular UuhChoir
+[p3,53,0,113]Regular GothicVox
+[p3,52,0,112]Regular Choir
+[p3,54,0,113]Regular Voices
+[p3,52,0,118]Live! Humming
+[p3,53,0,112]Regular VoxHumana
+[g2]A.Guitar
+[p3,24,0,115]Live! ClassicalGuitar
+[p3,24,0,116]Live! DynamicNylonGt
+[p3,24,0,119]Live! NylonGuitarMute
+[p3,24,0,117]Live! NylonGuitarSlide
+[p3,0,8,33]S.Art FlamencoGuitar2
+[p3,24,0,118]Live! HardFlamenco
+[p3,25,104,9]Live! SpanishGuitarSlide
+[p3,25,0,115]Regular CampfireGuitar
+[p3,25,0,116]Live! DynamicSteelGt
+[p3,1,8,33]S.Art FolkGtHarmonics SW
+[p3,25,0,112]Regular FolkGuitar
+[p3,25,104,10]Live! SteelAcoustic
+[p3,1,8,32]S.Art SteelGuitar1
+[p3,25,0,117]Live! SteelGuitar2
+[p3,25,0,120]Live! SteelGuitarMute
+[p3,25,0,118]Live! SteelGuitarSlide
+[p3,25,104,12]Live! SteelGuitarTwin1
+[p3,25,104,13]Live! SteelGuitarTwin2
+[p3,25,0,113]Live! 12StringGuitar
+[p3,25,0,119]Regular 18StringGuitar
+[p3,104,0,112]Regular Sitar3
+[p3,25,0,114]Sweet! Mandolin2
+[g2]E.Guitar
+[p3,27,0,117]Regular 60sCleanGuitar
+[p3,3,8,38]S.Art 70sSolidGuitar
+[p3,27,104,1]Cool! 70sSolidGuitar
+[p3,27,0,109]Cool! BalladSolid
+[p3,27,0,116]Regular BrightClean
+[p3,27,0,124]Regular ChorusGuitar
+[p3,27,0,107]Cool! ChorusSolid
+[p3,3,8,35]S.Art CleanElectric SW
+[p3,27,0,112]Cool! CleanGuitar
+[p3,3,8,34]S.Art CleanSolidGuitar
+[p3,27,104,3]Cool! CleanSolidGuitar2
+[p3,27,104,4]Regular CoolWahGuitar
+[p3,27,0,114]Regular DeepChorus
+[p3,28,0,115]Regular 50sVintageMute
+[p3,28,0,118]Cool! DynamicMute
+[p3,27,0,119]Regular Electric12String
+[p3,28,0,114]Cool! ElectricGuitar
+[p3,28,0,116]Cool! FunkGuitar1
+[p3,28,0,113]Regular FunkGuitar2
+[p3,28,0,119]Cool! MutedGuitar1
+[p3,28,0,112]Regular MutedGuitar2
+[p3,27,104,0]Cool! Slapback
+[p3,27,0,108]Cool! SlapSolid
+[p3,28,0,117]Cool! SlideClean
+[p3,27,104,5]Cool! SlideFinger
+[p3,27,104,7]Cool! SlidePick
+[p3,27,104,8]Cool! SlidePickAmp
+[p3,27,0,110]Cool! SlideSolid
+[p3,27,104,6]Cool! SlideWarm
+[p3,27,0,121]Regular SolidChord
+[p3,27,0,118]Regular SolidGuitar
+[p3,27,0,113]Regular TremoloGuitar
+[p3,27,0,111]Cool! TremoloSolid
+[p3,3,8,40]S.Art VintageAmpGuitar
+[p3,28,104,0]Cool! VintageMuteGuitar
+[p3,27,0,123]Regular VintageOpenGuitar
+[p3,3,8,47]S.Art VintagePureGuitar
+[p3,3,8,48]S.Art VintageSlapGuitar
+[p3,27,0,126]Regular VintageStrumGuitar
+[p3,27,0,120]Regular VintageTremGuitar
+[p3,27,0,122]Regular WahGuitar
+[p3,3,8,32]S.Art WarmElectric SW
+[p3,3,8,33]S.Art WarmSolidGuitar
+[p3,27,104,2]Cool! WarmSolid
+[p3,26,0,117]Regular DX JazzGuitar
+[p3,26,0,115]Cool! JazzGuitar
+[p3,26,0,116]Cool! JazzSoloGuitar
+[p3,26,104,1]Regular LoungeGuitar
+[p3,26,0,113]Regular OctaveGuitar
+[p3,26,104,0]Cool! SlideJazzGuitar
+[p3,29,0,117]Cool! BluesGuitar
+[p3,30,0,113]Regular CrunchGuitar
+[p3,30,0,112]Regular DistortionGuitar
+[p3,4,8,33]S.Art Feedbacker JS
+[p3,29,0,113]Regular FeedbackGuitar
+[p3,5,8,32]S.Art GuitarHero
+[p3,30,104,0]Cool! GuitarHero2
+[p3,30,104,1]Cool! HeavyRock
+[p3,30,0,114]Regular HeavyStack
+[p3,30,0,120]Regular MetalMaster
+[p3,30,0,117]Regular PowerChord
+[p3,30,0,115]Cool! PowerLead
+[p3,30,104,2]Cool! StereoRockGuitar
+[p3,30,0,116]Regular VodooLead
+[p3,5,8,33]S.Art CrunchGuitar
+[p3,3,8,37]S.Art HalfDriveGuitar
+[p3,29,104,0]Cool! HalfDriveGuitar2
+[p3,29,0,114]Regular LeadGuitar
+[p3,29,0,112]Regular OverdriveGuitar
+[p3,29,0,116]Regular RockGuitar
+[p3,26,0,119]Regular SmoothLead
+[p3,29,0,115]Regular VintageAmpGuitar2
+[p3,27,0,125]Cool! VintageLeadGuitar
+[p3,3,8,52]S.Art PedalSteelAmp
+[p3,3,8,36]S.Art PedalSteelGuitar3
+[p3,27,0,115]Regular PedalSteelGuitar4
+[g2]Bass
+[p3,33,104,2]Cool! VintageFlatBass2
+[p3,33,104,3]Cool! VintageMuteBass2
+[p3,34,104,0]Cool! VintagePickMute
+[p3,33,104,1]Cool! VintageRoundBass2
+[p3,36,0,112]Regular SlapBass
+[p3,35,0,112]Cool! FretlessBass2
+[p3,32,104,1]Regular AcousticBass2
+[p3,32,0,112]Regular AcousticBass3
+[p3,32,104,0]Regular BallroomBass
+[p3,32,104,2]Regular SoftAcousticBass2
+[p3,32,0,114]Regular Bass&Cymbal
+[p3,37,0,113]Regular DX FunkBass
+[p3,39,0,118]Regular DX100 Bass
+[p3,38,104,5]Regular 1o1Sub
+[p3,39,0,115]Regular 80sSynthBass
+[p3,39,0,112]Regular AnalogBass
+[p3,39,104,7]Regular BalladBass
+[p3,38,0,118]Regular BigDrone
+[p3,39,0,122]Regular BleepBass
+[p3,38,0,115]Regular ClickBass
+[p3,17,104,27]Regular ClickOrganBass
+[p3,38,104,2]Regular ClubBass
+[p3,38,104,4]Regular Competitor
+[p3,39,104,1]Regular DarkBass
+[p3,39,0,120]Regular DarkCoreBass
+[p3,38,104,3]Regular DeepPoint
+[p3,39,0,116]Regular DrySynthBass
+[p3,38,104,10]Regular DynoAcidBass
+[p3,38,0,119]Regular FatLoBass
+[p3,39,104,2]Regular FatPulse
+[p3,38,104,11]Regular FatSineResonance
+[p3,39,0,121]Regular FunkBass
+[p3,38,0,114]Regular HardBass
+[p3,38,0,113]Regular HiQ Bass
+[p3,38,0,116]Regular HouseBass
+[p3,38,104,1]Regular KickBass
+[p3,38,104,6]Regular LittleBassSynth
+[p3,39,104,0]Regular LoBass
+[p3,39,104,6]Regular MiniSub
+[p3,38,104,0]Regular MoonBass
+[p3,38,104,8]Regular PercPunch
+[p3,38,0,117]Regular PunchyBass
+[p3,39,0,119]Regular RampBass
+[p3,38,0,112]Regular ResonanceBass
+[p3,39,0,117]Regular SawBass
+[p3,39,104,4]Regular SquareBass
+[p3,39,104,5]Regular SubCutBass
+[p3,38,104,7]Regular TeknoBass
+[p3,39,104,3]Regular TightBass
+[p3,38,104,9]Regular TranceBass
+[p3,81,104,17]Regular VelocityMaster
+[p3,80,104,3]Regular WazzoSaw
+[g2]Percussion
+[p3,11,0,113]Regular JazzVibes
+[p3,11,0,112]Regular Vibraphone2
+[p3,12,0,112]Regular Marimba3
+[p3,13,0,112]Regular Xylophone2
+[p3,9,0,112]Regular Glockenspiel2
+[p3,46,0,112]Regular Harp
+[g2]Pad
+[p3,51,104,1]Regular 80sPad
+[p3,95,0,119]Regular AnalogSwell
+[p3,98,0,114]Regular AngelVibes
+[p3,89,0,112]Regular Area51
+[p3,89,104,6]Regular Atmo5th
+[p3,99,0,112]Regular Atmosphere
+[p3,88,0,119]Regular BellHeaven
+[p3,88,104,5]Regular Bellsphere
+[p3,90,0,115]Regular BigOctavePad
+[p3,95,0,113]Regular BrightOber
+[p3,90,104,3]Regular BrightPadClassic
+[p3,90,0,113]Regular BrightSawPad
+[p3,99,0,113]Regular CyberPad
+[p3,89,0,121]Regular DarkAngelPad
+[p3,89,0,113]Regular DarkMoon
+[p3,95,0,118]Regular DarkPad
+[p3,93,0,115]Regular DigitalPad
+[p3,89,0,116]Regular Disclosure
+[p3,88,0,121]Regular DreamHeaven
+[p3,89,0,114]Regular Dunes
+[p3,92,0,112]Regular DX Pad
+[p3,94,0,112]Regular Equinox
+[p3,101,0,117]Regular EveningStars
+[p3,88,0,112]Regular Fantasia
+[p3,97,0,112]Regular FarEast
+[p3,99,104,1]Regular FlyingHarmonics
+[p3,93,0,114]Regular GlassPad
+[p3,90,0,114]Regular GloriousPhase
+[p3,88,0,115]Regular GoldenAge
+[p3,94,0,116]Regular HahPad
+[p3,95,0,114]Regular HipaStrings
+[p3,88,104,22]Regular HybridPad
+[p3,94,0,113]Regular Insomnia
+[p3,94,0,115]Regular Ionosphere
+[p3,4,104,0]Regular Magnetics
+[p3,99,0,114]Regular Mediterrain
+[p3,95,0,117]Regular MellowPad
+[p3,95,0,116]Regular Messenger
+[p3,101,104,3]Regular MidnightSpecial
+[p3,88,0,117]Regular Millennium
+[p3,97,0,113]Regular Mystery
+[p3,89,0,115]Regular NeoWarmPad
+[p3,88,104,4]Regular NightMotion
+[p3,99,104,0]Regular NylonPad
+[p3,95,0,115]Regular OberSweep
+[p3,88,0,120]Regular PanHeaven
+[p3,88,104,2]Regular PearlsPad
+[p3,51,104,0]Regular PremiumPad
+[p3,88,0,122]Regular ProHeaven
+[p3,101,0,118]Regular PsychoPad
+[p3,101,0,112]Regular Skydiver
+[p3,94,0,114]Regular Solaris
+[p3,88,0,114]Regular Stargate
+[p3,88,0,123]Regular Sunbeam
+[p3,89,0,119]Regular SuperDarkPad
+[p3,88,0,118]Regular SweetHeaven
+[p3,88,0,113]Regular Symbiont
+[p3,89,104,1]Regular VaporPad
+[p3,95,0,112]Regular Wave2001
+[p3,91,0,112]Regular XenonPad
+[p3,101,0,113]Regular Bubblespace
+[p3,120,8,32]S.Art MagicBell
+[p3,101,104,8]Regular MetallicRain
+[p3,101,104,5]Regular MyGeneration
+[p3,89,104,5]Regular RainyDay
+[p3,101,104,10]Regular Randomizer
+[p3,88,104,21]Regular ReflectingZone
+[p3,101,0,115]Regular S&H Groove
+[p3,101,0,114]Regular Sirius
+[p3,101,104,2]Regular SixthSense
+[p3,94,104,4]Regular Spectralis
+[p3,101,104,9]Regular TheFog
+[p3,88,0,116]Regular TimeTravel
+[p3,97,104,2]Regular Tric-Trac
+[p3,101,0,116]Regular VelocityAshrami
+[p3,94,104,2]Regular WarpedWaves
+[p3,101,104,4]Regular WaterGames
+[g2]Synth
+[p3,84,0,113]Regular Adrenaline
+[p3,83,0,112]Regular AeroLead
+[p3,81,0,115]Regular Analogon
+[p3,81,0,126]Regular AttackSaw
+[p3,81,0,113]Regular BigLead
+[p3,81,0,114]Regular Blaster
+[p3,84,104,0]Regular BleepLead
+[p3,62,104,5]Regular BrassyLead
+[p3,80,0,125]Regular BrightMini
+[p3,81,104,10]Regular ChorusSawLead
+[p3,123,8,34]S.Art CoolHiPa JS
+[p3,90,104,17]Regular Cyclist
+[p3,51,104,5]Regular DanceChords
+[p3,86,0,112]Regular DanceHook
+[p3,81,104,8]Regular DetunedSawOctave
+[p3,84,104,1]Regular DetunedVintage
+[p3,81,0,118]Regular EarlyLead
+[p3,51,104,4]Regular FaaatComp
+[p3,81,0,119]Regular Fargo
+[p3,51,104,7]Regular FatSawHook
+[p3,81,0,116]Regular FireWire
+[p3,81,104,2]Regular FlangeFilter
+[p3,81,0,121]Regular FunkyLead
+[p3,81,104,15]Regular FusionLead
+[p3,80,0,116]Regular HiBias
+[p3,84,0,118]Regular HipaLead
+[p3,80,0,113]Regular HipLead
+[p3,80,0,117]Regular HopLead
+[p3,90,104,15]Regular LoonyLead
+[p3,80,0,114]Regular MiniLead
+[p3,81,104,0]Regular MouthLead
+[p3,81,0,123]Regular Nexus
+[p3,123,8,35]S.Art NuLine JS
+[p3,86,0,113]Regular OctaveHook
+[p3,81,0,122]Regular Oxygen
+[p3,80,0,122]Regular PanLead
+[p3,84,0,114]Regular Paraglide
+[p3,80,0,120]Regular PopLead
+[p3,84,0,112]Regular Portatone
+[p3,83,0,113]Regular ProLead
+[p3,90,104,24]Regular PunchyChordz
+[p3,81,0,127]Regular PunchyHook
+[p3,81,104,1]Regular PWM Lead
+[p3,123,8,37]S.Art Redoubling JS
+[p3,81,0,124]Regular Robolead
+[p3,81,0,112]Regular SawLead
+[p3,84,0,115]Regular Skyline
+[p3,80,0,124]Regular SoftMini
+[p3,80,0,119]Regular SoftR&B
+[p3,81,104,16]Regular SoftSaw
+[p3,80,104,5]Regular SoftSquare
+[p3,80,0,112]Regular SquareLead
+[p3,123,8,32]S.Art SquareStack JS
+[p3,80,104,0]Regular SubLead
+[p3,87,104,0]Regular TalkModLead
+[p3,81,104,14]Regular TechGlide
+[p3,84,0,117]Regular TechLead
+[p3,84,0,116]Regular Tekkline
+[p3,90,104,18]Regular TenPercent
+[p3,80,0,121]Regular TranceLead
+[p3,80,0,118]Regular TinyLead
+[p3,81,0,125]Regular TrumpetSaw
+[p3,87,0,112]Regular UnderHeim
+[p3,90,104,13]Regular UnstableLead
+[p3,81,104,3]Regular VinalogSaw
+[p3,80,0,115]Regular VinylLead
+[p3,81,0,117]Regular Warp
+[p3,87,104,3]Regular AnalogSequence
+[p3,84,104,12]Regular ArpeggioLine
+[p3,81,104,4]Regular Attack
+[p3,55,0,113]Regular BrassHit
+[p3,84,104,5]Regular BriteDecay
+[p3,84,104,10]Regular ChordBuddy
+[p3,81,104,13]Regular Chordmaster
+[p3,88,0,125]Regular CrystalEyes
+[p3,87,104,2]Regular DigitalSequence
+[p3,88,104,27]Regular DynamicSequence
+[p3,97,104,1]Regular EasternAir
+[p3,123,8,33]S.Art FourStack JS
+[p3,90,104,16]Regular HardTeeth
+[p3,100,104,0]Regular HeavenBell
+[p3,87,0,113]Regular Impact
+[p3,89,0,117]Regular MelodyMaker
+[p3,88,104,9]Regular NiceBell
+[p3,104,104,1]Regular Nomad
+[p3,80,0,126]Regular OrbitSine
+[p3,88,0,126]Regular Padbells
+[p3,87,104,7]Regular PercSequenceFM1
+[p3,87,104,8]Regular PercSequenceFM2
+[p3,87,104,6]Regular PercSequenceFS
+[p3,87,104,9]Regular PercSequenceHipa
+[p3,81,104,11]Regular PercSequenceSaw
+[p3,80,0,123]Regular PercSquare
+[p3,90,104,14]Regular Persecutor
+[p3,81,104,6]Regular PWM Percussion
+[p3,88,104,25]Regular PWM Picks
+[p3,80,104,4]Regular PWM Wild
+[p3,62,104,4]Regular ResonanceComp
+[p3,90,104,2]Regular ResonantClavi
+[p3,97,104,0]Regular SazFeeze
+[p3,84,104,4]Regular ShortUnison
+[p3,81,104,12]Regular SimpleComp
+[p3,88,104,24]Regular SoftStepper
+[p3,84,104,7]Regular StaccMelody
+[p3,88,104,8]Regular StackBell
+[p3,98,0,112]Regular Stardust
+[p3,98,0,113]Regular SunBell
+[p3,106,104,0]Regular SynthSticks
+[p3,84,104,6]Regular TekkTune
+[p3,81,104,5]Regular TrancePerc
+[p3,87,104,4]Regular TranceSequence1
+[p3,87,104,5]Regular TranceSequence2
+[p3,90,104,1]Regular TranceSequence3
+[p3,90,104,25]Regular TrancyChordz
+[p3,84,104,11]Regular TuneComp
+[p3,87,104,1]Regular Xtune
+[p3,90,104,12]Regular Yipping
+[p3,51,0,112]Regular AnalogStrings
+[p3,88,0,124]Regular StringBells
+[p3,50,104,9]Regular UnisonStrings
+[p3,89,0,118]Regular BigTune
+[p3,103,104,0]Regular PitchFall
+[p3,101,0,104]Regular LFO Pad
+[p3,101,0,110]Regular LFO SynBass
+[p3,101,0,108]Regular LFO Sync1
+[p3,101,0,107]Regular LFO Sync2
+[p3,101,0,109]Regular LFO Sync3
+[p3,101,0,106]Regular LFO Sync4
+[p3,101,0,105]Regular LFO Sync5
+[p3,89,0,126]Regular RS AnalogPad
+[p3,83,0,114]Regular RS DistortionLead
+[p3,81,0,109]Regular RS DualSaw
+[p3,80,0,127]Regular RS DualSquare
+[p3,89,0,124]Regular RS NoisePad
+[p3,84,0,119]Regular RS QuackLead
+[p3,81,0,107]Regular RS RampLead
+[p3,81,0,104]Regular RS SawLead1
+[p3,81,0,106]Regular RS SawLead2
+[p3,90,0,116]Regular RS ShortResonance
+[p3,81,0,105]Regular RS Sync1
+[p3,87,0,119]Regular RS Sync2
+[p3,89,0,123]Regular RS SynthPad
+[p3,81,0,108]Regular RS TechSaw
+[p3,89,0,125]Regular RS TeknoMan
+[p3,91,0,113]Regular RS WarmPad
+[p3,122,0,120]Regular Noise
+[p3,122,104,1]Regular TrancyNoise
+[g2]DrumKit
+[p3,1,127,0]Live!Drums StandardKit2
+[p3,40,127,0]Live!Drums BrushKit
+[p3,16,127,0]Drums RockKit2
+[p3,24,127,0]Drums ElectroKit2
+[p3,49,126,0]Live!SFX CymbalKit
+[p3,35,126,0]SFX ArabicKit2
+[p3,0,126,0]SFX SFX Kit1
+[p3,1,126,0]SFX SFX Kit2
+[p3,8,126,0]SFX NoisesKit
+[p3,122,104,0]Live! SeaShore
+[p3,125,104,0]Live! Helicopter
+[p3,126,104,0]Live! Applause1
+[p3,126,104,1]Live! Applause2
+[p3,127,104,0]Live! GunShot
+[g1]MegaVoice
+[g2]Strings
+[p3,48,8,3]MegaVoice KinoSmall
+[p3,48,8,4]MegaVoice KinoSmallComp
+[p3,48,8,5]MegaVoice KinoSmallCompOctCb
+[p3,48,8,6]MegaVoice KinoSmallAmbi
+[p3,49,8,2]MegaVoice KinoLarge
+[p3,49,8,3]MegaVoice KinoLargeComp
+[p3,49,8,4]MegaVoice KinoLargeOctCb
+[p3,49,8,6]MegaVoice KinoLargeAmbi
+[p3,49,8,5]MegaVoice KinoLargeAmbiOctCb
+[p3,48,8,1]MegaVoice ClassicalStrings
+[p3,49,8,1]MegaVoice SeattleStrings
+[p3,48,8,0]MegaVoice SmallStrings
+[p3,49,8,0]MegaVoice LargeStrings
+[g2]Brass
+[p3,56,8,1]MegaVoice PopHorns1
+[p3,56,8,2]MegaVoice PopHorns2
+[p3,56,8,0]MegaVoice Brass
+[p3,64,8,0]MegaVoice Trumpet
+[g2]Woodwind
+[p3,82,8,0]MegaVoice TenorSax
+[g2]Choir
+[p3,54,8,0]MegaVoice GospelChoir
+[p3,51,8,0]MegaVoice MaleVoiceChoir
+[p3,100,8,0]MegaVoice PopHaa
+[p3,101,8,0]MegaVoice PopDaa
+[p3,102,8,0]MegaVoice PopBaa
+[p3,105,8,0]MegaVoice PopHoo
+[p3,106,8,0]MegaVoice PopDoo
+[p3,103,8,0]MegaVoice PopShoo
+[p3,110,8,0]MegaVoice PopHee
+[p3,107,8,0]MegaVoice PopBee
+[p3,115,8,0]MegaVoice PopHaaLegato
+[p3,120,8,0]MegaVoice PopHooLegato
+[p3,125,8,0]MegaVoice PopHeeLegato
+[g2]A.Guitar
+[p3,0,8,0]MegaVoice NylonGuitar
+[p3,1,8,10]MegaVoice D-FolkGuitar
+[p3,1,8,13]MegaVoice D&HardFolkTwin1
+[p3,1,8,15]MegaVoice D&HardFolkTwin2
+[p3,1,8,14]MegaVoice D&WarmFolkTwin1
+[p3,1,8,16]MegaVoice D&WarmFolkTwin2
+[p3,1,8,11]MegaVoice SteelAcousticFinger
+[p3,1,8,12]MegaVoice SteelAcThumbPick
+[p3,1,8,1]MegaVoice SteelAcousticPick
+[p3,1,8,2]MegaVoice SteelAcousticSlap
+[p3,1,8,5]MegaVoice SteelGuitarTwin1
+[p3,1,8,6]MegaVoice SteelGuitarTwin2
+[p3,1,8,0]MegaVoice SteelGuitar
+[p3,1,8,7]MegaVoice 12StringPickTwin1
+[p3,1,8,8]MegaVoice 12StringPickTwin2
+[p3,2,8,1]MegaVoice 12StringGuitar
+[p3,2,8,0]MegaVoice HiStringGuitar
+[p3,0,8,3]MegaVoice FlamencoGuitar
+[p3,0,8,4]MegaVoice SpanishMedium
+[p3,0,8,5]MegaVoice SpanishHard
+[p3,13,8,0]MegaVoice UkleleThumbDown
+[p3,12,8,4]MegaVoice Mandolin
+[g2]E.Guitar
+[p3,3,8,10]MegaVoice 60sVintage
+[p3,3,8,11]MegaVoice 60sVintageSlap
+[p3,3,8,4]MegaVoice 50sVintageFinger
+[p3,3,8,5]MegaVoice 50sVintageFingerSlap
+[p3,3,8,6]MegaVoice 50sVintagePick
+[p3,3,8,7]MegaVoice 50sVintageSlap
+[p3,3,8,8]MegaVoice SlapAmpGuitar
+[p3,3,8,3]MegaVoice SingleCoilGuitar
+[p3,3,8,1]MegaVoice SolidGuitar1
+[p3,3,8,2]MegaVoice SolidGuitar2
+[p3,3,8,0]MegaVoice CleanGuitar
+[p3,6,8,0]MegaVoice JazzGuitar
+[p3,4,8,0]MegaVoice OverdriveGuitar
+[p3,5,8,0]MegaVoice DistortionGuitar
+[g2]Bass
+[p3,17,8,3]MegaVoice ActiveBassFingHmrOn
+[p3,17,8,4]MegaVoice ActiveBassFingHarm
+[p3,17,8,5]MegaVoice ActiveBassFingSlap
+[p3,18,8,3]MegaVoice ActiveBassPick
+[p3,18,8,4]MegaVoice ActiveBassPickOpen
+[p3,18,8,2]MegaVoice ActiveBassPickHmrOn
+[p3,18,8,5]MegaVoice ActiveBassPickMute
+[p3,20,8,0]MegaVoice ActiveBassSlap
+[p3,17,8,1]MegaVoice VintageRoundBass
+[p3,17,8,2]MegaVoice VintageFlatBass
+[p3,18,8,1]MegaVoice VintagePickBass
+[p3,17,8,0]MegaVoice ElectricBass
+[p3,18,8,0]MegaVoice PickBass
+[p3,19,8,0]MegaVoice FretlessBass
+[p3,16,8,0]MegaVoice AcousticBass
+[g1]GM&XG
+[g2]Piano
+[p3,0,0,0]GMXG GrandPiano
+[p3,0,0,1]GMXG GrandPiano KSP
+[p3,0,0,18]GMXG MellowGrandPiano
+[p3,0,0,40]GMXG PianoStrings
+[p3,0,0,41]GMXG Dream
+[p3,1,0,0]GMXG BrightPiano
+[p3,1,0,1]GMXG BrightPiano KSP
+[p3,2,0,0]GMXG El.GrandPiano
+[p3,2,0,1]GMXG El.GrandPiano KSP
+[p3,2,0,32]GMXG DetunedCP80
+[p3,2,0,40]GMXG LayeredCP1
+[p3,2,0,41]GMXG LayeredCP2
+[p3,3,0,0]GMXG Honkytonk
+[p3,3,0,1]GMXG Honkytonk KSP
+[p3,4,0,0]GMXG ElectricPiano1
+[p3,4,0,1]GMXG ElectricPiano1 KSP
+[p3,5,0,0]GMXG ElectricPiano2
+[p3,5,0,1]GMXG ElectricPiano2 KSP
+[p3,4,0,18]GMXG MellowElectricPiano
+[p3,4,0,32]GMXG ChorusEP1
+[p3,5,0,32]GMXG ChorusEP2
+[p3,4,0,40]GMXG HardElectricPiano
+[p3,4,0,45]GMXG VXfadeEl.Piano1
+[p3,5,0,45]GMXG VXfadeEl.Piano2
+[p3,4,0,64]GMXG 60sElectricPiano
+[p3,5,0,33]GMXG DX EP Hard
+[p3,5,0,34]GMXG DX Legend
+[p3,5,0,40]GMXG DX PhaseEP
+[p3,5,0,41]GMXG DX+AnalogEP
+[p3,5,0,42]GMXG DX KotoEP
+[p3,6,0,0]GMXG Harpsichord1
+[p3,6,0,1]GMXG Harpsichord KSP
+[p3,6,0,25]GMXG Harpsichord2
+[p3,6,0,35]GMXG Harpsichord3
+[p3,7,0,0]GMXG Clavi
+[p3,7,0,1]GMXG Clavi KSP
+[p3,7,0,27]GMXG ClaviWah
+[p3,7,0,64]GMXG PulseClavi
+[p3,7,0,65]GMXG PierceClavi
+[g2]ChromaticPerc
+[p3,8,0,0]GMXG Celesta
+[p3,9,0,0]GMXG Glockenspiel
+[p3,10,0,0]GMXG MusicBox1
+[p3,10,0,64]GMXG MusicBox2
+[p3,11,0,0]GMXG Vibraphone
+[p3,11,0,1]GMXG Vibraphone KSP
+[p3,11,0,45]GMXG HardVibes
+[p3,12,0,0]GMXG Marimba
+[p3,12,0,1]GMXG Marimba KSP
+[p3,12,0,64]GMXG SineMarimba
+[p3,12,0,97]GMXG Balimba
+[p3,12,0,98]GMXG LogDrums
+[p3,13,0,0]GMXG Xylophone
+[p3,14,0,0]GMXG TubularBells
+[p3,14,0,96]GMXG ChurchBells
+[p3,14,0,97]GMXG Carillon
+[p3,15,0,0]GMXG Dulcimer1
+[p3,15,0,35]GMXG Dulcimer2
+[p3,15,0,96]GMXG Cimbalom
+[p3,15,0,97]GMXG Santur
+[g2]Organ
+[p3,16,0,0]GMXG DrawbarOrgan1
+[p3,16,0,36]GMXG DrawbarOrgan2
+[p3,16,0,67]GMXG DrawbarOrgan3
+[p3,16,0,32]GMXG DetunedDrawOrgan
+[p3,16,0,33]GMXG 60sDrawbarOrgan1
+[p3,16,0,34]GMXG 60sDrawbarOrgan2
+[p3,16,0,35]GMXG 70sDrawbarOrgan1
+[p3,16,0,65]GMXG 70sDrawbarOrgan2
+[p3,16,0,37]GMXG 60sDrawbarOrgan3
+[p3,16,0,38]GMXG EvenBarOrgan
+[p3,16,0,40]GMXG 16+2'2_3Organ
+[p3,16,0,64]GMXG OrganBass
+[p3,16,0,66]GMXG CheezyOrgan
+[p3,17,0,0]GMXG PercussiveOrgan1
+[p3,17,0,37]GMXG PercussiveOrgan2
+[p3,17,0,24]GMXG 70sPercussiveOrgan
+[p3,17,0,32]GMXG DetunedPercOrgan
+[p3,17,0,33]GMXG LightOrgan
+[p3,18,0,0]GMXG RockOrgan
+[p3,18,0,64]GMXG RotaryOrgan
+[p3,18,0,65]GMXG SlowRotary
+[p3,18,0,66]GMXG FastRotary
+[p3,19,0,0]GMXG ChurchOrgan1
+[p3,19,0,35]GMXG ChurchOrgan2
+[p3,19,0,32]GMXG ChurchOrgan3
+[p3,19,0,40]GMXG NotreDame
+[p3,19,0,64]GMXG OrganFlute
+[p3,19,0,65]GMXG TremoloOrganFlute
+[p3,20,0,0]GMXG ReedOrgan
+[p3,20,0,40]GMXG PuffOrgan
+[p3,21,0,0]GMXG Accordion
+[p3,21,0,32]GMXG AccordionItalian
+[p3,22,0,0]GMXG Harmonica1
+[p3,22,0,32]GMXG Harmonica2
+[p3,23,0,0]GMXG TangoAccordion1
+[p3,23,0,64]GMXG TangoAccordion2
+[g2]Guitar
+[p3,24,0,0]GMXG NylonGuitar1
+[p3,24,0,16]GMXG NylonGuitar2
+[p3,24,0,25]GMXG NylonGuitar3
+[p3,24,0,43]GMXG VelocityGtHarmo
+[p3,24,0,96]GMXG Ukulele
+[p3,25,0,0]GMXG SteelGuitar1
+[p3,25,0,16]GMXG SteelGuitar2
+[p3,25,0,35]GMXG 12StrGuitar
+[p3,25,0,40]GMXG Nylon&Steel
+[p3,25,0,41]GMXG Steel&Body
+[p3,25,0,96]GMXG Mandolin
+[p3,26,0,0]GMXG JazzGuitar
+[p3,26,0,18]GMXG MellowGuitar
+[p3,26,0,32]GMXG JazzAmp
+[p3,27,0,0]GMXG CleanGuitar
+[p3,27,0,32]GMXG ChorusGuitar
+[p3,28,0,0]GMXG MutedGuitar
+[p3,28,0,40]GMXG FunkGuitar1
+[p3,28,0,43]GMXG FunkGuitar2
+[p3,28,0,41]GMXG MuteSteelGuitar
+[p3,28,0,45]GMXG JazzMan
+[p3,29,0,0]GMXG Overdriven
+[p3,29,0,43]GMXG GuitarPinch
+[p3,30,0,0]GMXG DistortionGuitar
+[p3,30,0,40]GMXG FeedbackGuitar1
+[p3,30,0,41]GMXG FeedbackGuitar2
+[p3,31,0,65]GMXG GuitarFeedback
+[p3,31,0,0]GMXG GuitarHarmonics1
+[p3,31,0,66]GMXG GuitarHarmonics2
+[g2]Bass
+[p3,32,0,0]GMXG AcousticBass
+[p3,32,0,40]GMXG JazzRhythm
+[p3,32,0,45]GMXG VXfadeUprghtBass
+[p3,33,0,0]GMXG FingerBass1
+[p3,33,0,45]GMXG FingerBass2
+[p3,33,0,18]GMXG FingerBassDark
+[p3,33,0,27]GMXG FlangeBass
+[p3,33,0,40]GMXG Bass&DistortionEG
+[p3,33,0,43]GMXG FingerSlapBass
+[p3,33,0,65]GMXG ModulatedBass
+[p3,34,0,0]GMXG PickBass
+[p3,34,0,28]GMXG MutePickBass
+[p3,35,0,0]GMXG FretlessBass1
+[p3,35,0,32]GMXG FretlessBass2
+[p3,35,0,33]GMXG FretlessBass3
+[p3,35,0,34]GMXG FretlessBass4
+[p3,35,0,96]GMXG SynthFretless
+[p3,35,0,97]GMXG SmthFretless
+[p3,36,0,0]GMXG SlapBass1
+[p3,37,0,0]GMXG SlapBass2
+[p3,36,0,27]GMXG ResonantSlap
+[p3,36,0,32]GMXG PunchThumb
+[p3,37,0,43]GMXG VelocitySwitchSlap
+[p3,38,0,0]GMXG SynthBass1
+[p3,38,0,18]GMXG SynthBass1 Dark
+[p3,39,0,0]GMXG SynthBass2
+[p3,39,0,19]GMXG SynthBass2 Dark
+[p3,38,0,20]GMXG FastResonantBass
+[p3,38,0,24]GMXG AcidBass
+[p3,38,0,35]GMXG ClaviBass
+[p3,38,0,40]GMXG TechnoBass
+[p3,38,0,64]GMXG Orbiter
+[p3,38,0,65]GMXG SquareBass
+[p3,38,0,66]GMXG RubberBass
+[p3,38,0,96]GMXG Hammer
+[p3,39,0,6]GMXG MellowSynthBass
+[p3,39,0,12]GMXG SequenceBass
+[p3,39,0,18]GMXG ClickSynthBass
+[p3,39,0,32]GMXG SmoothSynthBass
+[p3,39,0,40]GMXG ModulrSynthBass
+[p3,39,0,41]GMXG DX Bass
+[p3,39,0,64]GMXG X WireBass
+[g2]Strings
+[p3,40,0,0]GMXG Violin
+[p3,40,0,8]GMXG SlowAttackViolin
+[p3,41,0,0]GMXG Viola
+[p3,42,0,0]GMXG Cello
+[p3,43,0,0]GMXG Contrabass
+[p3,44,0,0]GMXG TremoloStrings
+[p3,44,0,8]GMXG SlwAtkTremStrings
+[p3,44,0,40]GMXG SuspenseStrings
+[p3,45,0,0]GMXG PizzicatoStrings
+[p3,46,0,0]GMXG OrchestralHarp
+[p3,46,0,40]GMXG YangQin
+[p3,47,0,0]GMXG Timpani
+[g2]Ensemble
+[p3,48,0,0]GMXG Strings1
+[p3,49,0,0]GMXG Strings2
+[p3,49,0,65]GMXG Strings3
+[p3,48,0,3]GMXG StereoStrings
+[p3,48,0,8]GMXG SlwAttackStrings
+[p3,48,0,24]GMXG ArcoStrings
+[p3,48,0,35]GMXG 60sStrings
+[p3,48,0,40]GMXG Orchestra1
+[p3,48,0,41]GMXG Orchestra2
+[p3,48,0,42]GMXG TremoloOrchstra
+[p3,48,0,45]GMXG VelocityStrings
+[p3,49,0,3]GMXG StereoSlowStrings
+[p3,49,0,8]GMXG LegatoStrings
+[p3,49,0,40]GMXG WarmStrings
+[p3,49,0,41]GMXG Kingdom
+[p3,49,0,64]GMXG 70sStrings
+[p3,50,0,27]GMXG ResonantStrings
+[p3,50,0,0]GMXG SynthStrings1
+[p3,51,0,0]GMXG SynthStrings2
+[p3,50,0,64]GMXG SynthStrings4
+[p3,50,0,65]GMXG SynthStrings5
+[p3,52,0,0]GMXG ChoirAahs1
+[p3,52,0,16]GMXG ChoirAahs2
+[p3,52,0,3]GMXG StereoChoir
+[p3,52,0,32]GMXG MellowChoir
+[p3,52,0,40]GMXG ChoirStrings
+[p3,53,0,0]GMXG VoiceOohs
+[p3,54,0,0]GMXG SynthVoice1
+[p3,54,0,40]GMXG SynthVoice2
+[p3,54,0,41]GMXG Choral
+[p3,54,0,64]GMXG AnalogVoice
+[p3,55,0,0]GMXG OrchestraHit1
+[p3,55,0,35]GMXG OrchestraHit2
+[p3,55,0,64]GMXG Impact
+[g2]Brass
+[p3,56,0,0]GMXG Trumpet1
+[p3,56,0,16]GMXG Trumpet2
+[p3,56,0,17]GMXG BrightTrumpet
+[p3,56,0,32]GMXG WarmTrumpet
+[p3,57,0,0]GMXG Trombone1
+[p3,57,0,18]GMXG Trombone2
+[p3,58,0,0]GMXG Tuba1
+[p3,58,0,16]GMXG Tuba2
+[p3,59,0,0]GMXG MutedTrumpet
+[p3,60,0,0]GMXG FrenchHorn1
+[p3,60,0,32]GMXG FrenchHorn2
+[p3,60,0,6]GMXG FrenchHornSolo
+[p3,60,0,37]GMXG HornOrchestra
+[p3,61,0,0]GMXG BrassSection1
+[p3,61,0,40]GMXG BrassSection2
+[p3,61,0,35]GMXG Tp&TbSection
+[p3,61,0,41]GMXG HighBrass
+[p3,61,0,42]GMXG MellowBrass
+[p3,62,0,0]GMXG SynthBrass1
+[p3,63,0,0]GMXG SynthBrass2
+[p3,62,0,27]GMXG SynthBrass3
+[p3,63,0,40]GMXG SynthBrass4
+[p3,62,0,12]GMXG QuackBrass
+[p3,62,0,20]GMXG ResoSynthBrass
+[p3,62,0,24]GMXG PolyBrass
+[p3,62,0,32]GMXG JumpBrass
+[p3,62,0,45]GMXG AnalogVeloBrass1
+[p3,63,0,45]GMXG AnalogVeloBrass2
+[p3,62,0,64]GMXG AnalogBrass1
+[p3,63,0,64]GMXG AnalogBrass2
+[p3,63,0,18]GMXG SoftBrass
+[p3,63,0,41]GMXG ChoirBrass
+[g2]Reed
+[p3,64,0,0]GMXG SopranoSax
+[p3,65,0,0]GMXG AltoSax
+[p3,65,0,40]GMXG SaxSection
+[p3,65,0,43]GMXG HyperAltoSax
+[p3,66,0,0]GMXG TenorSax1
+[p3,66,0,64]GMXG TenorSax2
+[p3,66,0,40]GMXG BreathyTenor
+[p3,66,0,41]GMXG SoftTenorSax
+[p3,67,0,0]GMXG BaritoneSax
+[p3,68,0,0]GMXG Oboe
+[p3,69,0,0]GMXG EnglishHorn
+[p3,70,0,0]GMXG Bassoon
+[p3,71,0,0]GMXG Clarinet
+[g2]Pipe
+[p3,72,0,0]GMXG Piccolo
+[p3,73,0,0]GMXG Flute
+[p3,74,0,0]GMXG Recorder
+[p3,75,0,0]GMXG PanFlute
+[p3,76,0,0]GMXG BlownBottle
+[p3,77,0,0]GMXG Shakuhachi
+[p3,78,0,0]GMXG Whistle
+[p3,79,0,0]GMXG Ocarina
+[g2]Synth.Lead
+[p3,80,0,0]GMXG SquareLead1
+[p3,80,0,6]GMXG SquareLead2
+[p3,80,0,8]GMXG LM Square
+[p3,80,0,18]GMXG Hollow
+[p3,80,0,19]GMXG Shroud
+[p3,80,0,64]GMXG Mellow
+[p3,80,0,65]GMXG SoloSine
+[p3,80,0,66]GMXG SineLead
+[p3,81,0,0]GMXG SawtoothLead1
+[p3,81,0,6]GMXG SawtoothLead2
+[p3,81,0,8]GMXG ThickSaw
+[p3,81,0,18]GMXG DynamicSaw
+[p3,81,0,19]GMXG DigitalSaw
+[p3,81,0,20]GMXG BigLead
+[p3,81,0,24]GMXG HeavySynth
+[p3,81,0,25]GMXG WaspySynth
+[p3,81,0,40]GMXG PulseSaw
+[p3,81,0,41]GMXG Dr.Lead
+[p3,81,0,45]GMXG VelocityLead
+[p3,81,0,96]GMXG SequencedAnalog
+[p3,82,0,0]GMXG CalliopeLead
+[p3,82,0,65]GMXG PureLead
+[p3,83,0,0]GMXG ChiffLead
+[p3,83,0,64]GMXG Rubby
+[p3,84,0,0]GMXG CharangLead
+[p3,84,0,64]GMXG DistortedLead
+[p3,84,0,65]GMXG WireLead
+[p3,85,0,0]GMXG VoiceLead
+[p3,85,0,24]GMXG SynthAahs
+[p3,85,0,64]GMXG VoxLead
+[p3,86,0,0]GMXG FifthsLead
+[p3,86,0,35]GMXG BigFive
+[p3,87,0,0]GMXG Bass&Lead
+[p3,87,0,16]GMXG Big&Low
+[p3,87,0,64]GMXG Fat&Perky
+[p3,87,0,65]GMXG SoftWhirl
+[g2]Synth.Pad
+[p3,88,0,0]GMXG NewAgePad
+[p3,88,0,64]GMXG Fantasy
+[p3,89,0,0]GMXG WarmPad
+[p3,89,0,16]GMXG ThickPad
+[p3,89,0,17]GMXG SoftPad
+[p3,89,0,18]GMXG SinePad
+[p3,89,0,64]GMXG HornPad
+[p3,89,0,65]GMXG RotaryStrings
+[p3,90,0,0]GMXG PolySynthPad
+[p3,90,0,64]GMXG PolyPad80
+[p3,90,0,65]GMXG ClickPad
+[p3,90,0,66]GMXG AnalogPad
+[p3,90,0,67]GMXG SquarePad
+[p3,91,0,0]GMXG ChoirPad
+[p3,91,0,64]GMXG Heaven
+[p3,91,0,66]GMXG Itopia
+[p3,91,0,67]GMXG CC Pad
+[p3,92,0,0]GMXG BowedPad
+[p3,92,0,64]GMXG Glacier
+[p3,92,0,65]GMXG GlassPad
+[p3,93,0,0]GMXG MetallicPad
+[p3,93,0,64]GMXG TinePad
+[p3,93,0,65]GMXG PanPad
+[p3,94,0,0]GMXG HaloPad
+[p3,95,0,0]GMXG SweepPad
+[p3,95,0,20]GMXG Shwimmer
+[p3,95,0,27]GMXG Converge
+[p3,95,0,64]GMXG PolarPad
+[p3,95,0,66]GMXG Celestial
+[g2]Synth.Effect
+[p3,96,0,0]GMXG Rain
+[p3,96,0,45]GMXG ClaviPad
+[p3,96,0,64]GMXG HarmoRain
+[p3,96,0,65]GMXG AfricanWind
+[p3,96,0,66]GMXG Carib
+[p3,97,0,0]GMXG SoundTrack
+[p3,97,0,27]GMXG Prologue
+[p3,97,0,64]GMXG Ancestral
+[p3,98,0,0]GMXG Crystal
+[p3,98,0,12]GMXG SynthDrumComp
+[p3,98,0,14]GMXG Popcorn
+[p3,98,0,18]GMXG TinyBells
+[p3,98,0,35]GMXG RoundGlocken
+[p3,98,0,40]GMXG GlockenChime
+[p3,98,0,41]GMXG ClearBells
+[p3,98,0,42]GMXG ChorusBells
+[p3,98,0,64]GMXG SynthMallet
+[p3,98,0,65]GMXG SoftCrystal
+[p3,98,0,66]GMXG LoudGlocken
+[p3,98,0,67]GMXG ChristmasBells
+[p3,98,0,68]GMXG VibraphoneBells
+[p3,98,0,69]GMXG DigitalBells
+[p3,98,0,70]GMXG AirBells
+[p3,98,0,71]GMXG BellHarp
+[p3,98,0,72]GMXG Gamelimba
+[p3,99,0,0]GMXG Atmosphere
+[p3,99,0,18]GMXG WarmAtmosphere
+[p3,99,0,19]GMXG HollwRelease
+[p3,99,0,40]GMXG NylonElectricPiano
+[p3,99,0,64]GMXG NylonHarp
+[p3,99,0,65]GMXG HarpVox
+[p3,99,0,66]GMXG AtmospherePad
+[p3,99,0,67]GMXG Planet
+[p3,100,0,0]GMXG Brightness
+[p3,100,0,64]GMXG FantasyBells
+[p3,100,0,96]GMXG Smokey
+[p3,101,0,0]GMXG Goblins
+[p3,101,0,64]GMXG GoblinsSynth
+[p3,101,0,65]GMXG Creeper
+[p3,101,0,66]GMXG RingPad
+[p3,101,0,67]GMXG Ritual
+[p3,101,0,68]GMXG ToHeaven
+[p3,101,0,70]GMXG Night
+[p3,101,0,71]GMXG Glisten
+[p3,101,0,96]GMXG BellChoir
+[p3,102,0,0]GMXG Echoes1
+[p3,102,0,8]GMXG Echoes2
+[p3,102,0,14]GMXG EchoPan
+[p3,102,0,64]GMXG EchoBells
+[p3,102,0,65]GMXG BigPan
+[p3,102,0,66]GMXG SynthPiano
+[p3,102,0,67]GMXG Creation
+[p3,102,0,68]GMXG Stardust
+[p3,102,0,69]GMXG Resonant&Panning
+[p3,103,0,0]GMXG ScienceFiction
+[p3,103,0,64]GMXG Starz
+[g2]Ethnic
+[p3,104,0,0]GMXG Sitar1
+[p3,104,0,35]GMXG Sitar2
+[p3,104,0,32]GMXG DetunedSitar
+[p3,104,0,96]GMXG Tambra
+[p3,104,0,97]GMXG Tamboura
+[p3,105,0,0]GMXG Banjo
+[p3,105,0,28]GMXG MutedBanjo
+[p3,105,0,96]GMXG Rabab
+[p3,105,0,97]GMXG Gopichant
+[p3,105,0,98]GMXG Oud
+[p3,106,0,0]GMXG Shamisen
+[p3,107,0,0]GMXG Koto
+[p3,107,0,96]GMXG Taisho-kin
+[p3,107,0,97]GMXG Kanoon
+[p3,108,0,0]GMXG Kalimba
+[p3,109,0,0]GMXG Bagpipe
+[p3,110,0,0]GMXG Fiddle
+[p3,111,0,0]GMXG Shanai1
+[p3,111,0,64]GMXG Shanai2
+[p3,111,0,96]GMXG Pungi
+[p3,111,0,97]GMXG Hichiriki
+[g2]Percussive
+[p3,112,0,0]GMXG TinkleBell
+[p3,112,0,96]GMXG Bonang
+[p3,112,0,97]GMXG Altair
+[p3,112,0,98]GMXG GamelanGongs
+[p3,112,0,99]GMXG StereoGamlan
+[p3,112,0,100]GMXG RamaCymbal
+[p3,112,0,101]GMXG AsianBells
+[p3,113,0,0]GMXG Agogo
+[p3,114,0,0]GMXG SteelDrums
+[p3,114,0,97]GMXG GlassPercussion
+[p3,114,0,98]GMXG ThaiBells
+[p3,115,0,0]GMXG Woodblock
+[p3,115,0,96]GMXG Castanets
+[p3,116,0,0]GMXG TaikoDrum
+[p3,116,0,96]GMXG GranCassa
+[p3,117,0,0]GMXG MelodicTom1
+[p3,117,0,64]GMXG MelodicTom2
+[p3,117,0,65]GMXG RealTom
+[p3,117,0,66]GMXG RockTom
+[p3,118,0,0]GMXG SynthDrum
+[p3,118,0,64]GMXG AnalogTom
+[p3,118,0,65]GMXG ElectroPercussion
+[p3,119,0,0]GMXG ReverseCymbal
+[g2]SoundEffect
+[p3,120,0,0]GMXG GuitarFretNoise
+[p3,121,0,0]GMXG BreathNoise
+[p3,122,0,0]GMXG Seashore
+[p3,123,0,0]GMXG BirdTweet1
+[p3,50,64,0]GMXG BirdTweet2
+[p3,124,0,0]GMXG TelephoneRing1
+[p3,70,64,0]GMXG TelephoneRing2
+[p3,125,0,0]GMXG Helicopter
+[p3,126,0,0]GMXG Applause
+[p3,127,0,0]GMXG Gunshot
+[p3,0,64,0]GMXG CuttingNoise1
+[p3,1,64,0]GMXG CuttingNoise2
+[p3,3,64,0]GMXG StringSlap
+[p3,16,64,0]GMXG FluteKeyClick
+[p3,32,64,0]GMXG Shower
+[p3,33,64,0]GMXG Thunder
+[p3,34,64,0]GMXG Wind
+[p3,35,64,0]GMXG Stream
+[p3,36,64,0]GMXG Bubble
+[p3,37,64,0]GMXG Feed
+[p3,48,64,0]GMXG Dog
+[p3,49,64,0]GMXG Horse
+[p3,54,64,0]GMXG Ghost
+[p3,55,64,0]GMXG Maou
+[p3,64,64,0]GMXG PhoneCall
+[p3,65,64,0]GMXG DoorSqueak
+[p3,66,64,0]GMXG DoorSlam
+[p3,67,64,0]GMXG ScratchCut
+[p3,68,64,0]GMXG ScratchSplit
+[p3,69,64,0]GMXG WindChime
+[p3,80,64,0]GMXG CarEngineIgn
+[p3,81,64,0]GMXG CarTiresSqueal
+[p3,82,64,0]GMXG CarPassing
+[p3,83,64,0]GMXG CarCrash
+[p3,84,64,0]GMXG Siren
+[p3,85,64,0]GMXG Train
+[p3,86,64,0]GMXG JetPlane
+[p3,87,64,0]GMXG Starship
+[p3,88,64,0]GMXG Burst
+[p3,89,64,0]GMXG RollerCoaster
+[p3,90,64,0]GMXG Submarine
+[p3,96,64,0]GMXG Laugh
+[p3,97,64,0]GMXG Scream
+[p3,98,64,0]GMXG Punch
+[p3,99,64,0]GMXG Heartbeat
+[p3,100,64,0]GMXG FootSteps
+[p3,112,64,0]GMXG MachineGun
+[p3,113,64,0]GMXG LaserGun
+[p3,114,64,0]GMXG Explosion
+[p3,115,64,0]GMXG Firework
+[g1]GM2
+[g2]Piano
+[p3,0,121,0]GM2 GrandPiano
+[p3,0,121,1]GM2 GrandPiano Wide
+[p3,0,121,2]GM2 GrandPiano Dark
+[p3,1,121,0]GM2 BrightPiano
+[p3,1,121,1]GM2 BrightPiano Wide
+[p3,2,121,0]GM2 El.GrandPiano
+[p3,2,121,1]GM2 El.GrandPiano Wide
+[p3,3,121,0]GM2 Honkytonk
+[p3,3,121,1]GM2 Honkytonk Wide
+[p3,4,121,0]GM2 ElectricPiano1
+[p3,5,121,0]GM2 ElectricPiano2
+[p3,4,121,1]GM2 DetunedEP1
+[p3,5,121,1]GM2 DetunedEP2
+[p3,4,121,2]GM2 EP1 VelocityMix
+[p3,5,121,2]GM2 EP2 VelocityMix
+[p3,4,121,3]GM2 60sElectricPiano
+[p3,5,121,3]GM2 EP Legend
+[p3,5,121,4]GM2 EP Phase
+[p3,6,121,0]GM2 Harpsichord
+[p3,6,121,1]GM2 Harpsi OctaveMix
+[p3,6,121,2]GM2 Harpsichord Wide
+[p3,6,121,3]GM2 Harpsi KeyOff
+[p3,7,121,0]GM2 Clavi
+[p3,7,121,1]GM2 PulseClavi
+[g2]ChromaticPerc
+[p3,8,121,0]GM2 Celesta
+[p3,9,121,0]GM2 Glockenspiel
+[p3,10,121,0]GM2 MusicBox
+[p3,11,121,0]GM2 Vibraphone
+[p3,11,121,1]GM2 Vibraphone Wide
+[p3,12,121,0]GM2 Marimba
+[p3,12,121,1]GM2 Marimba Wide
+[p3,13,121,0]GM2 Xylophone
+[p3,14,121,0]GM2 TubularBells
+[p3,14,121,1]GM2 ChurchBells
+[p3,14,121,2]GM2 Carillon
+[p3,15,121,0]GM2 Dulcimer
+[g2]Organ
+[p3,16,121,0]GM2 DrawbarOrgan1
+[p3,16,121,3]GM2 DrawbarOrgan2
+[p3,16,121,1]GM2 DetunedDrawOrgan
+[p3,16,121,2]GM2 Italian60sOrgan
+[p3,17,121,0]GM2 PercussiveOrgan1
+[p3,17,121,2]GM2 PercussiveOrgan2
+[p3,17,121,1]GM2 DetunedPercOrgan
+[p3,18,121,0]GM2 RockOrgan
+[p3,19,121,0]GM2 ChurchOrgan
+[p3,19,121,1]GM2 ChurchOrganOctave
+[p3,19,121,2]GM2 DetunedChurchOrgan
+[p3,20,121,0]GM2 ReedOrgan
+[p3,20,121,1]GM2 PuffOrgan
+[p3,21,121,0]GM2 Accordion1
+[p3,21,121,1]GM2 Accordion2
+[p3,22,121,0]GM2 Harmonica
+[p3,23,121,0]GM2 TangoAccordion
+[g2]Guitar
+[p3,24,121,0]GM2 NylonGuitar1
+[p3,24,121,3]GM2 NylonGuitar2
+[p3,24,121,2]GM2 NylonGuitar KeyOff
+[p3,24,121,1]GM2 Ukulele
+[p3,25,121,0]GM2 SteelGuitar
+[p3,25,121,1]GM2 12StrGuitar
+[p3,25,121,2]GM2 Mandolin
+[p3,25,121,3]GM2 Steel&Body
+[p3,26,121,0]GM2 JazzGuitar
+[p3,26,121,1]GM2 PedalSteelGuitar
+[p3,27,121,0]GM2 CleanGuitar
+[p3,27,121,1]GM2 DetunedCleanGuitar
+[p3,27,121,2]GM2 MidToneGuitar
+[p3,28,121,0]GM2 MutedGuitar
+[p3,28,121,1]GM2 FunkGuitar
+[p3,28,121,2]GM2 MutedVeloSwGuitar
+[p3,28,121,3]GM2 JazzMan
+[p3,29,121,0]GM2 Overdriven
+[p3,29,121,1]GM2 GuitarPinch
+[p3,30,121,0]GM2 Distortion
+[p3,30,121,1]GM2 FeedbackGuitar
+[p3,30,121,2]GM2 DistortionRhythmGt
+[p3,31,121,0]GM2 GuitarHarmonics
+[p3,31,121,1]GM2 GuitarFeedback
+[g2]Bass
+[p3,32,121,0]GM2 AcousticBass
+[p3,33,121,0]GM2 FingerBass
+[p3,33,121,1]GM2 FingerSlapBass
+[p3,34,121,0]GM2 PickBass
+[p3,35,121,0]GM2 FretlessBass
+[p3,36,121,0]GM2 SlapBass1
+[p3,37,121,0]GM2 SlapBass2
+[p3,38,121,0]GM2 SynthBass1
+[p3,39,121,0]GM2 SynthBass2
+[p3,38,121,1]GM2 WarmSyBass
+[p3,38,121,2]GM2 ResoSynthBass
+[p3,38,121,3]GM2 ClaviBass
+[p3,38,121,4]GM2 Hammer
+[p3,39,121,1]GM2 AttackBass
+[p3,39,121,2]GM2 RubberBass
+[p3,39,121,3]GM2 AttackPulse
+[g2]Strings
+[p3,40,121,0]GM2 Violin
+[p3,40,121,1]GM2 SlowAttackViolin
+[p3,41,121,0]GM2 Viola
+[p3,42,121,0]GM2 Cello
+[p3,43,121,0]GM2 Contrabass
+[p3,44,121,0]GM2 TremoloStrings
+[p3,45,121,0]GM2 PizzicatoStrings
+[p3,46,121,0]GM2 OrchestralHarp
+[p3,46,121,1]GM2 YangQin
+[p3,47,121,0]GM2 Timpani
+[g2]Ensemble
+[p3,48,121,0]GM2 Strings1
+[p3,49,121,0]GM2 Strings2
+[p3,48,121,1]GM2 StringsBrass
+[p3,48,121,2]GM2 60sStrings
+[p3,50,121,0]GM2 SynthStrings1
+[p3,51,121,0]GM2 SynthStrings2
+[p3,50,121,1]GM2 SynthStrings3
+[p3,52,121,0]GM2 ChoirAahs1
+[p3,52,121,1]GM2 ChoirAahs2
+[p3,53,121,0]GM2 VoiceOohs
+[p3,53,121,1]GM2 Humming
+[p3,54,121,0]GM2 SynthVoice
+[p3,54,121,1]GM2 AnalogVoice
+[p3,55,121,0]GM2 OrchestraHit
+[p3,55,121,1]GM2 BassHitPlus
+[p3,55,121,2]GM2 6thHit
+[p3,55,121,3]GM2 EuroHit
+[g2]Brass
+[p3,56,121,0]GM2 Trumpet
+[p3,56,121,1]GM2 DarkTrumpetSoft
+[p3,57,121,0]GM2 Trombone1
+[p3,57,121,1]GM2 Trombone2
+[p3,57,121,2]GM2 BrightTrombone
+[p3,58,121,0]GM2 Tuba
+[p3,59,121,0]GM2 MutedTrumpet1
+[p3,59,121,1]GM2 MutedTrumpet2
+[p3,60,121,0]GM2 FrenchHorn1
+[p3,60,121,1]GM2 FrenchHorn2
+[p3,61,121,0]GM2 BrassSection1
+[p3,61,121,1]GM2 BrassSection2
+[p3,62,121,0]GM2 SynthBrass1
+[p3,63,121,0]GM2 SynthBrass2
+[p3,62,121,1]GM2 SynthBrass3
+[p3,63,121,1]GM2 SynthBrass4
+[p3,62,121,2]GM2 AnalogSynBrass1
+[p3,63,121,2]GM2 AnalogSynBrass2
+[p3,62,121,3]GM2 JumpBrass
+[g2]Reed
+[p3,64,121,0]GM2 SopranoSax
+[p3,65,121,0]GM2 AltoSax
+[p3,66,121,0]GM2 TenorSax
+[p3,67,121,0]GM2 BaritoneSax
+[p3,68,121,0]GM2 Oboe
+[p3,69,121,0]GM2 EnglishHorn
+[p3,70,121,0]GM2 Bassoon
+[p3,71,121,0]GM2 Clarinet
+[g2]Pipe
+[p3,72,121,0]GM2 Piccolo
+[p3,73,121,0]GM2 Flute
+[p3,74,121,0]GM2 Recorder
+[p3,75,121,0]GM2 PanFlute
+[p3,76,121,0]GM2 BlownBottle
+[p3,77,121,0]GM2 Shakuhachi
+[p3,78,121,0]GM2 Whistle
+[p3,79,121,0]GM2 Ocarina
+[g2]Synth.Lead
+[p3,80,121,0]GM2 SquareLead1
+[p3,80,121,1]GM2 SquareLead2
+[p3,80,121,2]GM2 SineLead
+[p3,81,121,0]GM2 SawtoothLead1
+[p3,81,121,1]GM2 SawtoothLead2
+[p3,81,121,2]GM2 SawPulseLead
+[p3,81,121,3]GM2 DoubleSawLead
+[p3,81,121,4]GM2 SequencedAnalog
+[p3,82,121,0]GM2 CalliopeLead
+[p3,83,121,0]GM2 ChiffLead
+[p3,84,121,0]GM2 CharangLead
+[p3,84,121,1]GM2 WireLead
+[p3,85,121,0]GM2 VoiceLead
+[p3,86,121,0]GM2 FifthsLead
+[p3,87,121,0]GM2 Bass&Lead
+[p3,87,121,1]GM2 SoftWhirl
+[g2]Synth.Pad
+[p3,88,121,0]GM2 NewAgePad
+[p3,89,121,0]GM2 WarmPad
+[p3,89,121,1]GM2 SinePad
+[p3,90,121,0]GM2 PolySynthPad
+[p3,91,121,0]GM2 ChoirPad
+[p3,91,121,1]GM2 ItopiaPad
+[p3,92,121,0]GM2 BowedPad
+[p3,93,121,0]GM2 MetallicPad
+[p3,94,121,0]GM2 HaloPad
+[p3,95,121,0]GM2 SweepPad
+[g2]Synth.Effect
+[p3,96,121,0]GM2 Rain
+[p3,97,121,0]GM2 SoundTrack
+[p3,98,121,0]GM2 Crystal
+[p3,98,121,1]GM2 SynthMallet
+[p3,99,121,0]GM2 Atmosphere
+[p3,100,121,0]GM2 Brightness
+[p3,101,121,0]GM2 Goblins
+[p3,102,121,0]GM2 Echoes
+[p3,102,121,1]GM2 EchoBell
+[p3,102,121,2]GM2 EchoPan
+[p3,103,121,0]GM2 ScienceFiction
+[g2]Ethnic
+[p3,104,121,0]GM2 Sitar1
+[p3,104,121,1]GM2 Sitar2
+[p3,105,121,0]GM2 Banjo
+[p3,106,121,0]GM2 Shamisen
+[p3,107,121,0]GM2 Koto
+[p3,107,121,1]GM2 TaishoKoto
+[p3,108,121,0]GM2 Kalimba
+[p3,109,121,0]GM2 Bagpipe
+[p3,110,121,0]GM2 Fiddle
+[p3,111,121,0]GM2 Shanai
+[g2]Percussive
+[p3,112,121,0]GM2 TinkleBell
+[p3,113,121,0]GM2 Agogo
+[p3,114,121,0]GM2 SteelDrums
+[p3,115,121,0]GM2 Woodblock
+[p3,115,121,1]GM2 Castanets
+[p3,116,121,0]GM2 TaikoDrum
+[p3,116,121,1]GM2 ConcertBassDrum
+[p3,117,121,0]GM2 MelodicTom1
+[p3,117,121,1]GM2 MelodicTom2
+[p3,118,121,0]GM2 SynthDrum
+[p3,118,121,1]GM2 RhythmBoxTom
+[p3,118,121,2]GM2 ElectricDrum
+[p3,119,121,0]GM2 ReverseCymbal
+[g2]SoundEffect
+[p3,120,121,0]GM2 GuitarFretNoise
+[p3,120,121,1]GM2 GuitarCutNoise
+[p3,120,121,2]GM2 StringSlap
+[p3,121,121,0]GM2 BreathNoise
+[p3,121,121,1]GM2 FluteKeyClick
+[p3,122,121,0]GM2 Seashore
+[p3,122,121,1]GM2 Rain
+[p3,122,121,2]GM2 Thunder
+[p3,122,121,3]GM2 Wind
+[p3,122,121,4]GM2 Stream
+[p3,122,121,5]GM2 Bubble
+[p3,123,121,0]GM2 BirdTweet1
+[p3,123,121,3]GM2 BirdTweet2
+[p3,123,121,1]GM2 Dog
+[p3,123,121,2]GM2 HorseGallop
+[p3,124,121,0]GM2 TelephoneRing1
+[p3,124,121,1]GM2 TelephoneRing2
+[p3,124,121,2]GM2 DoorCreaking
+[p3,124,121,3]GM2 Door
+[p3,124,121,4]GM2 Scratch
+[p3,124,121,5]GM2 WindChime
+[p3,125,121,0]GM2 Helicopter
+[p3,125,121,1]GM2 CarEngine
+[p3,125,121,2]GM2 CarStop
+[p3,125,121,3]GM2 CarPass
+[p3,125,121,4]GM2 CarCrash
+[p3,125,121,5]GM2 Siren
+[p3,125,121,6]GM2 Train
+[p3,125,121,7]GM2 JetPlane
+[p3,125,121,8]GM2 Starship
+[p3,125,121,9]GM2 BurstNoise
+[p3,126,121,0]GM2 Applause
+[p3,126,121,1]GM2 Laughing
+[p3,126,121,2]GM2 Screaming
+[p3,126,121,3]GM2 Punch
+[p3,126,121,4]GM2 Heartbeat
+[p3,126,121,5]GM2 Footsteps
+[p3,127,121,0]GM2 Gunshot
+[p3,127,121,1]GM2 MachineGun
+[p3,127,121,2]GM2 LaserGun
+[p3,127,121,3]GM2 Explosion
+[g2]Drum
+[p3,0,120,0]GM2 StandardSet
+[p3,8,120,0]GM2 RoomSet
+[p3,16,120,0]GM2 PowerSet
+[p3,24,120,0]GM2 ElectroSet
+[p3,25,120,0]GM2 AnalogSet
+[p3,32,120,0]GM2 JazzSet
+[p3,40,120,0]GM2 BrushSet
+[p3,48,120,0]GM2 OrchestraSet
+[p3,56,120,0]GM2 SFX Set
+[end]
