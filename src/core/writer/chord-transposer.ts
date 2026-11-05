@@ -588,28 +588,31 @@ export class ChordTransposer {
     const effectiveHiKey = hiKey !== undefined ? hiKey : 6;
     const rootShift = ChordTransposer.calculateHiKeyShift(targetChord.rootPitchClass, effectiveHiKey);
 
-    // 若半音位移為 0 且無音階調整，直接回傳原音
-    const isChordNtt = ntt === 2 || ntt === 130 || ntt === 'Chord';
+    const isBass = channel === 10; // Ch 10 為 Bass 聲部
+    const isChordPart = channel === 11 || channel === 12 || channel === 13; // Ch 11/12/13 為 Chord 1/2, Pad
+    const isChordNtt = ntt === 2 || ntt === 130 || ntt === 'Chord' || isChordPart;
     const isStrictTriad = targetChord.type === 'maj' || targetChord.type === 'm';
-    if (rootShift === 0 && scaleShift === 0 && (!isChordNtt || !isStrictTriad || pitchClass !== 11)) {
+
+    // 若半音位移為 0 且無音階調整，直接回傳原音 (若為和弦伴奏聲部且為純三和弦，需放行 7 音進行吸附保護)
+    if (rootShift === 0 && scaleShift === 0 && (!isChordNtt || !isStrictTriad || (pitchClass !== 11 && pitchClass !== 10))) {
       return pitch;
     }
 
-    const isBass = channel === 10; // Ch 10 為 Bass 聲部
-    const isChordPart = channel === 11 || channel === 12; // Ch 11/12 為 Chord 1/2
-
     // 3. 疊加根音位移與音階調整
     let newPitch = pitch + rootShift + scaleShift;
-    // 4. NTT = 2 / 130 (Chord) 和弦音智慧吸附保護 (Chord Tone Snapping)
+    // 4. NTT 和弦音智慧吸附保護 (Chord Tone Snapping - 支援 Major / Minor 原廠規格)
     if (isChordNtt && !isDrum && channel !== 9 && channel !== 10) {
-      const targetRootPc = ((targetChord.semitonesFromC % 12) + 12) % 12;
+      const targetRootPc = ((targetChord.rootPitchClass % 12) + 12) % 12;
       const notePc = ((newPitch % 12) + 12) % 12;
       const relPc = ((notePc - targetRootPc) + 12) % 12;
       if (targetChord.type === 'maj') {
-        if (relPc === 11) newPitch += 1; // 大七度吸附至根音 (+1 半音)
-      } else if (targetChord.type === 'm') {
-        if (relPc === 8) newPitch -= 1;  // 雙重保險：消除 G# (8) -> 吸附至五度音 (7)
-        else if (relPc === 11) newPitch -= 1; // 大七度 (11) 吸附至小七度 (10)
+        if (relPc === 11) newPitch += 1; // 大七度吸附至根音 (+1 半音，如 CM7 原音 B 在 C 和弦下吸附為 C)
+        else if (relPc === 10) newPitch += 2; // 小七度吸附至根音 (+2 半音)
+      } else if (targetChord.type === 'm' || targetChord.type === 'm7') {
+        if (relPc === 11) newPitch -= 1; // 大七度 (11) 吸附至小七度 (10，消除 G# 衝突，調和為純淨小七度 G)
+        else if (relPc === 8) newPitch -= 1; // 消除 G# (8) -> 吸附至五度音 (7)
+      } else if (targetChord.type === '7') {
+        if (relPc === 11) newPitch -= 1; // 大七度 (11) 吸附至小七度 (10)
       }
     }
 
