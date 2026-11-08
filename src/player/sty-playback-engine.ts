@@ -55,6 +55,8 @@ export interface PlaybackState {
 
 export type TickCallback = (bar: number, beat: number, tick: number, totalBars: number) => void;
 export type ChannelActivityCallback = (activeChannels: Set<number>) => void;
+export type PlayStateCallback = (isPlaying: boolean) => void;
+export type PlayEndedCallback = () => void;
 
 export class StyPlaybackEngine {
   private parsed: YamahaFileParsed | null = null;
@@ -106,6 +108,8 @@ export class StyPlaybackEngine {
   // 回呼
   private onTickCallback: TickCallback | null = null;
   private onActivityCallback: ChannelActivityCallback | null = null;
+  private onPlayStateChangeCallback: PlayStateCallback | null = null;
+  private onEndedCallback: PlayEndedCallback | null = null;
   private activeChannelsInWindow: Set<number> = new Set();
 
   constructor() {
@@ -269,6 +273,14 @@ export class StyPlaybackEngine {
 
   public setOnActivity(cb: ChannelActivityCallback) {
     this.onActivityCallback = cb;
+  }
+
+  public setOnPlayStateChange(cb: PlayStateCallback | null) {
+    this.onPlayStateChangeCallback = cb;
+  }
+
+  public setOnEnded(cb: PlayEndedCallback | null) {
+    this.onEndedCallback = cb;
   }
 
   public setChannelMute(channel: number, mute: boolean) {
@@ -1191,7 +1203,7 @@ export class StyPlaybackEngine {
    */
   public play() {
     if (!this.currentSection || this.sectionEvents.length === 0) return;
-    this.stop();
+    this.stop(false);
 
     const ctx = getSharedAudioContext();
     if (ctx && ctx.state === 'suspended') {
@@ -1199,6 +1211,9 @@ export class StyPlaybackEngine {
     }
 
     this.isPlaying = true;
+    if (this.onPlayStateChangeCallback) {
+      this.onPlayStateChangeCallback(true);
+    }
 
     // 若為 MIDI 模式，初始化琴端 8 大聲部音色與音量
     if (this.outputMode === 'midi') {
@@ -1254,6 +1269,9 @@ export class StyPlaybackEngine {
           this.lastScheduledTick = -1;
         } else {
           this.stop();
+          if (this.onEndedCallback) {
+            this.onEndedCallback();
+          }
           return;
         }
       }
@@ -1389,7 +1407,18 @@ export class StyPlaybackEngine {
       const currentCtx = getSharedAudioContext();
       const now = currentCtx ? currentCtx.currentTime : 0;
       const elapsedSec = Math.max(0, now - this.playbackStartAudioTime);
-      const curTick = (elapsedSec * ticksPerSec) % this.totalSectionTicks;
+      const rawTick = elapsedSec * ticksPerSec;
+
+      if (!this.isLooping && rawTick >= this.totalSectionTicks) {
+        // 單次播放已達結尾，避免取模產生 Bar 1 抖動與數值回捲
+        this.stop();
+        if (this.onEndedCallback) {
+          this.onEndedCallback();
+        }
+        return;
+      }
+
+      const curTick = rawTick % this.totalSectionTicks;
 
       const currentBar = Math.floor(curTick / ticksPerBar) + 1;
       const beatInBar = (curTick % ticksPerBar) / ticksPerBeat + 1;
@@ -1410,24 +1439,27 @@ export class StyPlaybackEngine {
         this.onActivityCallback(new Set(this.activeChannelsInWindow));
       }
 
-      this.rafId = requestAnimationFrame(renderTick);
+      if (typeof requestAnimationFrame !== 'undefined') { this.rafId = requestAnimationFrame(renderTick); }
     };
 
-    this.rafId = requestAnimationFrame(renderTick);
+    if (typeof requestAnimationFrame !== 'undefined') { this.rafId = requestAnimationFrame(renderTick); }
   }
 
   public pause() {
     this.stop();
   }
 
-  public stop() {
+  public stop(notify: boolean = true) {
+    const wasPlaying = this.isPlaying;
     this.isPlaying = false;
     if (this.timerId) {
       clearInterval(this.timerId);
       this.timerId = null;
     }
     if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
+      if (typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(this.rafId);
+      }
       this.rafId = null;
     }
     if (this.activeProgressionBar !== -1) {
@@ -1442,6 +1474,9 @@ export class StyPlaybackEngine {
       for (let ch = 8; ch <= 15; ch++) {
         midiManager.sendControlChange(ch, 11, 127);
       }
+    }
+    if (notify && wasPlaying && this.onPlayStateChangeCallback) {
+      this.onPlayStateChangeCallback(false);
     }
   }
 

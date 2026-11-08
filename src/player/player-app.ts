@@ -559,6 +559,19 @@ export class PlayerApp {
         }
       });
     });
+
+    // 播放狀態變更監聽 (當單次播完自動停止或手動停止時，同步刷新按鈕狀態)
+    styPlaybackEngine.setOnPlayStateChange(() => {
+      this.updatePlayStateUI();
+    });
+
+    // 全曲 / 單段落單次播完 (On Ended) 自動歸零重設指針與小節顯示
+    styPlaybackEngine.setOnEnded(() => {
+      this.updatePlayStateUI();
+      this.trackEditor?.updatePlayhead(0);
+      const totalBars = styPlaybackEngine.getTotalBars();
+      this.labelPosition.textContent = `小節 01 / ${totalBars.toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
+    });
   }
 
   private async loadSampleByUrl(url: string, name: string) {
