@@ -124,6 +124,7 @@ export class SingleTrackEditor {
   // 🥁 鼓組 16-Step 步進格子矩陣視圖 (Drum Step Sequencer Grid)
   private viewMode: 'piano-roll' | 'drum-grid' = 'piano-roll';
   private lastPlayheadStep: number = -1;
+  private onToggleSoloPlayCallback: ((channel: number) => void) | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -627,6 +628,7 @@ export class SingleTrackEditor {
     const prevScrollLeft = this.gridScrollEl ? this.gridScrollEl.scrollLeft : 0;
     const prevScrollTop = this.gridScrollEl ? this.gridScrollEl.scrollTop : 0;
     const isDrum = styPlaybackEngine.isChannelDrum(this.channel);
+    const isSoloPlayingThisTrack = styPlaybackEngine.getIsPlaying() && styPlaybackEngine.getChannelSolo() === this.channel;
 
     this.container.innerHTML = '';
     this.container.style.setProperty('--part-accent', this.partAccentColor);
@@ -639,6 +641,9 @@ export class SingleTrackEditor {
         <span class="editor-track-badge" style="background: ${this.partAccentColor};">CH ${this.channel + 1} - ${this.partLabel}</span>
         ${!this.isChannelActive ? '<span class="editor-status-pill pill-inactive" id="ed-pill-activate" title="此聲部尚未啟用，點擊挑選樂器音色並自動建立 CASM 伴奏規則">➕ 點此啟用聲部</span>' : ''}
         <span class="editor-voice-tag clickable-voice-tag" title="${this.voiceInfo ? this.voiceInfo.voiceName + ' (點擊更換音色)' : '點擊更換音色'}">${this.voiceInfo?.voiceName || (this.isChannelActive ? '預設音色' : '未配置音色')} ✏️</span>
+        <button id="ed-btn-solo-play" class="editor-solo-play-btn ${isSoloPlayingThisTrack ? 'playing' : ''}" title="${isSoloPlayingThisTrack ? '暫停獨奏試聽此軌' : '僅播此軌 (Solo) 伴奏 (點擊切換播放/暫停)'}">
+          ${isSoloPlayingThisTrack ? '⏸ 暫停獨奏 (Pause)' : '🎧 僅播此軌 (Solo)'}
+        </button>
         <span class="editor-meta-pill">拍號: ${this.timeSignature.numerator}/${this.timeSignature.denominator} | 總計: ${this.totalBars} 小節 | PPQ: ${this.division}</span>
         <span id="ed-note-count-pill" class="editor-meta-pill">音符總數: ${this.events.length}</span>
         ${styPlaybackEngine.isChannelMegaVoice(this.channel) ? '<span id="ed-megavoice-pill" class="editor-meta-pill" style="border-color: #f59e0b; color: #fbbf24; background: rgba(245, 158, 11, 0.1);" title="Yamaha 兆級音色 (C6 ≥ 96 特效雜音直通保護已啟動)">⚡ MegaVoice (C6+ 原音直通)</span>' : ''}
@@ -2127,6 +2132,14 @@ export class SingleTrackEditor {
       }
     });
 
+    // 🎧 僅播此軌 (Solo) 快捷試聽按鈕
+    const btnSoloPlay = this.container.querySelector('#ed-btn-solo-play');
+    btnSoloPlay?.addEventListener('click', () => {
+      if (this.onToggleSoloPlayCallback) {
+        this.onToggleSoloPlayCallback(this.channel);
+      }
+    });
+
     // 點擊「➕ 點此啟用聲部」標籤
     const pillActivate = this.container.querySelector('#ed-pill-activate');
     pillActivate?.addEventListener('click', () => {
@@ -2398,6 +2411,25 @@ export class SingleTrackEditor {
   /**
    * 即時平滑更新播放游標 (GPU 加速，零 Layout Reflow，永不卡頓)
    */
+  public setOnToggleSoloPlay(cb: (channel: number) => void) {
+    this.onToggleSoloPlayCallback = cb;
+  }
+
+  public updateSoloPlayState(isSoloPlaying: boolean, soloChannel?: number | null) {
+    const btn = this.container.querySelector('#ed-btn-solo-play') as HTMLButtonElement | null;
+    if (!btn) return;
+    const isThisTrackPlaying = isSoloPlaying && (soloChannel === undefined || soloChannel === this.channel);
+    if (isThisTrackPlaying) {
+      btn.classList.add('playing');
+      btn.innerHTML = '⏸ 暫停獨奏 (Pause)';
+      btn.title = '暫停獨奏試聽此軌';
+    } else {
+      btn.classList.remove('playing');
+      btn.innerHTML = '🎧 僅播此軌 (Solo)';
+      btn.title = '僅播此軌 (Solo) 伴奏 (點擊切換播放/暫停)';
+    }
+  }
+
   public updatePlayhead(currentTick: number) {
     if (this.viewMode === 'drum-grid') {
       const beatsPerBar = this.timeSignature.numerator || 4;

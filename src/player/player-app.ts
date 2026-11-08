@@ -140,6 +140,9 @@ export class PlayerApp {
         this.activateChannel(channel);
       }
     });
+    this.trackEditor.setOnToggleSoloPlay((channel) => {
+      this.toggleSoloPlay(channel);
+    });
 
     this.voicePicker = new VoicePickerModal();
     this.sectionCloneModal = new SectionCloneModal();
@@ -321,21 +324,7 @@ export class PlayerApp {
 
     // 🎧 單軌獨奏播放
     this.btnPlaySolo.addEventListener('click', () => {
-      const ctx = getSharedAudioContext();
-      if (ctx && ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      if (styPlaybackEngine.getIsPlaying() && styPlaybackEngine.getChannelSolo() === this.focusedChannel) {
-        styPlaybackEngine.stop();
-        this.updatePlayStateUI();
-      } else {
-        // 獨奏模式：鎖定當前聚焦聲部
-        styPlaybackEngine.setChannelSolo(this.focusedChannel);
-        this.syncMixerSoloButtons();
-        styPlaybackEngine.play();
-        this.updatePlayStateUI();
-      }
+      this.toggleSoloPlay();
     });
 
     this.btnStop.addEventListener('click', () => {
@@ -1345,6 +1334,27 @@ export class PlayerApp {
     });
   }
 
+  public toggleSoloPlay(channel?: number) {
+    const ch = channel ?? this.focusedChannel;
+    const ctx = getSharedAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    if (styPlaybackEngine.getIsPlaying() && styPlaybackEngine.getChannelSolo() === ch) {
+      styPlaybackEngine.stop();
+      this.updatePlayStateUI();
+    } else {
+      if (ch !== this.focusedChannel) {
+        this.setFocusedChannel(ch);
+      }
+      styPlaybackEngine.setChannelSolo(ch);
+      this.syncMixerSoloButtons();
+      styPlaybackEngine.play();
+      this.updatePlayStateUI();
+    }
+  }
+
   private updatePlayStateUI() {
     const isPlaying = styPlaybackEngine.getIsPlaying();
     const currentSolo = styPlaybackEngine.getChannelSolo();
@@ -1369,6 +1379,8 @@ export class PlayerApp {
       this.btnPlaySolo.classList.remove('playing');
       this.btnPlaySolo.innerHTML = '🎧 僅播此軌 (Solo)';
     }
+
+    this.trackEditor?.updateSoloPlayState(isPlaying && currentSolo !== null, currentSolo);
 
     this.updateFocusedBanner();
   }
