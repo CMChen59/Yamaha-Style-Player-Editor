@@ -1,5 +1,10 @@
 # Yamaha Style Player & Editor 全階段執行藍圖與需求追蹤手冊 (Master Roadmap)
 
+> [!IMPORTANT]
+> **最新終極全能工作站藍圖已升級發佈**：  
+> 請參閱 2026-11-08 確立之全新旗艦計畫書 👉 [**docs/MASTER_ULTIMATE_EXECUTION_PLAN.md**](file:///D:/Vibe%20Coding/MIDI/Yamaha-Style-Player-Editor/docs/MASTER_ULTIMATE_EXECUTION_PLAN.md)。  
+> 完整收錄「MIDI 琴端發聲 ➔ 視覺化小節切片 ➔ SFF2/PAD 深度創作 ➔ USB 一鍵直傳 SX920」五大優先級完整規劃。
+
 本手冊為 **Yamaha Style Player & Editor** 專案的唯一核心執行進度總表與動態需求追蹤庫。
 
 所有經過討論確立之開發階段、功能任務、原廠規格校準項目，以及後續新增之優化需求，皆統整於此，作為後續執行的最高依據與歷史對照，以確保功能不遺漏、進度有脈絡、架構清晰嚴謹。
