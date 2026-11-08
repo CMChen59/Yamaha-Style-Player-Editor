@@ -8,7 +8,7 @@ import type { YamahaFileParsed, YamahaCustomChunk } from '../models/types';
 import { DEFAULT_STYLE_PARTS, type StylePartId } from '../models/style-types';
 
 export type NtrRule = 'Root Transpose' | 'Root Fixed' | 'Guitar';
-export type NttRule = 'Bypass' | 'Chord' | 'Bass' | 'Melody';
+export type NttRule = 'Bypass' | 'Chord' | 'Bass' | 'Melody' | 'Maj-min' | 'Maj-min (Intro)';
 export type RetriggerRule = 'Stop' | 'Pitch Shift' | 'Retrigger';
 
 export interface CasmPartRule {

@@ -588,9 +588,17 @@ export class ChordTransposer {
     const effectiveHiKey = hiKey !== undefined ? hiKey : 6;
     const rootShift = ChordTransposer.calculateHiKeyShift(targetChord.rootPitchClass, effectiveHiKey);
 
+    // Yamaha SFF2 官方手冊規範 (Page 26 & 32)：
+    // NTT = 7 (Maj-min (Intro)) / Bass (Intro)：當彈奏和弦之根音與該段落之 Section Key 相同時 (rootShift === 0)，
+    // Intro 與 Ending 段落中的旋律與裝飾樂句 (如 4006 Intro A 中的 Bb3 自然小調音階) 必須 100% 保持原始音高播放！
+    const isMajMinIntro = ntt === 7 || ntt === 'Maj-min' || ntt === 'Maj-min (Intro)';
+    if (isMajMinIntro && rootShift === 0) {
+      return pitch;
+    }
+
     const isBass = channel === 10; // Ch 10 為 Bass 聲部
-    const isChordPart = channel === 11 || channel === 12 || channel === 13; // Ch 11/12/13 為 Chord 1/2, Pad
-    const isChordNtt = ntt === 2 || ntt === 130 || ntt === 'Chord' || isChordPart;
+    const isChordPart = (channel === 11 || channel === 12 || channel === 13) && !isMajMinIntro; // Ch 11/12/13 為 Chord 1/2, Pad
+    const isChordNtt = (ntt === 2 || ntt === 130 || ntt === 'Chord' || isChordPart) && !isMajMinIntro;
     const isStrictTriad = targetChord.type === 'maj' || targetChord.type === 'm';
 
     // 若半音位移為 0 且無音階調整，直接回傳原音 (若為和弦伴奏聲部且為純三和弦，需放行 7 音進行吸附保護)
