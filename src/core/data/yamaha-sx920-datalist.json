@@ -4173,17 +4173,17 @@
     "suitabilityReason": ""
   },
   {
-    "id": "pizzicato-strings",
-    "name": "Pizzicato Strings",
-    "chineseName": "跳躍撥弦 (Pizzicato Strings)",
-    "category": "Strings",
+    "id": "panpipes",
+    "name": "PanPipes",
+    "chineseName": "排簫 (PanPipes)",
+    "category": "Woodwind",
     "msb": 0,
     "lsb": 113,
     "pc": 75,
     "icon": "S809",
     "type": "Sweet!",
     "suitability": "recommended",
-    "suitabilityReason": "Multi Pad 示範撥弦"
+    "suitabilityReason": "Yamaha 原廠排簫排笛旋律音色 (PSR-SX920 官方 0-113-76)"
   },
   {
     "id": "voice-0-112-78-whistle",

@@ -13,7 +13,7 @@ export interface YamahaChordPreset {
   msb: number;     // CC 0 Bank Select MSB
   lsb: number;     // CC 32 Bank Select LSB
   icon: string;
-  category: 'Piano' | 'E.Piano' | 'Guitar' | 'Strings' | 'Organ' | 'Accordion' | 'Brass' | 'Saxophone' | 'Pad' | 'Choir' | 'Synth';
+  category: 'Piano' | 'E.Piano' | 'Guitar' | 'Strings' | 'Organ' | 'Accordion' | 'Brass' | 'Saxophone' | 'Woodwind' | 'Pad' | 'Choir' | 'Synth';
   categoryLabel: string;
   description: string;
 }
@@ -341,14 +341,26 @@ export const YAMAHA_SX920_CHORD_VOICES: YamahaChordPreset[] = [
   {
     id: 'pizzicato-strings',
     name: 'Pizzicato Strings (跳躍撥弦)',
-    panelPc: 76,
-    pc: 75,
+    panelPc: 46,
+    pc: 45,
     msb: 0,
     lsb: 113,
     icon: '✨',
     category: 'Strings',
     categoryLabel: '🎻 弦樂群 (Strings)',
     description: '俏皮輕快的提琴撥弦，適合動態切奏與小節點綴。',
+  },
+  {
+    id: 'panpipes',
+    name: 'PanPipes (排簫/排笛)',
+    panelPc: 76,
+    pc: 75,
+    msb: 0,
+    lsb: 113,
+    icon: '🪈',
+    category: 'Woodwind',
+    categoryLabel: '🪈 木管/長笛 (Woodwind)',
+    description: 'Yamaha 原廠空靈排簫/排笛音色，常用於民族旋律與節奏裝飾 (0-113-76)。',
   },
 
   // --- 🎷 風琴與手風琴 (Organ & Accordion) ---

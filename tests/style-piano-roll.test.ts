@@ -71,9 +71,9 @@ describe('步驟 3.1: STY 段落聲部鋼琴卷軸 (Piano Roll) 音符提取與�
       expect(note.durationTick).toBeGreaterThan(0);
     }
 
-    // 驗證音色解析為跳躍撥弦 (pizzicato)，而非打擊樂器
+    // 驗證音色解析為排簫/木管 (flute)，而非打擊樂器
     const inst = resolveAuditionInstrumentId(0, 113, 75, 8);
-    expect(inst.instrumentId).toBe('pizzicato');
+    expect(inst.instrumentId).toBe('flute');
     expect(inst.isDrum).toBe(false);
   });
 

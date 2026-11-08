@@ -178,7 +178,7 @@ describe('Phase 4.1: YamahaStyleModifier 伴奏風格 8 聲部混音與音色修
     // 原檔為 Bank 0-113, PC 75 (跳躍撥弦 Pizzicato Strings)，演奏音符 71, 74, 75 等高音旋律跑動
     const resOrig = resolveAuditionInstrumentId(0, 113, 75, 8);
     expect(resOrig.isDrum).toBe(false);
-    expect(resOrig.instrumentId).toBe('pizzicato');
+    expect(resOrig.instrumentId).toBe('flute');
 
     // 2. 將 Ch 8 更換為長笛 (Sweet! Flute, Bank 0-112, PC 73)
     const ok = YamahaStyleModifier.setPartMixing(realSty, 8, {

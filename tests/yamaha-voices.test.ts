@@ -12,12 +12,19 @@ describe('Yamaha PSR-SX920 音色資料庫與搜尋引擎測試 (Voice DB)', () 
     expect(VOICE_CATEGORIES.length).toBeGreaterThan(10);
   });
 
-  it('能精準識別樣品檔案中的 Pad 3 原廠撥弦 (Bank 0-113, PC 75)', () => {
+  it('能精準識別 4006 Intro A 中的原廠排簫 PanPipes (Bank 0-113, PC 75)', () => {
     const voice = findYamahaVoice(0, 113, 75);
     expect(voice).toBeDefined();
-    expect(voice?.name).toBe('Pizzicato Strings');
-    expect(voice?.category).toBe('Strings');
+    expect(voice?.name).toBe('PanPipes');
+    expect(voice?.category).toBe('Woodwind');
     expect(voice?.icon).toBe('S809');
+  });
+
+  it('能精準識別原廠跳躍撥弦 PizzicatoStrings (Bank 0-113, PC 45)', () => {
+    const voice = findYamahaVoice(0, 113, 45);
+    expect(voice).toBeDefined();
+    expect(voice?.name).toBe('PizzicatoStrings');
+    expect(voice?.category).toBe('Strings');
   });
 
   it('能精準識別樣品檔案中的 Pad 1 旗艦西雅圖弦樂 (Bank 8-33, PC 49)', () => {
@@ -55,7 +62,7 @@ describe('Yamaha PSR-SX920 音色資料庫與搜尋引擎測試 (Voice DB)', () 
   it('三聯號數字搜尋', () => {
     const results = searchYamahaVoices('0-113-75');
     expect(results.length).toBe(1);
-    expect(results[0].name).toBe('Pizzicato Strings');
+    expect(results[0].name).toBe('PanPipes');
   });
 
   it('資料庫擴充至 2,395 種官方 100% 完整 Data List 音色', () => {

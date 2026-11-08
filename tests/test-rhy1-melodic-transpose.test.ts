@@ -14,10 +14,10 @@ describe('全聲部動態打擊樂/旋律樂器判定與轉調防護測試', () 
     styPlaybackEngine.loadParsed(parsed);
     styPlaybackEngine.selectSection('Intro A');
 
-    // Ch 8 是 Pizzicato Strings (Strings 分類)
+    // Ch 8 是 PanPipes (Woodwind 分類)
     const voiceCh8 = styPlaybackEngine.getPartVoices().get(8);
-    expect(voiceCh8?.voiceName).toContain('Pizzicato');
-    expect(voiceCh8?.category).toBe('Strings');
+    expect(voiceCh8?.voiceName).toContain('PanPipes');
+    expect(voiceCh8?.category).toBe('Woodwind');
 
     // 驗證 isChannelDrum 判定
     expect(styPlaybackEngine.isChannelDrum(8)).toBe(false); // Ch 8 是旋律樂器
