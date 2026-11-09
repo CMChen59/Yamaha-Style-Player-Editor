@@ -59,11 +59,14 @@ describe('4006 Intro A CASM Volume, Voice, Pan & Effects Resolution Test', () =>
     expect(styPlaybackEngine.getChannelReverb(14)).toBe(72); // Phrase 1
     expect(styPlaybackEngine.getChannelReverb(15)).toBe(72); // Phrase 2
 
-    // 驗證音色也是 100% 吻合：
+    // 驗證音色也是 100% 吻合 (優先呈現 SX920 面板標準代碼 104-21-1 CFX Concert Grand，並記錄相容舊碼 104-1-1)：
     const voices = styPlaybackEngine.getPartVoices();
     expect(voices.get(11)?.msb).toBe(104);
-    expect(voices.get(11)?.lsb).toBe(1);
-    expect(voices.get(11)?.pc).toBe(0); // 1-based: 104-1-1 CFX Concert Grand
+    expect(voices.get(11)?.lsb).toBe(21);
+    expect(voices.get(11)?.pc).toBe(0); // 1-based SX920 面板: 104-21-1 CFX Concert Grand
+    expect(voices.get(11)?.rawLsb).toBe(1); // 檔案相容舊碼: 104-1-1
+    expect(voices.get(11)?.isLegacyAlias).toBe(true);
+    expect(voices.get(11)?.legacyCodeLabel).toBe('104-1-1');
 
     expect(voices.get(12)?.msb).toBe(104);
     expect(voices.get(12)?.lsb).toBe(13);

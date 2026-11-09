@@ -4993,6 +4993,255 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    /* ==========================================================================
+       📊 標準 MIDI 音樂檔全景透視與 16 通道樂器總覽 (MIDI Song & Channel Inspector)
+       ========================================================================== */
+    .midi-inspector-panel {
+      background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(9, 13, 22, 0.96));
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 12px;
+      padding: 18px 20px;
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.08);
+    }
+
+    .midi-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+    }
+
+    .midi-kpi-card {
+      background: rgba(30, 41, 59, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .midi-kpi-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .midi-kpi-value {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #f8fafc;
+      letter-spacing: 0.3px;
+    }
+
+    .midi-kpi-sub {
+      font-size: 0.74rem;
+      color: #64748b;
+      line-height: 1.35;
+    }
+
+    .midi-locator-bar {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .midi-locator-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .midi-locator-input {
+      width: 68px;
+      background: #090d16;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      font-size: 0.92rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 5px 8px;
+      border-radius: 6px;
+      outline: none;
+    }
+
+    .midi-locator-btn {
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #7dd3fc;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .midi-locator-btn:hover, .midi-locator-btn.active {
+      background: rgba(56, 189, 248, 0.28);
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+
+    .midi-ch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .midi-ch-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.18s;
+      position: relative;
+      box-sizing: border-box;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .midi-ch-card:hover {
+      border-color: rgba(56, 189, 248, 0.45);
+      background: rgba(30, 41, 59, 0.85);
+    }
+
+    .midi-ch-card.is-focused {
+      border-color: var(--part-accent, #10b981);
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.22);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .midi-ch-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 26px;
+      min-width: 0;
+    }
+
+    .midi-ch-badge {
+      background: rgba(56, 189, 248, 0.18);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      font-size: 0.76rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      line-height: 1.3;
+    }
+
+    .midi-ch-voice-btn {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .midi-ch-voice-btn:hover {
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+
+    .midi-ch-meta-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.74rem;
+      color: #94a3b8;
+      min-width: 0;
+    }
+
+    .midi-ch-meta-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .midi-ch-footer {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-top: 2px;
+      min-width: 0;
+    }
+
+    .midi-ch-sliders {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .midi-ch-card .part-vol-wrap,
+    .midi-ch-card .part-pan-wrap {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      margin-top: 0;
+    }
+
+    .midi-ch-card .part-vol-slider,
+    .midi-ch-card .part-pan-slider {
+      flex: 1 1 0%;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      margin: 0;
+    }
+
+    .midi-ch-bar-track {
+      height: 5px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .midi-ch-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #10b981);
+      border-radius: 999px;
+    }
   </style>
 </head>
 <body>
@@ -5016,20 +5265,21 @@
     <section>
       <div id="drop-zone" class="drop-zone">
         <span class="drop-zone-icon">📂</span>
-        <div class="drop-zone-title">點擊選擇或拖曳 Yamaha STY 伴奏檔案至此</div>
-        <div class="drop-zone-desc">支援 .sty, .prs, .sst 等 Yamaha 原廠伴奏格式</div>
+        <div class="drop-zone-title">點擊選擇或拖曳 Yamaha STY 伴奏檔 或 標準 MIDI (.mid) 音樂檔至此</div>
+        <div class="drop-zone-desc">支援 .sty, .prs, .sst 原廠伴奏格式，以及 .mid, .midi 標準音樂檔（直拉播放並自動解析小節、速度、16 通道與使用樂器）</div>
         <div class="sample-bar" onclick="event.stopPropagation()">
           <button id="btn-open-new-style" class="btn-create-style" title="從無到有建立全新的 Yamaha SFF2 伴奏檔案">
             ✨ 建立全新伴奏 (New Style)
           </button>
-          <span style="font-size: 0.75rem; color: #94a3b8; margin-left: 6px;">或選擇示範伴奏：</span>
+          <span style="font-size: 0.75rem; color: #94a3b8; margin-left: 6px;">或選擇示範檔：</span>
           <button class="sample-btn" data-file="LoveSong.T547.sty">🎵 LoveSong.T547.sty (70 BPM)</button>
           <button class="sample-btn" data-file="4006_SX900.T547.sty">🎵 4006_SX900.T547.sty (92 BPM)</button>
           <button class="sample-btn" data-file="1024_容易受傷的女人.sty">🎵 容易受傷的女人.sty (66 BPM)</button>
           <button class="sample-btn" data-file="SX920_V2_4Bar_Test.sty">🎵 SX920_V2_4Bar_Test.sty (120 BPM)</button>
+          <button class="sample-btn" data-file="demo_groove.mid" style="border-color: rgba(16, 185, 129, 0.5); color: #34d399;">🎼 demo_groove.mid (MIDI 範例曲)</button>
         </div>
       </div>
-      <input type="file" id="file-input" accept=".sty,.prs,.sst,.mid" style="display: none;">
+      <input type="file" id="file-input" accept=".sty,.prs,.sst,.mid,.midi" style="display: none;">
     </section>
 
     <!-- 伴奏規格儀表板 -->
@@ -5064,15 +5314,24 @@
           <div class="output-card-icon">🎹</div>
           <div class="output-card-info">
             <div class="output-card-title">Yamaha 實體電子琴 (PSR-SX920 Web MIDI)</div>
-            <div class="output-card-sub">直通電子琴旗艦 AWM2 音源，聆聽原廠最高音質伴奏！</div>
+            <div class="output-card-sub">直通電子琴旗艦 AWM2 音源，聆聽 100% 原廠 S.Art! 與 MegaVoice 真實表現力</div>
+          </div>
+          <div class="output-check">✔</div>
+        </button>
+
+        <button id="btn-output-both" class="output-card-btn">
+          <div class="output-card-icon">⚡</div>
+          <div class="output-card-info">
+            <div class="output-card-title">雙模同步發聲 (電腦 + PSR-SX920)</div>
+            <div class="output-card-sub">同時驅動電腦軟音源與實體琴 MIDI，方便無琴預覽與接琴雙向比對</div>
           </div>
           <div class="output-check">✔</div>
         </button>
       </div>
 
-      <!-- 琴端專屬設定抽屜 (切換至實體琴發聲時自動展開) -->
+      <!-- 琴端專屬設定抽屜 (切換至實體琴發聲或雙模同步時自動展開) -->
       <div id="midi-drawer" class="midi-drawer" style="display: none;">
-        <div class="midi-drawer-controls">
+        <div class="midi-drawer-controls" style="flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <label for="select-midi-port" style="font-size: 0.82rem; color: #94a3b8; font-weight: bold;">MIDI 輸出埠：</label>
             <select id="select-midi-port" class="audio-output-select" style="min-width: 200px;"></select>
@@ -5081,15 +5340,29 @@
             <label for="select-midi-in-port" style="font-size: 0.82rem; color: #f43f5e; font-weight: bold;">MIDI 輸入埠 (琴鍵步進)：</label>
             <select id="select-midi-in-port" class="audio-output-select" style="min-width: 200px;"></select>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <button id="btn-refresh-midi" class="btn-drawer">🔄 重新整理設備</button>
-            <button id="btn-test-piano" class="btn-drawer" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399;">🎵 琴端發聲測試</button>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+            <button id="btn-refresh-midi" class="btn-drawer" title="重新掃描 USB MIDI 輸出與輸入裝置">🔄 重新整理設備</button>
+            <button id="btn-sync-midi-parts" class="btn-drawer" style="background: rgba(56, 189, 248, 0.2); border-color: #38bdf8; color: #7dd3fc;" title="立即將目前段落 8 大伴奏聲部的 SX920 音色 (MSB/LSB/PC) 與混音參數推播至琴端">📡 同步 8 聲部至琴端</button>
+            <button id="btn-test-piano" class="btn-drawer" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399;" title="測試 Ch1 CFX Concert Grand [104-21-1] 鋼琴琶音">🎹 測試 Ch1 鋼琴</button>
+            <button id="btn-test-midi-drums" class="btn-drawer" style="background: rgba(245, 158, 11, 0.18); border-color: #f59e0b; color: #fbbf24;" title="測試 Ch10 Standard Kit 1 [127-0-1] 伴奏鼓組">🥁 測試 Ch10 鼓組</button>
+            <button id="btn-test-midi-bass" class="btn-drawer" style="background: rgba(59, 130, 246, 0.18); border-color: #3b82f6; color: #93c5fd;" title="測試 Ch11 Finger Bass [104-2-34] 伴奏貝斯">🎸 測試 Ch11 貝斯</button>
+            <button id="btn-test-midi-chord" class="btn-drawer" style="background: rgba(168, 85, 247, 0.18); border-color: #a855f7; color: #d8b4fe;" title="測試 Ch12 CFX Concert Grand [104-21-1] 伴奏和弦">🎼 測試 Ch12 和弦</button>
+            <button id="btn-midi-panic" class="btn-drawer" style="background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #fca5a5;" title="對全部 16 通道發送 All Sound Off / All Notes Off 緊急消音">🛑 緊急消音 (Panic)</button>
           </div>
+        </div>
+        <!-- 即時 MIDI 訊號傳輸監控列 (Live MIDI TX Monitor) -->
+        <div id="midi-tx-monitor-bar" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: rgba(9, 13, 22, 0.85); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; padding: 7px 12px; font-family: monospace; font-size: 0.78rem; color: #cbd5e1;">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+            <span id="midi-tx-led" style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #475569; transition: all 0.1s;"></span>
+            <strong style="color: #38bdf8;">MIDI TX 即時監控：</strong>
+            <span id="midi-tx-log-text" style="color: #e2e8f0;">等待 MIDI 訊號發送... (點擊上方測試按鈕或播放伴奏即可檢視即時封包)</span>
+          </div>
+          <span id="midi-sysex-badge" style="flex-shrink: 0; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.12); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.3);">XG / GM 就緒</span>
         </div>
         <div class="midi-hint-box">
           <div style="font-weight: bold; color: #38bdf8; margin-bottom: 4px;">💡 PSR-SX920 琴端發聲與連線步進錄音設定重點：</div>
           <div>1. 請在琴右側螢幕旁按下 <strong>[MENU]</strong> ➔ 點擊螢幕上的 <strong>[MIDI]</strong> 選單。</div>
-          <div>2. 在左側預設模板中選擇 <strong style="color: #fff;">「Song」</strong>（最推薦）或 <strong style="color: #fff;">「All Parts」</strong>，琴端即可立即解鎖 8 大伴奏聲部，直接聆聽旗艦音源！</div>
+          <div>2. 在左側預設模板中選擇 <strong style="color: #fff;">「Song」</strong>（最推薦）或 <strong style="color: #fff;">「All Parts」</strong>，琴端即可立即解鎖 8 大伴奏聲部 (Ch 9~16)，直接聆聽旗艦音源！</div>
           <div>3. 請確認琴上的總音量旋鈕與 <strong>[STYLE-ACMP]</strong> 伴奏音量滑桿已開啟。</div>
           <div>4. <strong>實體琴鍵連線步進錄音</strong>：在下方單軌專注編輯器中點擊「🔴 步進錄音」，直接在 PSR-SX920 琴鍵上彈奏單音或多音和弦，放開琴鍵即自動精準記錄並依時值推進！支援空白鍵休止、T 鍵延音與退步撤銷。</div>
         </div>
@@ -5218,8 +5491,51 @@
       </div>
     </section>
 
+    <!-- 📊 標準 MIDI 音樂檔全景透視與 16 通道樂器總覽 (載入一般 .mid 檔時自動切換顯示，不建立假預設段落) -->
+    <section id="midi-song-inspector-panel" class="midi-inspector-panel">
+      <div class="panel-header" style="margin-bottom: 0;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <span style="color: #34d399;">📊 MIDI 音樂檔全景透視與通道樂器總覽 (MIDI Song &amp; 16-Channel Inspector)</span>
+          <span id="midi-song-mode-badge" style="font-size: 0.74rem; padding: 2px 10px; border-radius: 999px; background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.45); color: #6ee7b7; font-weight: 600;">16 通道原曲原調直通模式 · 無預設假段落</span>
+        </div>
+        <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">點擊任一通道卡片可獨奏、靜音、更換音色或展開下方單軌音符捲軸</span>
+      </div>
+
+      <!-- 五大關鍵規格指標卡 (KPI Summary Cards) -->
+      <div id="midi-kpi-grid" class="midi-kpi-grid"></div>
+
+      <!-- 小節區間選段試聽器 (Bar Range & Loop Locator) -->
+      <div class="midi-locator-bar">
+        <div class="midi-locator-left">
+          <span style="font-size: 0.82rem; font-weight: 700; color: #38bdf8;">🎯 播放小節區間定位：</span>
+          <span style="font-size: 0.8rem; color: #cbd5e1;">從第</span>
+          <input type="number" id="input-midi-start-bar" class="midi-locator-input" min="1" value="1" title="播放起始小節">
+          <span style="font-size: 0.8rem; color: #cbd5e1;">小節 ～ 第</span>
+          <input type="number" id="input-midi-end-bar" class="midi-locator-input" min="1" value="4" title="播放結束小節">
+          <span id="label-midi-total-bars-hint" style="font-size: 0.8rem; color: #94a3b8;">小節 (全曲共 1 小節)</span>
+          <button id="btn-apply-midi-bar-range" class="midi-locator-btn active" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981; color: #ffffff;" title="立即套用指定小節區間並開始循環播放">▶ 套用並播放區間</button>
+          <button id="btn-stop-midi-bar-range" class="midi-locator-btn" style="background: rgba(244, 63, 94, 0.16); border-color: rgba(244, 63, 94, 0.45); color: #fda4af;" title="停止播放">⏹ 停止</button>
+        </div>
+        <div id="midi-quick-range-btns" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <button type="button" class="midi-locator-btn" data-range="all">▶ 全曲完整播放</button>
+          <button type="button" class="midi-locator-btn" data-range="1-4">▶ 第 1~4 小節</button>
+          <button type="button" class="midi-locator-btn" data-range="1-8">▶ 第 1~8 小節</button>
+          <button type="button" class="midi-locator-btn" data-range="1-16">▶ 第 1~16 小節</button>
+        </div>
+      </div>
+
+      <!-- 發聲通道與使用樂器明細卡片網格 -->
+      <div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+          <span id="midi-ch-section-title" style="font-size: 0.85rem; font-weight: 700; color: #e2e8f0;">🎛️ 通道與使用樂器明細 (Active Channels &amp; Instruments)</span>
+          <span id="midi-markers-summary" style="font-size: 0.75rem; color: #94a3b8;"></span>
+        </div>
+        <div id="midi-ch-grid" class="midi-ch-grid"></div>
+      </div>
+    </section>
+
     <!-- 段落選擇器矩陣 -->
-    <section class="section-matrix-panel">
+    <section id="section-matrix-panel" class="section-matrix-panel">
       <div class="panel-header">
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
           <span>伴奏段落選擇 (Yamaha Sections)</span>
@@ -5252,7 +5568,7 @@
     </section>
 
     <!-- 8 伴奏聲部混音盤 -->
-    <section class="mixer-panel">
+    <section id="mixer-panel" class="mixer-panel">
       <div class="panel-header">
         <div style="display: flex; align-items: center; gap: 12px;">
           <span>8 大伴奏聲部狀態與混音盤 (8-Part Arranger Mixer)</span>

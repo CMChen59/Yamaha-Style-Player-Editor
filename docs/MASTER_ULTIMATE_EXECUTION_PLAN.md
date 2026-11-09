@@ -47,11 +47,11 @@ flowchart TD
     2. 驗收：SX920 螢幕 User 磁區根目錄立刻出現 `TEST.STY`，點選可正常播放。
   - **工時**：1 天 ｜ **產出**：可獨立執行的傳檔核心邏輯。
 
-- [ ] **【任務 0-3】Web MIDI 琴端真實發聲引擎（Hardware Sounding via Web MIDI）**
+- [x] **【任務 0-3】Web MIDI 琴端真實發聲引擎（Hardware Sounding via Web MIDI）（軟體引擎已於 2026-11-09 完成並通過測試，待接琴實測驗收）**
   - **具體實作**：
-    1. 在網頁端加入 `Web MIDI Output` 引擎，將音軌事件（Note-On/Off, CC, Program Change）即時推播給 SX920。
-    2. 點擊播放時，聲音直接由 SX920 的喇叭或耳機發出，享受 100% 真實的原廠 Super Articulation! 與 MegaVoice 表現力。
-  - **工時**：1 天 ｜ **產出**：網頁具備「琴端實體發聲 / 電腦軟音源」一鍵切換開關。
+    1. 升級 `MidiManager` 與 `StyPlaybackEngine`，完整支援 `'webaudio' | 'midi' | 'both'` 三模式無縫切換、GM/XG SysEx 自動授權與降級喚醒、8 大伴奏聲部（Ch 9~16）SX920 音色（MSB/LSB/PC）與混音參數（Vol/Pan/Rev/Cho/Expr/PitchBend）全自動同步、Pitch Bend 彎音曲線排程、以及預排視窗（Lookahead Timestamp）0 掛音保證。
+    2. 擴充琴端專屬抽屜面板，提供「📡 同步 8 聲部至琴端」、「🎹 測試 Ch1 鋼琴」、「🥁 測試 Ch10 鼓組」、「🎸 測試 Ch11 貝斯」、「🎼 測試 Ch12 和弦」、「🛑 緊急消音 (Panic)」與「MIDI TX 即時封包監控列」。
+  - **工時**：1 天 ｜ **產出**：網頁具備「電腦軟音源 / 琴端實體發聲 / 雙模同步發聲」一鍵切換開關與即時 MIDI TX 監控器。
 
 ---
 
@@ -67,11 +67,11 @@ flowchart TD
     3. **High Key 臨界值防跳八度**：將 HiKey 設定為極值，徹底禁用琴端內部的八度強制折返（Octave Wrap）。
   - **工時**：1 天 ｜ **驗收**：實體琴彈奏 Cm、Fm、G7 時，Phrase 1 笛子旋律音高不動如山。
 
-- [ ] **【任務 1-2】PSR-SX920 原廠 2,395 種音色代碼與別名顯示零落差**
+- [x] **【任務 1-2】PSR-SX920 原廠 2,395 種音色代碼與別名顯示零落差（已於 2026-11-09 完成並通過測試）**
   - **現象**：4006.STY Main A 中 Chord 1 顯示 104-21-1 vs 琴端 104-1-1 之別名對照。
   - **具體實作**：
-    1. 完善 `LEGACY_VOICE_ALIASES` 雙向查找機制，優先以 SX920 旗艦面板名稱顯示，副標註相容舊碼。
-    2. 確保 UI 顯示名稱、MIDI Program Change、琴端螢幕顯示三者 100% 一致。
+    1. 完善 `LEGACY_VOICE_ALIASES` 與 `REVERSE_VOICE_ALIASES` 雙向查找機制，並新增 `resolveYamahaVoiceWithAlias` 與 `getLegacyAliasesForVoice`，優先以 SX920 旗艦面板名稱與代碼（`104-21-1`）顯示，副標註相容舊碼（`104-1-1`）。
+    2. 校準 `YAMAHA_SX920_CHORD_VOICES` 全數 46 款預設音色與 `StyPlaybackEngine` 的 `PartVoiceInfo`，確保 UI 顯示名稱、音色選擇器檢索、MIDI Program Change、琴端螢幕顯示四者 100% 一致。
   - **工時**：0.5 天 ｜ **驗收**：音色清單完全消除對照困惑。
 
 ---

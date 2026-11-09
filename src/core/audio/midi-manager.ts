@@ -19,6 +19,16 @@ export interface VoiceBankConfig {
   pc: number;  // Program Change (0~127)
 }
 
+export interface MidiTxLogEntry {
+  id: number;
+  timestamp: number;
+  type: 'noteOn' | 'noteOff' | 'cc' | 'pc' | 'pitchBend' | 'sysex';
+  channel: number; // 0~15 (SysEx 為 -1)
+  summary: string;
+  hexBytes: string;
+  connected: boolean;
+}
+
 export interface WebMidiPort {
   id: string;
   name?: string;
@@ -34,7 +44,21 @@ export interface WebMidiPort {
 export interface WebMidiAccess {
   inputs: Map<string, WebMidiPort>;
   outputs: Map<string, WebMidiPort>;
+  sysexEnabled?: boolean;
   onstatechange: ((event: any) => void) | null;
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+function formatMidiNoteName(note: number): string {
+  const n = Math.max(0, Math.min(127, Math.round(note)));
+  const octave = Math.floor(n / 12) - 1;
+  return `${NOTE_NAMES[n % 12]}${octave}`;
+}
+
+function toHexString(bytes: number[] | Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+    .join(' ');
 }
 
 export class MidiManager {
@@ -42,14 +66,21 @@ export class MidiManager {
   private selectedOutput: WebMidiPort | null = null;
   private selectedInput: WebMidiPort | null = null;
   private routingMode: AudioRoutingMode = 'audio';
+  private hasSysexSupport: boolean = false;
   private stateChangeListeners: Array<(devices: MidiDeviceInfo[]) => void> = [];
   private noteInputListeners: Array<(type: 'noteon' | 'noteoff', pitch: number, velocity: number, channel: number) => void> = [];
   private voiceInputListeners: Array<(config: VoiceBankConfig, channel: number) => void> = [];
   private midiActivityListeners: Array<() => void> = [];
+  private txListeners: Array<(entry: MidiTxLogEntry) => void> = [];
+  private txLog: MidiTxLogEntry[] = [];
+  private txNextId: number = 1;
+  private maxTxLogSize: number = 80;
   private currentBankMsb: number = 0;
   private currentBankLsb: number = 0;
   private isRequesting = false;
   private activeNotes: Set<string> = new Set(); // 格式: `${channel}:${note}`
+  private pendingNoteOffTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private maxScheduledTimestamp: number = 0;
 
   /**
    * 檢查瀏覽器是否支援 Web MIDI API
@@ -59,7 +90,86 @@ export class MidiManager {
   }
 
   /**
+   * 是否具備 SysEx 系統專屬訊息傳送權限 (GM / XG System On)
+   */
+  public hasSysex(): boolean {
+    return this.hasSysexSupport;
+  }
+
+  /**
+   * 取得目前所有發聲中 (尚未到達 Note-Off 時間) 的音符集合 (`${channel}:${note}`)
+   */
+  public getActiveNotes(): Set<string> {
+    return new Set(this.activeNotes);
+  }
+
+  /**
+   * 注入或清除虛擬/測試 MIDI 輸出埠 (供單元測試或無琴環境離線驗證使用)
+   */
+  public setMockOutputPort(port: WebMidiPort | null): void {
+    this.selectedOutput = port;
+    if (port) {
+      this.wakeUpAllChannels();
+    }
+  }
+
+  /**
+   * 註冊即時 MIDI 輸出訊號監聽器 (供 UI 監控面板與診斷工具使用)
+   */
+  public onTxActivity(callback: (entry: MidiTxLogEntry) => void): () => void {
+    this.txListeners.push(callback);
+    return () => {
+      this.txListeners = this.txListeners.filter(cb => cb !== callback);
+    };
+  }
+
+  /**
+   * 取得最近傳送的 MIDI 封包紀錄
+   */
+  public getRecentTxLog(limit: number = 30): MidiTxLogEntry[] {
+    return this.txLog.slice(-limit);
+  }
+
+  /**
+   * 清空 MIDI 輸出監控紀錄
+   */
+  public clearTxLog(): void {
+    this.txLog = [];
+  }
+
+  private recordTx(
+    type: MidiTxLogEntry['type'],
+    channel: number,
+    summary: string,
+    bytes: number[] | Uint8Array,
+    timestamp?: number
+  ): void {
+    const entry: MidiTxLogEntry = {
+      id: this.txNextId++,
+      timestamp: timestamp ?? (typeof performance !== 'undefined' ? performance.now() : Date.now()),
+      type,
+      channel,
+      summary,
+      hexBytes: toHexString(bytes),
+      connected: this.selectedOutput !== null,
+    };
+    this.txLog.push(entry);
+    if (this.txLog.length > this.maxTxLogSize) {
+      this.txLog.splice(0, this.txLog.length - this.maxTxLogSize);
+    }
+    this.triggerMidiActivity();
+    for (const cb of this.txListeners) {
+      try {
+        cb(entry);
+      } catch (err) {
+        console.error('[MidiManager] Error in txListener:', err);
+      }
+    }
+  }
+
+  /**
    * 請求 Web MIDI API 存取權限並掃描可用輸出裝置
+   * 優先請求 { sysex: true } 以支援 Yamaha XG / GM System On 喚醒，若被拒則自動降級為 { sysex: false }
    */
   public async requestAccess(): Promise<{ success: boolean; error?: string; devices: MidiDeviceInfo[] }> {
     if (!this.isSupported()) {
@@ -72,7 +182,14 @@ export class MidiManager {
 
     this.isRequesting = true;
     try {
-      this.midiAccess = await (navigator as any).requestMIDIAccess({ sysex: false });
+      try {
+        this.midiAccess = await (navigator as any).requestMIDIAccess({ sysex: true });
+        this.hasSysexSupport = Boolean(this.midiAccess?.sysexEnabled ?? true);
+      } catch {
+        // 若瀏覽器或使用者拒絕 SysEx 權限，平滑退回標準免 SysEx 模式
+        this.midiAccess = await (navigator as any).requestMIDIAccess({ sysex: false });
+        this.hasSysexSupport = false;
+      }
 
       // 綁定熱插拔事件監聽器 (Hot-plugging detection)
       if (this.midiAccess) {
@@ -383,6 +500,9 @@ export class MidiManager {
    * 傳送原生 MIDI 位元組陣列
    */
   public send(bytes: number[] | Uint8Array, timestamp?: number): boolean {
+    if (timestamp !== undefined && timestamp > this.maxScheduledTimestamp) {
+      this.maxScheduledTimestamp = timestamp;
+    }
     if (!this.selectedOutput) return false;
     try {
       if (timestamp !== undefined) {
@@ -402,7 +522,6 @@ export class MidiManager {
    * 可選傳入 initControllers=true 同步預設充沛音量 (CC7=115) 與表情 (CC11=127)
    */
   public sendVoiceChange(channel: number, config: VoiceBankConfig, initControllers: boolean = false): boolean {
-    if (!this.selectedOutput) return false;
     const ch = Math.max(0, Math.min(15, channel));
     const msb = Math.max(0, Math.min(127, Math.round(config.msb)));
     const lsb = Math.max(0, Math.min(127, Math.round(config.lsb)));
@@ -410,13 +529,19 @@ export class MidiManager {
 
     this.send([0xB0 | ch, 0, msb]);   // CC 0: Bank Select MSB
     this.send([0xB0 | ch, 32, lsb]);  // CC 32: Bank Select LSB
-    this.send([0xC0 | ch, pc]);       // Program Change
+    const ok = this.send([0xC0 | ch, pc]); // Program Change
+    this.recordTx(
+      'pc',
+      ch,
+      `Ch${ch + 1} 音色切換 [${msb}-${lsb}-${pc + 1}] (MSB:${msb} LSB:${lsb} PC:${pc})`,
+      [0xB0 | ch, 0, msb, 0xB0 | ch, 32, lsb, 0xC0 | ch, pc]
+    );
     if (initControllers) {
-      this.send([0xB0 | ch, 7, 115]);   // CC 7: Channel Volume (115 飽滿音量)
-      this.send([0xB0 | ch, 11, 127]);  // CC 11: Expression (127 最大表情)
-      this.send([0xB0 | ch, 10, 64]);   // CC 10: Pan (置中)
+      this.sendControlChange(ch, 7, 115);   // CC 7: Channel Volume (115 飽滿音量)
+      this.sendControlChange(ch, 11, 127);  // CC 11: Expression (127 最大表情)
+      this.sendControlChange(ch, 10, 64);   // CC 10: Pan (置中)
     }
-    return true;
+    return ok;
   }
 
   /**
@@ -424,14 +549,17 @@ export class MidiManager {
    * 防止因琴端預設通道音量為 0 或控制器被切斷而無聲
    */
   public wakeUpAllChannels(): void {
-    if (!this.selectedOutput) return;
-
-    // 嘗試傳送 GM / XG System On SysEx (若支援)
-    try {
-      this.send([0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7]); // GM System On
-      this.send([0xF0, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7]); // XG System On
-    } catch {
-      // 忽略無 sysex 權限情況
+    // 若具備 SysEx 權限則傳送 GM / XG System On SysEx 喚醒
+    if (this.hasSysexSupport) {
+      try {
+        const gmOn = [0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7];
+        const xgOn = [0xF0, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7];
+        this.send(gmOn);
+        this.send(xgOn);
+        this.recordTx('sysex', -1, 'GM / Yamaha XG System On 喚醒指令', xgOn);
+      } catch {
+        // 忽略無 sysex 權限情況
+      }
     }
 
     for (let ch = 0; ch < 16; ch++) {
@@ -440,6 +568,7 @@ export class MidiManager {
       this.send([0xB0 | ch, 11, 127]);  // CC 11: Expression = 127
       this.send([0xB0 | ch, 10, 64]);   // CC 10: Pan = 64
       this.send([0xB0 | ch, 64, 0]);    // CC 64: Sustain Off
+      this.send([0xE0 | ch, 0x00, 0x40]); // Pitch Bend Center (8192)
     }
   }
 
@@ -450,26 +579,21 @@ export class MidiManager {
     channel: number,
     params: { volume?: number; pan?: number; reverb?: number; chorus?: number }
   ): boolean {
-    if (!this.selectedOutput) return false;
     const ch = Math.max(0, Math.min(15, channel));
 
     if (params.volume !== undefined) {
-      const vol = Math.max(0, Math.min(127, Math.round(params.volume)));
-      this.send([0xB0 | ch, 7, vol]); // CC 7: Channel Volume
+      this.sendControlChange(ch, 7, params.volume);
     }
     if (params.pan !== undefined) {
-      const pan = Math.max(0, Math.min(127, Math.round(params.pan)));
-      this.send([0xB0 | ch, 10, pan]); // CC 10: Pan
+      this.sendControlChange(ch, 10, params.pan);
     }
     if (params.reverb !== undefined) {
-      const rev = Math.max(0, Math.min(127, Math.round(params.reverb)));
-      this.send([0xB0 | ch, 91, rev]); // CC 91: Reverb Send Level
+      this.sendControlChange(ch, 91, params.reverb);
     }
     if (params.chorus !== undefined) {
-      const cho = Math.max(0, Math.min(127, Math.round(params.chorus)));
-      this.send([0xB0 | ch, 93, cho]); // CC 93: Chorus Send Level
+      this.sendControlChange(ch, 93, params.chorus);
     }
-    return true;
+    return this.selectedOutput !== null;
   }
 
   /**
@@ -479,18 +603,54 @@ export class MidiManager {
     const ch = Math.max(0, Math.min(15, channel));
     const n = Math.max(0, Math.min(127, Math.round(note)));
     const v = Math.max(1, Math.min(127, Math.round(velocity)));
-    this.activeNotes.add(`${ch}:${n}`);
-    return this.send([0x90 | ch, n, v], timestamp);
+    const key = `${ch}:${n}`;
+
+    // 若同一音高先前有待清理的 NoteOff 計時器，先取消以避免提前將新音符自 activeNotes 移除
+    const existingTimer = this.pendingNoteOffTimers.get(key);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.pendingNoteOffTimers.delete(key);
+    }
+
+    this.activeNotes.add(key);
+    const bytes = [0x90 | ch, n, v];
+    const ok = this.send(bytes, timestamp);
+    this.recordTx('noteOn', ch, `Ch${ch + 1} NoteOn ${formatMidiNoteName(n)} (${n}) Vel:${v}`, bytes, timestamp);
+    return ok;
   }
 
   /**
-   * 傳送 Note-Off 事件
+   * 傳送 Note-Off 事件 (若含未來排程 timestamp，自動保留 activeNotes 追蹤直到實際發聲結束，確保中途 Panic 可 100% 攔截)
    */
   public sendNoteOff(channel: number, note: number, timestamp?: number): boolean {
     const ch = Math.max(0, Math.min(15, channel));
     const n = Math.max(0, Math.min(127, Math.round(note)));
-    this.activeNotes.delete(`${ch}:${n}`);
-    return this.send([0x80 | ch, n, 0], timestamp);
+    const key = `${ch}:${n}`;
+    const bytes = [0x80 | ch, n, 0];
+
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const delayMs = timestamp !== undefined ? timestamp - now : 0;
+
+    if (delayMs > 4) {
+      const prevTimer = this.pendingNoteOffTimers.get(key);
+      if (prevTimer) clearTimeout(prevTimer);
+      const timer = setTimeout(() => {
+        this.activeNotes.delete(key);
+        this.pendingNoteOffTimers.delete(key);
+      }, delayMs);
+      this.pendingNoteOffTimers.set(key, timer);
+    } else {
+      const prevTimer = this.pendingNoteOffTimers.get(key);
+      if (prevTimer) {
+        clearTimeout(prevTimer);
+        this.pendingNoteOffTimers.delete(key);
+      }
+      this.activeNotes.delete(key);
+    }
+
+    const ok = this.send(bytes, timestamp);
+    this.recordTx('noteOff', ch, `Ch${ch + 1} NoteOff ${formatMidiNoteName(n)} (${n})`, bytes, timestamp);
+    return ok;
   }
 
   /**
@@ -500,7 +660,24 @@ export class MidiManager {
     const ch = Math.max(0, Math.min(15, channel));
     const cc = Math.max(0, Math.min(127, Math.round(controller)));
     const val = Math.max(0, Math.min(127, Math.round(value)));
-    return this.send([0xB0 | ch, cc, val], timestamp);
+    const bytes = [0xB0 | ch, cc, val];
+    const ok = this.send(bytes, timestamp);
+
+    const ccNames: Record<number, string> = {
+      1: 'Mod',
+      7: 'Vol',
+      10: 'Pan',
+      11: 'Expr',
+      64: 'Sustain',
+      91: 'Reverb',
+      93: 'Chorus',
+      120: 'AllSoundOff',
+      121: 'ResetCtrl',
+      123: 'AllNotesOff',
+    };
+    const label = ccNames[cc] ? `CC#${cc}(${ccNames[cc]})` : `CC#${cc}`;
+    this.recordTx('cc', ch, `Ch${ch + 1} ${label} = ${val}`, bytes, timestamp);
+    return ok;
   }
 
   /**
@@ -511,29 +688,94 @@ export class MidiManager {
     const val = Math.max(0, Math.min(16383, Math.round(value)));
     const lsb = val & 0x7F;
     const msb = (val >> 7) & 0x7F;
-    return this.send([0xE0 | ch, lsb, msb], timestamp);
+    const bytes = [0xE0 | ch, lsb, msb];
+    const ok = this.send(bytes, timestamp);
+    const diff = val - 8192;
+    const diffStr = diff >= 0 ? `+${diff}` : `${diff}`;
+    this.recordTx('pitchBend', ch, `Ch${ch + 1} PitchBend ${val} (${diffStr})`, bytes, timestamp);
+    return ok;
   }
 
   /**
-   * 防掛音安全緊急中斷：對全部 16 個通道廣播 All Sound Off, All Notes Off 與 Damper Off
+   * 立即消音單一指定通道 (用於播放中途切換靜音 Mute / 獨奏 Solo 或切換 CASM 來源音軌時防止殘留長音)
+   */
+  public silenceChannel(channel: number): boolean {
+    const ch = Math.max(0, Math.min(15, channel));
+    const prefix = `${ch}:`;
+    for (const [key, timer] of this.pendingNoteOffTimers.entries()) {
+      if (key.startsWith(prefix)) {
+        clearTimeout(timer);
+        this.pendingNoteOffTimers.delete(key);
+      }
+    }
+    for (const key of Array.from(this.activeNotes)) {
+      if (key.startsWith(prefix)) {
+        const [, nStr] = key.split(':');
+        this.send([0x80 | ch, Number(nStr), 0]);
+        this.activeNotes.delete(key);
+      }
+    }
+
+    this.send([0xB0 | ch, 64, 0]);  // Sustain Off
+    this.send([0xB0 | ch, 123, 0]); // All Notes Off
+    this.send([0xE0 | ch, 0x00, 0x40]); // Pitch Bend Center (8192)
+
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (this.maxScheduledTimestamp > now) {
+      const flushTime = this.maxScheduledTimestamp + 1;
+      this.send([0xB0 | ch, 64, 0], flushTime);
+      this.send([0xB0 | ch, 123, 0], flushTime);
+    }
+    this.recordTx('cc', ch, `Ch${ch + 1} 通道消音 (AllNotesOff)`, [0xB0 | ch, 123, 0]);
+    return this.selectedOutput !== null;
+  }
+
+  /**
+   * 防掛音安全緊急中斷：對全部 16 個通道廣播 All Sound Off, All Notes Off, Damper Off 與 PitchBend 歸零
+   * 並同時清理預排視窗 (Lookahead Queue) 內的所有未到時音符，確保 0 掛音
    */
   public panicAllChannels(): boolean {
-    if (!this.selectedOutput) return false;
+    // 0. 清除所有等待中的 NoteOff 計時器
+    for (const timer of this.pendingNoteOffTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingNoteOffTimers.clear();
 
-    // 1. 先對所有主動追蹤中正在發聲的音符逐一發送實體 Note-Off，確保硬體琴音符立刻熄滅
-    for (const key of this.activeNotes) {
+    // 1. 先對所有主動追蹤中正在發聲或已排程的音符逐一發送實體 Note-Off
+    const snapshotNotes = Array.from(this.activeNotes);
+    for (const key of snapshotNotes) {
       const [ch, n] = key.split(':').map(Number);
       this.send([0x80 | ch, n, 0]);
     }
     this.activeNotes.clear();
 
-    // 2. 對全部 16 個通道廣播 All Sound Off (CC120), All Notes Off (CC123), Damper Off (CC64)
+    // 2. 對全部 16 個通道廣播 All Sound Off (CC120), All Notes Off (CC123), Damper Off (CC64), PitchBend Center (8192)
     for (let ch = 0; ch < 16; ch++) {
       this.send([0xB0 | ch, 120, 0]); // CC 120: All Sound Off (立即切斷發聲)
       this.send([0xB0 | ch, 123, 0]); // CC 123: All Notes Off
       this.send([0xB0 | ch, 64, 0]);  // CC 64: Damper / Sustain Pedal Off
+      this.send([0xE0 | ch, 0x00, 0x40]); // Pitch Bend 歸中 (8192)
     }
-    return true;
+
+    // 3. 若瀏覽器硬體佇列中尚有未來 150ms Lookahead 視窗內的 timestamped NoteOn，
+    //    在最後一個已排程時間點 +1ms 處追加排入 All Notes Off 與 NoteOff，徹底杜絕預排音符殘留掛音！
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (this.maxScheduledTimestamp > now) {
+      const flushTime = this.maxScheduledTimestamp + 1;
+      for (const key of snapshotNotes) {
+        const [ch, n] = key.split(':').map(Number);
+        this.send([0x80 | ch, n, 0], flushTime);
+      }
+      for (let ch = 0; ch < 16; ch++) {
+        this.send([0xB0 | ch, 120, 0], flushTime);
+        this.send([0xB0 | ch, 123, 0], flushTime);
+        this.send([0xB0 | ch, 64, 0], flushTime);
+      }
+      this.maxScheduledTimestamp = 0;
+    }
+
+    this.recordTx('cc', 0, '全通道緊急消音 (16Ch Panic All Sound/Notes Off)', [0xB0, 120, 0]);
+    return this.selectedOutput !== null;
   }
 
   /**
@@ -541,11 +783,10 @@ export class MidiManager {
    * 無論 PSR-SX920 處於何種 MIDI 模式（即使是最嚴苛的 Keyboard / Right 1 模式）皆必響
    */
   public playTestChime(channel: number = 0): void {
-    if (!this.selectedOutput) return;
     const ch = Math.max(0, Math.min(15, channel));
 
-    // 先切換至 Concert Grand (MSB 0, LSB 112, PC 0)
-    this.sendVoiceChange(ch, { msb: 0, lsb: 112, pc: 0 });
+    // 先切換至 PSR-SX920 官方旗艦 CFX Concert Grand (MSB 104, LSB 21, PC 0, 面板 104-21-1)
+    this.sendVoiceChange(ch, { msb: 104, lsb: 21, pc: 0 });
     this.sendMixerControllers(ch, { volume: 115, pan: 64 });
 
     const notes = [60, 64, 67, 72]; // C4, E4, G4, C5
@@ -563,7 +804,6 @@ export class MidiManager {
    * 測試 2: 伴奏鼓組發聲測試 (Channel 10 Standard Kit 1)
    */
   public playTestDrums(channel: number = 9): void {
-    if (!this.selectedOutput) return;
     const ch = Math.max(0, Math.min(15, channel));
 
     // 切換至 Standard Kit 1 (Bank 127-0, PC 0)
@@ -593,7 +833,6 @@ export class MidiManager {
    * 測試 3: 伴奏貝斯發聲測試 (Channel 11 Finger Bass)
    */
   public playTestBass(channel: number = 10): void {
-    if (!this.selectedOutput) return;
     const ch = Math.max(0, Math.min(15, channel));
 
     // 切換至 Finger Bass (Bank 104-2, PC 33)
@@ -615,10 +854,10 @@ export class MidiManager {
    * 測試 4: 伴奏和弦發聲測試 (Channel 12 Concert Grand)
    */
   public playTestChord(channel: number = 11): void {
-    if (!this.selectedOutput) return;
     const ch = Math.max(0, Math.min(15, channel));
 
-    this.sendVoiceChange(ch, { msb: 0, lsb: 112, pc: 0 });
+    // 切換至 PSR-SX920 官方旗艦 CFX Concert Grand (MSB 104, LSB 21, PC 0, 面板 104-21-1)
+    this.sendVoiceChange(ch, { msb: 104, lsb: 21, pc: 0 });
     this.sendMixerControllers(ch, { volume: 115, pan: 64 });
 
     const chord = [60, 64, 67]; // C4, E4, G4

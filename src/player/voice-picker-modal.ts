@@ -18,6 +18,7 @@ import {
   VOICE_SUITABILITY_FILTERS,
   searchYamahaVoices,
   findYamahaVoice,
+  getLegacyAliasesForVoice,
 } from '../core/data/yamaha-voices';
 import { styPlaybackEngine, type PartVoiceInfo } from './sty-playback-engine';
 
@@ -333,16 +334,23 @@ export class VoicePickerModal {
 
       // 推薦星號
       const recStar = v.suitability === 'recommended' ? '<span class="vp-rec-star" title="官方推薦優選音色">⭐</span>' : '';
+      const legacyAliases = getLegacyAliasesForVoice(v.msb, v.lsb, v.pc, true);
+      const specsTitle = legacyAliases.length > 0
+        ? `SX920 面板: ${v.msb}-${v.lsb}-${v.pc + 1} ｜ 相容舊代碼: ${legacyAliases.join(', ')}`
+        : `SX920 面板: ${v.msb}-${v.lsb}-${v.pc + 1}`;
+      const aliasHint = legacyAliases.length > 0
+        ? ` <span class="vc-legacy-alias" style="opacity:0.75;font-size:11px;">(相容舊碼: ${legacyAliases[0]})</span>`
+        : '';
 
       card.innerHTML = `
         <div class="vc-top-row">
           <span class="vc-category-pill">${v.category}</span>
           ${typeBadge}
           ${recStar}
-          <span class="vc-specs">M:${v.msb} L:${v.lsb} PC:${v.pc + 1}</span>
+          <span class="vc-specs" title="${specsTitle}">M:${v.msb} L:${v.lsb} PC:${v.pc + 1}</span>
         </div>
         <div class="vc-name" title="${v.name}">${v.name}</div>
-        <div class="vc-chinese-name">${v.chineseName || ''}</div>
+        <div class="vc-chinese-name">${v.chineseName || ''}${aliasHint}</div>
         <div class="vc-bottom-actions">
           <button class="vc-btn-audition" title="試聽示範樂句">▶ 試聽</button>
           <button class="vc-btn-select" title="選取此音色">選取</button>
@@ -397,9 +405,11 @@ export class VoicePickerModal {
     this.btnConfirmApply.disabled = false;
     this.btnAuditionCurrent.disabled = false;
     const chName = voice.chineseName ? ` (${voice.chineseName})` : '';
+    const legacyAliases = getLegacyAliasesForVoice(voice.msb, voice.lsb, voice.pc, true);
+    const aliasText = legacyAliases.length > 0 ? ` ｜ 相容舊碼: ${legacyAliases.join(', ')}` : '';
     this.footerSelectedInfo.innerHTML = `
       <span>已選取：<b>${voice.name}${chName}</b></span>
-      <span class="vp-footer-specs">【分類: ${voice.category} ｜ Bank MSB: ${voice.msb}, LSB: ${voice.lsb}, PC: ${voice.pc + 1}】</span>
+      <span class="vp-footer-specs">【分類: ${voice.category} ｜ Bank MSB: ${voice.msb}, LSB: ${voice.lsb}, PC: ${voice.pc + 1}${aliasText}】</span>
     `;
   }
 
