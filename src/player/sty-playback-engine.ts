@@ -904,6 +904,31 @@ export class StyPlaybackEngine {
       }
     }
 
+    // 2b. 若特定通道在 startTick 前尚無音色設定 (例如音符自第 4 小節才進來，PC 設定在第 4 小節或音符處)，
+    //     向後尋找該通道全曲的第一個音色事件，確保切片播放時正確發送該軌音色，絕不退回預設鋼琴
+    for (let ch = 0; ch < 16; ch++) {
+      if (!rawVoices[ch] || rawVoices[ch].pc === undefined) {
+        for (const item of flatEvents) {
+          const ev = item.ev;
+          if (ev.channel === ch) {
+            if (ev.type === "controlChange" && ev.controller !== undefined && ev.value !== undefined) {
+              if (ev.controller === 0) {
+                if (!rawVoices[ch]) rawVoices[ch] = { msb: ev.value, lsb: 0, pc: 0 };
+                else rawVoices[ch].msb = ev.value;
+              } else if (ev.controller === 32) {
+                if (!rawVoices[ch]) rawVoices[ch] = { msb: ch === 9 ? 127 : 0, lsb: ev.value, pc: 0 };
+                else rawVoices[ch].lsb = ev.value;
+              }
+            } else if (ev.type === "programChange" && ev.program !== undefined) {
+              if (!rawVoices[ch]) rawVoices[ch] = { msb: ch === 9 ? 127 : 0, lsb: 0, pc: ev.program };
+              else rawVoices[ch].pc = ev.program;
+              break;
+            }
+          }
+        }
+      }
+    }
+
     // 3. 萃取 [startTick, endTick) 區間內的 16 通道 NoteOn / NoteOff 事件 (1:1 原通道直通)
     const rawNoteEvents: PlaybackNoteEvent[] = [];
     const noteOnMap: Map<string, { absTick: number; ev: MidiEvent; ch: number }> = new Map();

@@ -43,6 +43,69 @@ const PAD_CHANNEL_NAME: Record<number, string> = {
   9: 'Pad Drum 2',
 };
 
+/**
+ * 智慧解碼 MIDI 文本事件 (Meta 0x01~0x07)
+ * 自動識別 UTF-8、Big5 (繁體中文)、GB18030/GBK (簡體中文) 或 Latin-1，徹底消除曲內標記與音軌名稱亂碼
+ */
+export function decodeMidiText(data: Uint8Array): string {
+  if (!data || data.length === 0) return "";
+
+  // 1. 純 ASCII (全小於 0x80) 快速直通
+  let isPureAscii = true;
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] >= 0x80) {
+      isPureAscii = false;
+      break;
+    }
+  }
+  if (isPureAscii) {
+    return new TextDecoder("ascii").decode(data);
+  }
+
+  // 2. 優先嘗試 UTF-8 (若包含合法 CJK 漢字或多字節符號且無格式錯誤)
+  try {
+    const utf8 = new TextDecoder("utf-8", { fatal: true }).decode(data);
+    if (/[\u4E00-\u9FFF]/.test(utf8)) {
+      return utf8;
+    }
+    return utf8;
+  } catch {
+    // 非合法 UTF-8，轉入中文字元編碼辨識
+  }
+
+  // 3. 嘗試 Big5 (繁體中文，華語 MIDI 與台灣/香港早期編曲檔最廣泛使用) 與 GB18030 (簡體中文)
+  const candidates: { enc: string; text: string; cjkCount: number }[] = [];
+  for (const enc of ["big5", "gb18030"]) {
+    try {
+      const text = new TextDecoder(enc, { fatal: true }).decode(data);
+      const cjkCount = (text.match(/[\u4E00-\u9FFF]/g) || []).length;
+      candidates.push({ enc, text, cjkCount });
+    } catch {
+      try {
+        const text = new TextDecoder(enc).decode(data);
+        const cjkCount = (text.match(/[\u4E00-\u9FFF]/g) || []).length;
+        if (cjkCount > 0) {
+          candidates.push({ enc, text, cjkCount });
+        }
+      } catch {}
+    }
+  }
+
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => b.cjkCount - a.cjkCount);
+    if (candidates[0].cjkCount > 0) {
+      return candidates[0].text;
+    }
+  }
+
+  // 4. 若皆無漢字特徵，回退至標準 Latin-1 (西歐 / ISO-8859-1) 保留原始字節
+  try {
+    return new TextDecoder("latin1").decode(data);
+  } catch {
+    return "";
+  }
+}
+
 export class YamahaParser {
   /**
    * 解析 STY 或 PAD 二進位資料
@@ -137,7 +200,7 @@ export class YamahaParser {
           let metaText: string | undefined;
           if ([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07].includes(metaType)) {
             // 文字事件
-            metaText = new TextDecoder('latin1').decode(metaData);
+            metaText = decodeMidiText(metaData);
           }
 
           if (metaType === 0x03 && metaText) {

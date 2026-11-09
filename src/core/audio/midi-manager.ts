@@ -250,8 +250,18 @@ export class MidiManager {
       });
     }
 
-    // 優先推薦的置頂
-    return result.sort((a, b) => (b.isRecommended ? 1 : 0) - (a.isRecommended ? 1 : 0));
+    // 優先推薦的置頂，且優先選擇 Port 1 (Song 16 軌標準主動脈)，次選 Port 2
+    return result.sort((a, b) => {
+      if (a.isRecommended !== b.isRecommended) {
+        return (b.isRecommended ? 1 : 0) - (a.isRecommended ? 1 : 0);
+      }
+      const aIsPort1 = /(?:port\s*1|workstation\s*1|-1\b|\b1\b)/i.test(a.name);
+      const bIsPort1 = /(?:port\s*1|workstation\s*1|-1\b|\b1\b)/i.test(b.name);
+      if (aIsPort1 !== bIsPort1) {
+        return aIsPort1 ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
   }
 
   /**
@@ -786,7 +796,7 @@ export class MidiManager {
     const ch = Math.max(0, Math.min(15, channel));
 
     // 先切換至 PSR-SX920 官方旗艦 CFX Concert Grand (MSB 104, LSB 21, PC 0, 面板 104-21-1)
-    this.sendVoiceChange(ch, { msb: 104, lsb: 21, pc: 0 });
+    this.sendVoiceChange(ch, { msb: 104, lsb: 21, pc: 0 }, true);
     this.sendMixerControllers(ch, { volume: 115, pan: 64 });
 
     const notes = [60, 64, 67, 72]; // C4, E4, G4, C5
@@ -807,7 +817,7 @@ export class MidiManager {
     const ch = Math.max(0, Math.min(15, channel));
 
     // 切換至 Standard Kit 1 (Bank 127-0, PC 0)
-    this.sendVoiceChange(ch, { msb: 127, lsb: 0, pc: 0 });
+    this.sendVoiceChange(ch, { msb: 127, lsb: 0, pc: 0 }, true);
     this.sendMixerControllers(ch, { volume: 115, pan: 64 });
 
     // 大鼓(36) -> 閉鈸(42) -> 小鼓(38) -> 碎音鈸(49)
@@ -836,7 +846,7 @@ export class MidiManager {
     const ch = Math.max(0, Math.min(15, channel));
 
     // 切換至 Finger Bass (Bank 104-2, PC 33)
-    this.sendVoiceChange(ch, { msb: 104, lsb: 2, pc: 33 });
+    this.sendVoiceChange(ch, { msb: 104, lsb: 2, pc: 33 }, true);
     this.sendMixerControllers(ch, { volume: 115, pan: 64 });
 
     const notes = [36, 43, 41, 38]; // C1, G1, F1, D1
@@ -857,7 +867,7 @@ export class MidiManager {
     const ch = Math.max(0, Math.min(15, channel));
 
     // 切換至 PSR-SX920 官方旗艦 CFX Concert Grand (MSB 104, LSB 21, PC 0, 面板 104-21-1)
-    this.sendVoiceChange(ch, { msb: 104, lsb: 21, pc: 0 });
+    this.sendVoiceChange(ch, { msb: 104, lsb: 21, pc: 0 }, true);
     this.sendMixerControllers(ch, { volume: 115, pan: 64 });
 
     const chord = [60, 64, 67]; // C4, E4, G4

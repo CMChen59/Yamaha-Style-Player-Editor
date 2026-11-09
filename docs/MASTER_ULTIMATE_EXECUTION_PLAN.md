@@ -47,7 +47,7 @@ flowchart TD
     2. 驗收：SX920 螢幕 User 磁區根目錄立刻出現 `TEST.STY`，點選可正常播放。
   - **工時**：1 天 ｜ **產出**：可獨立執行的傳檔核心邏輯。
 
-- [x] **【任務 0-3】Web MIDI 琴端真實發聲引擎（Hardware Sounding via Web MIDI）（軟體引擎已於 2026-11-09 完成並通過測試，待接琴實測驗收）**
+- [x] **【任務 0-3】Web MIDI 琴端真實發聲引擎（Hardware Sounding via Web MIDI）（已於 2026-11-09 接琴實測驗收通過，確認 Port 1 16 通道發聲動脈正常）**
   - **具體實作**：
     1. 升級 `MidiManager` 與 `StyPlaybackEngine`，完整支援 `'webaudio' | 'midi' | 'both'` 三模式無縫切換、GM/XG SysEx 自動授權與降級喚醒、8 大伴奏聲部（Ch 9~16）SX920 音色（MSB/LSB/PC）與混音參數（Vol/Pan/Rev/Cho/Expr/PitchBend）全自動同步、Pitch Bend 彎音曲線排程、以及預排視窗（Lookahead Timestamp）0 掛音保證。
     2. 擴充琴端專屬抽屜面板，提供「📡 同步 8 聲部至琴端」、「🎹 測試 Ch1 鋼琴」、「🥁 測試 Ch10 鼓組」、「🎸 測試 Ch11 貝斯」、「🎼 測試 Ch12 和弦」、「🛑 緊急消音 (Panic)」與「MIDI TX 即時封包監控列」。

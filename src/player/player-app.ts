@@ -612,7 +612,13 @@ export class PlayerApp {
       ports.forEach((p) => {
         const opt = document.createElement('option');
         opt.value = p.id;
-        opt.textContent = p.name + (p.isRecommended ? ' (推薦 Yamaha 設備)' : '');
+                const isPort1 = /(?:port\s*1|workstation\s*1|-1\b|\b1\b)/i.test(p.name);
+        const isPort2 = /(?:port\s*2|workstation\s*2|-2\b|\b2\b)/i.test(p.name);
+        let portTag = '';
+        if (isPort1) portTag = ' (Port 1 · 推薦主動脈 / 全 16 軌 Song)';
+        else if (isPort2) portTag = ' (Port 2 · 伴奏模式)';
+        else if (p.isRecommended) portTag = ' (推薦 Yamaha 設備)';
+        opt.textContent = p.name + portTag;
         if (selected && selected.id === p.id) {
           opt.selected = true;
         }
