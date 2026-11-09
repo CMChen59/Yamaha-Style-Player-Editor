@@ -55,6 +55,7 @@ export class PlayerApp {
   private inputMidiEndBar: HTMLInputElement | null = null;
   private labelMidiTotalBarsHint: HTMLElement | null = null;
   private btnApplyMidiBarRange: HTMLButtonElement | null = null;
+  private btnStopMidiBarRange: HTMLButtonElement | null = null;
   private chordAuditionBar: HTMLElement | null = null;
   private sectionMatrixPanel: HTMLElement | null = null;
   private mixerPanel: HTMLElement | null = null;
@@ -262,6 +263,7 @@ export class PlayerApp {
     this.inputMidiEndBar = document.getElementById('input-midi-end-bar') as HTMLInputElement | null;
     this.labelMidiTotalBarsHint = document.getElementById('label-midi-total-bars-hint');
     this.btnApplyMidiBarRange = document.getElementById('btn-apply-midi-bar-range') as HTMLButtonElement | null;
+    this.btnStopMidiBarRange = document.getElementById('btn-stop-midi-bar-range') as HTMLButtonElement | null;
     this.chordAuditionBar = document.getElementById('chord-audition-bar');
     this.sectionMatrixPanel = document.getElementById('section-matrix-panel');
     this.mixerPanel = document.getElementById('mixer-panel');
@@ -530,10 +532,17 @@ export class PlayerApp {
       this.applyMidiSongBarRange(s, e, true);
     });
 
-    const btnStopMidiBarRange = document.getElementById('btn-stop-midi-bar-range');
-    btnStopMidiBarRange?.addEventListener('click', () => {
+    this.btnStopMidiBarRange?.addEventListener('click', (e) => {
+      e.stopPropagation();
       styPlaybackEngine.stop();
       this.updatePlayStateUI();
+      this.trackEditor?.updatePlayhead(0);
+      if (this.currentSongAnalysis) {
+        const s = parseInt(this.inputMidiStartBar?.value || '1', 10) || 1;
+        const total = this.currentSongAnalysis.totalBars;
+        const eBar = parseInt(this.inputMidiEndBar?.value || String(total), 10) || total;
+        this.labelPosition.textContent = `小節 ${s.toString().padStart(2, '0')} / ${eBar.toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
+      }
     });
 
     document.querySelectorAll('#midi-quick-range-btns .midi-locator-btn').forEach((btn) => {
