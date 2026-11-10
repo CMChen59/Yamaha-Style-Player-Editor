@@ -10,8 +10,18 @@ import { YamahaStyleModifier } from './style-modifier';
 import { CasmModifier } from './casm-modifier';
 import { getGoldenStyleTemplateBytes } from '../data/yamaha-style-template';
 import type { SongPartMappingPlan, YamahaPartType } from './midi-part-assign-matrix';
-import type { MidiSongAnalysis } from '../parser/midi-song-analyzer';
+import { MidiSongAnalyzer, type MidiSongAnalysis } from '../parser/midi-song-analyzer';
 import type { YamahaFileParsed } from '../models/types';
+import { ROOT_SEMITONES_FROM_C } from './chord-transposer';
+
+export interface BarChordInfo {
+  bar: number;
+  rootName: string;
+  rootPitchClass: number;
+  isMinor: boolean;
+  shiftToC: number;
+  chordName: string;
+}
 
 export interface MidiSliceAssembleOptions {
   /** 來源 MIDI 解析結果 */
@@ -30,6 +40,8 @@ export interface MidiSliceAssembleOptions {
   baseStyleParsed?: YamahaFileParsed | null;
   /** 風格名稱 (可選) */
   styleName?: string;
+  /** 是否啟用和弦反向正規化為 C 基準大調 (若未指定，Main/Fill/Break 預設為 true，Intro/Ending 預設為 false) */
+  normalizeChordsToC?: boolean;
 }
 
 export interface AssembledPartInfo {
@@ -50,6 +62,8 @@ export interface MidiSliceAssembleResult {
   totalNotesExtracted: number;
   assembledPartsCount: number;
   partDetails: AssembledPartInfo[];
+  isHarmonicallyNormalized: boolean;
+  detectedChordsByBar?: Array<{ bar: number; chordName: string; shiftToC: number }>;
   message: string;
 }
 
@@ -90,6 +104,7 @@ export class MidiSliceAssembler {
     const timeSig = sourceParsed.timeSignature || { numerator: 4, denominator: 4 };
     const beatsPerMeasure = timeSig.numerator * (4 / timeSig.denominator);
     const srcTicksPerBar = Math.round(srcPpq * beatsPerMeasure);
+    const ticksPerBarSrc = srcTicksPerBar;
     const targetTicksPerBar = Math.round(targetPpq * beatsPerMeasure);
 
     const startTickSrc = (startBar - 1) * srcTicksPerBar;
@@ -115,6 +130,26 @@ export class MidiSliceAssembler {
     YamahaStyleModifier.clearSectionNotes(styleParsed, targetSection);
 
     // 5. 提取來源 MIDI 中指定小節區間之音符
+    // 判定是否啟用和弦反向正規化 (Main / Fill / Break 預設啟用，Intro / Ending 預設直通保留)
+    const isMainOrFill = /^(main|fill|break)/i.test(targetSection.trim());
+    const shouldNormalize = options.normalizeChordsToC !== undefined
+      ? options.normalizeChordsToC
+      : isMainOrFill;
+
+    const barChordMap = new Map<number, BarChordInfo>();
+    const detectedChordsByBar: Array<{ bar: number; chordName: string; shiftToC: number }> = [];
+
+    if (shouldNormalize) {
+      const bassAssign = mappingPlan.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
+      const bassCh = bassAssign ? bassAssign.sourceChannel : undefined;
+
+      for (let b = startBar; b <= endBar; b++) {
+        const cInfo = MidiSliceAssembler.detectBarChord(sourceParsed, b, ticksPerBarSrc, bassCh);
+        barChordMap.set(b, cInfo);
+        detectedChordsByBar.push({ bar: b, chordName: cInfo.chordName, shiftToC: cInfo.shiftToC });
+      }
+    }
+
     // 建立 sourceChannel -> assignment 快速索引
     const srcAssignMap = new Map<number, typeof mappingPlan.assignments[0]>();
     for (const a of mappingPlan.assignments) {
@@ -168,7 +203,9 @@ export class MidiSliceAssembler {
               startTickSrc,
               endTickSrc,
               scaleFactor,
-              maxSectionTicksTarget
+              maxSectionTicksTarget,
+              barChordMap,
+              ticksPerBarSrc
             );
           }
           activeNotes.set(noteKey, { startAbsTick: absTick, velocity: ev.velocity! });
@@ -187,7 +224,9 @@ export class MidiSliceAssembler {
               startTickSrc,
               endTickSrc,
               scaleFactor,
-              maxSectionTicksTarget
+              maxSectionTicksTarget,
+              barChordMap,
+              ticksPerBarSrc
             );
           }
         }
@@ -211,7 +250,9 @@ export class MidiSliceAssembler {
             startTickSrc,
             endTickSrc,
             scaleFactor,
-            maxSectionTicksTarget
+            maxSectionTicksTarget,
+            barChordMap,
+            ticksPerBarSrc
           );
         }
       }
@@ -238,29 +279,32 @@ export class MidiSliceAssembler {
         targetCh
       );
 
-      // 同步設定該伴奏聲部的樂器音色與基本混音屬性
-      const srcChInfo = analysis.activeChannels.find(c => c.channel === assign.sourceChannel);
-      if (srcChInfo) {
-        YamahaStyleModifier.setPartMixing(
-          styleParsed,
-          targetCh,
-          {
-            bankMsb: srcChInfo.msb,
-            bankLsb: srcChInfo.lsb,
-            programChange: srcChInfo.pc,
-            volume: 100,
-            pan: 64,
-          },
-          { targetSection }
-        );
-      }
+      // 同步設定該伴奏聲部的樂器音色與基本混音屬性 (使用起始小節 startBar 當下生效之最新音色與混音參數)
+      const effVoice = MidiSongAnalyzer.getEffectiveVoiceAtBar(
+        sourceParsed,
+        assign.sourceChannel,
+        startBar
+      );
+
+      YamahaStyleModifier.setPartMixing(
+        styleParsed,
+        targetCh,
+        {
+          bankMsb: effVoice.msb,
+          bankLsb: effVoice.lsb,
+          programChange: effVoice.pc,
+          volume: effVoice.volume,
+          pan: effVoice.pan,
+        },
+        { targetSection }
+      );
 
       totalNotesExtracted += notes.length;
       partDetails.push({
         part: assign.targetPart,
         targetChannel: targetCh,
         sourceChannel: assign.sourceChannel,
-        voiceName: assign.voiceName,
+        voiceName: effVoice.voiceName,
         noteCount: notes.length,
       });
     }
@@ -270,6 +314,10 @@ export class MidiSliceAssembler {
     for (const r of stdRules) {
       CasmModifier.injectOrUpdateSectionCasmRule(styleParsed, targetSection, r.channel, r);
     }
+
+    const normDesc = shouldNormalize
+      ? ` [已自動執行 C 基準大調和弦正規化: ${detectedChordsByBar.map(c => `第${c.bar}小節(${c.chordName})`).join(' ➔ ')}]`
+      : ` [原曲和弦進行直通保留模式]`;
 
     return {
       success: true,
@@ -281,17 +329,19 @@ export class MidiSliceAssembler {
       totalNotesExtracted,
       assembledPartsCount: partDetails.length,
       partDetails,
-      message: `成功提取第 ${startBar} ~ ${endBar} 小節（共 ${totalBars} 小節），並裝配至伴奏段落【${targetSection}】！共提取 ${totalNotesExtracted} 顆音符至 ${partDetails.length} 個伴奏聲部。`,
+      isHarmonicallyNormalized: shouldNormalize,
+      detectedChordsByBar,
+      message: `成功提取第 ${startBar} ~ ${endBar} 小節（共 ${totalBars} 小節），並裝配至伴奏段落【${targetSection}】！共提取 ${totalNotesExtracted} 顆音符至 ${partDetails.length} 個伴奏聲部。${normDesc}`,
     };
   }
 
   /**
-   * 輔助處理音符落點、Tick 相對平移、PPQ 縮放與邊界截斷
+   * 輔助處理音符落點、Tick 相對平移、PPQ 縮放、邊界截斷與和弦反向正規化
    */
   private static pushExtractedNote(
     map: Map<number, Array<{ noteNumber: number; relTick: number; durationTicks: number; velocity: number; sourceChannel: number }>>,
     targetChannel: number,
-    sourceChannel: number,
+    _sourceChannel: number,
     noteNumber: number,
     velocity: number,
     startAbsTick: number,
@@ -299,7 +349,9 @@ export class MidiSliceAssembler {
     startTickSrc: number,
     endTickSrc: number,
     scaleFactor: number,
-    maxSectionTicksTarget: number
+    maxSectionTicksTarget: number,
+    barChordMap?: Map<number, BarChordInfo>,
+    ticksPerBarSrc?: number
   ) {
     // 檢查音符是否與切片區間 [startTickSrc, endTickSrc) 有交集
     if (endAbsTick <= startTickSrc || startAbsTick >= endTickSrc) {
@@ -320,17 +372,123 @@ export class MidiSliceAssembler {
     // 確保不會溢出段落最大邊界
     if (relTickTarget >= maxSectionTicksTarget) return;
 
+    // 若啟用和弦反向正規化且此聲部非打擊樂 (Target Channel 不為 8、9，即非 Rhythm 1 / 2)：
+    let effectiveNote = noteNumber;
+    if (barChordMap && ticksPerBarSrc && targetChannel !== 8 && targetChannel !== 9) {
+      const noteBar = Math.floor(clippedStart / ticksPerBarSrc) + 1;
+      const cInfo = barChordMap.get(noteBar);
+      if (cInfo && cInfo.shiftToC !== 0) {
+        effectiveNote += cInfo.shiftToC;
+
+        // 若原和弦為小調，將小三度 (Eb, pitchClass 3) 轉為大三度 (E, pitchClass 4)，以形成 Yamaha 規範之純淨 C 大調基準樣式
+        if (cInfo.isMinor && (effectiveNote % 12 === 3)) {
+          effectiveNote += 1;
+        }
+
+        // 音域保護限制 (防止移調後衝出樂器正常演奏音區)
+        if (targetChannel === 10) {
+          // Bass 聲部安全音域：E1 (28) ~ G3 (55)
+          while (effectiveNote < 28) effectiveNote += 12;
+          while (effectiveNote > 55) effectiveNote -= 12;
+        } else {
+          // 和弦 / 鋪底吉他 / 鍵盤安全音域：A2 (45) ~ C6 (84)
+          while (effectiveNote < 45) effectiveNote += 12;
+          while (effectiveNote > 84) effectiveNote -= 12;
+        }
+      }
+    }
+
     if (!map.has(targetChannel)) {
       map.set(targetChannel, []);
     }
 
     map.get(targetChannel)!.push({
-      noteNumber,
+      noteNumber: Math.max(0, Math.min(127, effectiveNote)),
       relTick: relTickTarget,
       durationTicks: Math.min(durationTarget, maxSectionTicksTarget - relTickTarget),
       velocity: Math.min(127, Math.max(1, velocity)),
-      sourceChannel,
+      sourceChannel: targetChannel, // 強制歸一化為目標伴奏通道 (8~15)
     });
+  }
+
+  /**
+   * 智慧分析指定小節 (bar) 之原曲和弦根音與大/小調性，計算回溯至 C 基準大調所需之半音位移
+   */
+  public static detectBarChord(
+    sourceParsed: YamahaFileParsed,
+    bar: number,
+    ticksPerBar: number,
+    bassChannel?: number
+  ): BarChordInfo {
+    const PITCH_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+    const barStartTick = Math.max(0, (bar - 1) * ticksPerBar);
+    const barEndTick = bar * ticksPerBar;
+
+    let bassPitch: number | null = null;
+    let minBassTick: number = Infinity;
+    const pitchCounts = new Array<number>(12).fill(0);
+
+    for (const track of sourceParsed.tracks) {
+      let curTick = 0;
+      for (const ev of track.events) {
+        curTick += ev.delta;
+        if (curTick >= barEndTick) break;
+        if (curTick >= barStartTick && ev.type === 'noteOn' && (ev.velocity ?? 0) > 0 && ev.noteNumber !== undefined) {
+          // 排除打擊樂軌道 (CH 10, channel 9)
+          if (ev.channel === 9) continue;
+
+          const pitch = ev.noteNumber;
+          pitchCounts[pitch % 12]++;
+
+          // 若指定貝斯通道，或者為該小節最低音且在低音區 (<= 55, G3)
+          if (bassChannel !== undefined && ev.channel === bassChannel) {
+            if (curTick < minBassTick) {
+              minBassTick = curTick;
+              bassPitch = pitch;
+            }
+          } else if (bassPitch === null && pitch <= 55) {
+            bassPitch = pitch;
+          }
+        }
+      }
+    }
+
+    // 決定根音音級 (Root Pitch Class: 0 ~ 11)
+    let rootPc = 0;
+    if (bassPitch !== null) {
+      rootPc = bassPitch % 12;
+    } else {
+      // 若無貝斯音符，以出現頻率最高者作為根音候選
+      let maxCount = 0;
+      for (let i = 0; i < 12; i++) {
+        if (pitchCounts[i] > maxCount) {
+          maxCount = pitchCounts[i];
+          rootPc = i;
+        }
+      }
+    }
+
+    const rootName = PITCH_NAMES[rootPc];
+    // 檢驗小三度 (rootPc + 3) vs 大三度 (rootPc + 4)
+    const minorThirdCount = pitchCounts[(rootPc + 3) % 12];
+    const majorThirdCount = pitchCounts[(rootPc + 4) % 12];
+    const isMinor = minorThirdCount > majorThirdCount;
+
+    // 計算反向移調至 C 基準大調所需的半音位移量 (shiftToC)
+    // 依據 ROOT_SEMITONES_FROM_C，shiftToC = -ROOT_SEMITONES_FROM_C[rootName]
+    const semitonesFromC = ROOT_SEMITONES_FROM_C[rootName] ?? 0;
+    const shiftToC = -semitonesFromC;
+
+    const chordName = `${rootName}${isMinor ? 'm' : ''}`;
+
+    return {
+      bar,
+      rootName,
+      rootPitchClass: rootPc,
+      isMinor,
+      shiftToC,
+      chordName,
+    };
   }
 
   /**

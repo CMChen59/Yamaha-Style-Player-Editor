@@ -11,6 +11,7 @@ import {
   type YamahaPartType
 } from '../core/writer/midi-part-assign-matrix';
 import type { MidiSongAnalysis } from '../core/parser/midi-song-analyzer';
+import type { YamahaFileParsed } from '../core/models/types';
 import { ALL_STANDARD_SECTIONS } from '../core/models/style-types';
 
 export interface MidiSliceAssignConfig {
@@ -19,6 +20,7 @@ export interface MidiSliceAssignConfig {
   totalBars: number;
   targetSection: string;       // e.g. 'Main A', 'Intro A'
   mappingPlan: SongPartMappingPlan;
+  normalizeChordsToC: boolean;
 }
 
 export class MidiSliceAssignModal {
@@ -31,12 +33,20 @@ export class MidiSliceAssignModal {
   private btnCancel!: HTMLButtonElement;
   private btnCloseHeader!: HTMLButtonElement;
   private btnAuditionAccomp!: HTMLButtonElement;
+  private chkNormalizeChords!: HTMLInputElement;
+  private normDescEl!: HTMLElement;
+  private normLabelEl!: HTMLElement;
 
   private currentAnalysis: MidiSongAnalysis | null = null;
   private currentPlan: SongPartMappingPlan | null = null;
   private currentStartBar: number = 1;
   private currentEndBar: number = 4;
+  private currentSourceParsed?: YamahaFileParsed;
   private onConfirmCallback: ((config: MidiSliceAssignConfig) => void) | null = null;
+
+  public getCurrentSourceParsed(): YamahaFileParsed | undefined {
+    return this.currentSourceParsed;
+  }
   private onAuditionCallback: ((isSoloAccomp: boolean, excludedChannels: number[]) => void) | null = null;
   private isAuditioningAccomp: boolean = false;
 
@@ -81,6 +91,21 @@ export class MidiSliceAssignModal {
             </div>
           </div>
 
+          <!-- 和弦正規化模式控制列 (Yamaha C 基準大調 vs 直通原曲進行) -->
+          <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem;">🎼</span>
+              <div>
+                <span style="font-size: 0.82rem; font-weight: 700; color: #c4b5fd;">和弦正規化模式 (Harmonic Normalization)：</span>
+                <span id="ms-norm-desc" style="font-size: 0.73rem; color: #94a3b8; display: block;">Main / Fill 伴奏段落：自動將各小節和弦歸一化為 C 基準大調，琴端左手換和弦 100% 精準轉調。</span>
+              </div>
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="ms-chk-normalize-chords" style="width: 16px; height: 16px; accent-color: #8b5cf6;" checked>
+              <span id="ms-norm-label" style="font-size: 0.82rem; font-weight: 700; color: #a78bfa;">啟用 C 基準大調正規化</span>
+            </label>
+          </div>
+
           <!-- 伴奏 8 聲部對照卡網格 (樂器為主、原曲 Ch 為輔) -->
           <div>
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -118,6 +143,9 @@ export class MidiSliceAssignModal {
     this.btnCancel = wrap.querySelector('#btn-cancel-ms-modal') as HTMLButtonElement;
     this.btnCloseHeader = wrap.querySelector('#btn-close-ms-modal') as HTMLButtonElement;
     this.btnAuditionAccomp = wrap.querySelector('#btn-ms-audition-accomp') as HTMLButtonElement;
+    this.chkNormalizeChords = wrap.querySelector('#ms-chk-normalize-chords') as HTMLInputElement;
+    this.normDescEl = wrap.querySelector('#ms-norm-desc') as HTMLElement;
+    this.normLabelEl = wrap.querySelector('#ms-norm-label') as HTMLElement;
   }
 
   private bindEvents() {
@@ -131,6 +159,18 @@ export class MidiSliceAssignModal {
       this.toggleAccompAudition();
     });
 
+    this.selectSectionEl.addEventListener('change', () => {
+      this.updateNormalizeModeBySection();
+    });
+
+    this.chkNormalizeChords.addEventListener('change', () => {
+      if (this.chkNormalizeChords.checked) {
+        this.normLabelEl.style.color = '#a78bfa';
+      } else {
+        this.normLabelEl.style.color = '#94a3b8';
+      }
+    });
+
     this.btnConfirm.addEventListener('click', () => {
       if (!this.currentPlan) return;
       const totalBars = Math.max(1, (this.currentEndBar - this.currentStartBar) + 1);
@@ -140,6 +180,7 @@ export class MidiSliceAssignModal {
         totalBars,
         targetSection: this.selectSectionEl.value || 'Main A',
         mappingPlan: this.currentPlan,
+        normalizeChordsToC: this.chkNormalizeChords.checked,
       };
 
       if (this.onConfirmCallback) {
@@ -147,6 +188,19 @@ export class MidiSliceAssignModal {
       }
       this.close();
     });
+  }
+
+  private updateNormalizeModeBySection() {
+    const sec = this.selectSectionEl.value || 'Main A';
+    const isMainOrFill = /^(main|fill|break)/i.test(sec.trim());
+    this.chkNormalizeChords.checked = isMainOrFill;
+    if (isMainOrFill) {
+      this.normDescEl.textContent = 'Main / Fill 伴奏段落：自動將各小節和弦歸一化為 C 基準大調，琴端左手換和弦 100% 精準轉調。';
+      this.normLabelEl.style.color = '#a78bfa';
+    } else {
+      this.normDescEl.textContent = 'Intro / Ending 獨立樂段：維持直通原曲和弦進行，樂手在琴端按單音 C 即可完整播放原曲旋律。';
+      this.normLabelEl.style.color = '#94a3b8';
+    }
   }
 
   /**
@@ -158,12 +212,17 @@ export class MidiSliceAssignModal {
     endBar: number,
     plan: SongPartMappingPlan | null,
     onConfirm: (config: MidiSliceAssignConfig) => void,
-    onAudition?: (isSoloAccomp: boolean, excludedChannels: number[]) => void
+    onAudition?: (isSoloAccomp: boolean, excludedChannels: number[]) => void,
+    sourceParsed?: YamahaFileParsed
   ) {
     this.currentAnalysis = analysis;
     this.currentStartBar = startBar;
     this.currentEndBar = endBar;
-    this.currentPlan = plan ? plan : MidiPartAssignMatrix.createAutoMappingPlan(analysis);
+    this.currentSourceParsed = sourceParsed;
+    this.currentPlan = plan ? plan : MidiPartAssignMatrix.createAutoMappingPlan(
+      analysis,
+      sourceParsed ? { sourceParsed, startBar, endBar } : undefined
+    );
     this.onConfirmCallback = onConfirm;
     this.onAuditionCallback = onAudition || null;
     this.isAuditioningAccomp = false;
@@ -173,6 +232,7 @@ export class MidiSliceAssignModal {
     this.rangeBadgeEl.textContent = `第 ${startBar} ~ ${endBar} 小節 (共 ${span} 小節)`;
 
     this.populateSectionOptions();
+    this.updateNormalizeModeBySection();
     this.renderPartsGrid();
     this.renderMelodyBox();
 

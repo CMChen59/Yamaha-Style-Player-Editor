@@ -606,13 +606,14 @@ export class PlayerApp {
         this.currentSongAnalysis,
         s,
         e,
-        this.currentPartMappingPlan,
+        null, // 每次切片重新依據當前選定小節動態嗅探生效樂器
         (sliceConfig) => {
           this.handleMidiSliceAssignConfirm(sliceConfig);
         },
         (isSoloAccomp, excludedChannels) => {
           this.handleAccompAudition(isSoloAccomp, excludedChannels);
-        }
+        },
+        this.currentParsed || undefined
       );
     });
 
@@ -1059,8 +1060,14 @@ export class PlayerApp {
             <span>📍 區間: <strong style="color: #cbd5e1;">${barSpanText}</strong></span>
             <span>🎵 音域: <strong style="color: #cbd5e1;">${chInfo.pitchRangeLabel}</strong></span>
           </div>
-          <div class="midi-ch-meta-line">
+          <div class="midi-ch-meta-line" style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
             <span>🏷️ 類別: <strong style="color: #cbd5e1;">${chInfo.category}</strong></span>
+            ${chInfo.programChangesCount > 1 ? `
+              <span style="color: #f59e0b; font-size: 0.72rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); padding: 1px 6px; border-radius: 4px; white-space: nowrap; cursor: help;"
+                title="${chInfo.programChangeTimeline && chInfo.programChangeTimeline.length > 1 ? chInfo.programChangeTimeline.map(p => `第 ${p.bar} 小節: ${p.voiceName}`).join(' ➔ ') : `更換過 ${chInfo.programChangesCount} 次音色`}">
+                ⚡ 曲中換樂器 (${chInfo.programChangesCount})
+              </span>
+            ` : ''}
           </div>
         </div>
 
@@ -1378,6 +1385,7 @@ export class PlayerApp {
         mappingPlan: config.mappingPlan,
         baseStyleParsed: this.workingStyleParsed,
         styleName: `${this.currentFileName.replace(/\.[^/.]+$/, '')}_Arranger`,
+        normalizeChordsToC: config.normalizeChordsToC,
       });
 
       this.workingStyleParsed = result.styleParsed;
@@ -1451,7 +1459,18 @@ export class PlayerApp {
               <div style="font-size: 0.75rem; color: #94a3b8;">🎼 提取音符總計</div>
               <div style="font-size: 0.95rem; font-weight: 700; color: #fbbf24;">${result.totalNotesExtracted} 顆音符 (${result.assembledPartsCount} 聲部)</div>
             </div>
+            <div>
+              <div style="font-size: 0.75rem; color: #94a3b8;">🎹 和弦模式</div>
+              <div style="font-size: 0.88rem; font-weight: 700; color: ${result.isHarmonicallyNormalized ? '#c084fc' : '#94a3b8'};">
+                ${result.isHarmonicallyNormalized ? '✅ C 基準大調 (已歸一)' : '直通原曲進行'}
+              </div>
+            </div>
           </div>
+          ${result.detectedChordsByBar && result.detectedChordsByBar.length > 0 ? `
+            <div style="font-size: 0.72rem; color: #c4b5fd; background: rgba(139, 92, 246, 0.1); border: 1px dashed rgba(139, 92, 246, 0.3); padding: 5px 10px; border-radius: 6px;">
+              🔍 <strong>各小節原曲和弦反向歸一化路徑：</strong> ${result.detectedChordsByBar.map(c => `第${c.bar}小節 [${c.chordName}] ➔ C (${c.shiftToC >= 0 ? '+' : ''}${c.shiftToC})`).join(' · ')}
+            </div>
+          ` : ''}
 
           <!-- 伴奏聲部裝配明細 -->
           <div>

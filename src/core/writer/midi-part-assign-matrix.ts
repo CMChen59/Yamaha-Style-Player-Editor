@@ -1,4 +1,5 @@
-import type { MidiSongAnalysis, MidiChannelAnalysis } from '../parser/midi-song-analyzer';
+import { MidiSongAnalyzer, type MidiSongAnalysis, type MidiChannelAnalysis } from '../parser/midi-song-analyzer';
+import type { YamahaFileParsed } from '../models/types';
 
 /**
  * Yamaha 原廠 8 大伴奏聲部定義 (Ch 9 ~ 16，0-based 為 8 ~ 15)
@@ -166,23 +167,73 @@ export class MidiPartAssignMatrix {
   }
 
   /**
-   * 針對全曲進行 8 大伴奏聲部的最佳化自動分配 (Part Assignment Engine)
+   * 針對全曲或指定切片小節區段進行 8 大伴奏聲部的最佳化自動分配 (Part Assignment Engine)
+   * 若提供 sliceContext，將自動動態嗅探該小節起始點之最新生效音色與該區間音符數
    */
-  public static createAutoMappingPlan(analysis: MidiSongAnalysis): SongPartMappingPlan {
+  public static createAutoMappingPlan(
+    analysis: MidiSongAnalysis,
+    sliceContext?: {
+      sourceParsed: YamahaFileParsed;
+      startBar: number;
+      endBar: number;
+    }
+  ): SongPartMappingPlan {
     const activeChannels = analysis.activeChannels.filter(c => c.hasNotes && c.noteCount > 0);
     const assignments: ChannelMappingAssignment[] = [];
     const partToSourceChannelMap = new Map<YamahaPartType, number>();
 
-    // 1. 初步分析各通道的主旋律特徵
+    // 若有切片上下文，預先統計該區間 [startTick, endTick) 內各通道的音符數
+    const sliceNoteCountMap = new Map<number, number>();
+    if (sliceContext) {
+      const division = sliceContext.sourceParsed.division || 480;
+      const timeSig = sliceContext.sourceParsed.timeSignature || { numerator: 4, denominator: 4 };
+      const num = timeSig.numerator || 4;
+      const den = timeSig.denominator || 4;
+      const ticksPerBar = Math.max(1, Math.round(division * num * (4 / den)));
+      const startTick = Math.max(0, (sliceContext.startBar - 1) * ticksPerBar);
+      const endTick = sliceContext.endBar * ticksPerBar;
+
+      for (const track of sliceContext.sourceParsed.tracks) {
+        let curTick = 0;
+        for (const ev of track.events) {
+          curTick += ev.delta;
+          if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0 && ev.channel !== undefined) {
+            if (curTick >= startTick && curTick < endTick) {
+              sliceNoteCountMap.set(ev.channel, (sliceNoteCountMap.get(ev.channel) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+
+    // 1. 初步分析各通道的主旋律特徵 (若有切片區間，採用該小節起始當下生效之最新音色與該區段音符數)
     for (const ch of activeChannels) {
-      const melodyInfo = this.detectMelody(ch);
+      let vName = ch.voiceName;
+      let cat = ch.category;
+      let noteCount = ch.noteCount;
+
+      if (sliceContext) {
+        const eff = MidiSongAnalyzer.getEffectiveVoiceAtBar(
+          sliceContext.sourceParsed,
+          ch.channel,
+          sliceContext.startBar
+        );
+        vName = eff.voiceName;
+        cat = eff.category;
+        noteCount = sliceNoteCountMap.get(ch.channel) || 0;
+      }
+
+      const melodyInfo = sliceContext
+        ? this.detectMelody({ ...ch, category: cat, voiceName: vName, noteCount })
+        : this.detectMelody(ch);
+
       assignments.push({
         sourceChannel: ch.channel,
         displaySourceChannel: ch.displayChannel,
-        voiceName: ch.voiceName,
-        category: ch.category,
+        voiceName: vName,
+        category: cat,
         trackNames: ch.trackNames,
-        noteCount: ch.noteCount,
+        noteCount,
         melodyInfo,
         isExcluded: melodyInfo.isMelody, // 預設排除主旋律
         targetPart: null,
@@ -194,21 +245,27 @@ export class MidiPartAssignMatrix {
     // 待分配的伴奏候選通道 (未被排除的通道)
     const candidates = assignments.filter(a => !a.isExcluded);
 
-    // 2. 階段一：指派核心骨幹 (主鼓組與貝斯)
+    // 2. 階段一：指派核心骨幹 (主鼓組與貝斯，優先挑選該區段有發聲音符者)
     // 2.1 主鼓組 (Rhythm 2: Ch 10)
-    const mainDrum = candidates.find(a => a.sourceChannel === 9 || a.category === 'Drums');
+    const mainDrum = candidates.find(a => (a.sourceChannel === 9 || a.category === 'Drums') && a.noteCount > 0)
+      || candidates.find(a => a.sourceChannel === 9 || a.category === 'Drums');
     if (mainDrum) {
       this.bindPart(mainDrum, 'Rhythm2', partToSourceChannelMap);
     }
 
     // 2.2 貝斯 (Bass: Ch 11)
-    const mainBass = candidates.find(a => a.targetPart === null && (a.category === 'Bass' || a.sourceChannel === 10));
+    const mainBass = candidates.find(a => a.targetPart === null && (a.category === 'Bass' || a.sourceChannel === 10) && a.noteCount > 0)
+      || candidates.find(a => a.targetPart === null && (a.category === 'Bass' || a.sourceChannel === 10));
     if (mainBass) {
       this.bindPart(mainBass, 'Bass', partToSourceChannelMap);
     }
 
     // 2.3 輔助打擊 (Rhythm 1: Ch 9) - 優先分配明確為鼓組 (Drums) 或非旋律打擊
     const subDrum = candidates.find(a =>
+      a.targetPart === null &&
+      (a.category === 'Drums' || (a.category === 'Percussion' && a.trackNames.some(t => t.toLowerCase().includes('perc') || t.toLowerCase().includes('drum')))) &&
+      a.noteCount > 0
+    ) || candidates.find(a =>
       a.targetPart === null &&
       (a.category === 'Drums' || (a.category === 'Percussion' && a.trackNames.some(t => t.toLowerCase().includes('perc') || t.toLowerCase().includes('drum'))))
     );
@@ -219,6 +276,10 @@ export class MidiPartAssignMatrix {
     // 3. 階段二：指派和弦與長音鋪底 (Chord 1, Chord 2, Pad)
     // 3.1 核心和弦 Chord 1 (鋼琴 / 鍵盤優先，若無則吉他)
     const chord1Cand = candidates.find(a =>
+      a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano') && a.noteCount > 0
+    ) || candidates.find(a =>
+      a.targetPart === null && a.category.includes('Guitar') && a.noteCount > 0
+    ) || candidates.find(a =>
       a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano')
     ) || candidates.find(a =>
       a.targetPart === null && a.category.includes('Guitar')
@@ -233,6 +294,8 @@ export class MidiPartAssignMatrix {
       .sort((a, b) => b.noteCount - a.noteCount);
 
     const chord2Cand = guitarCandidates[0] || candidates.find(a =>
+      a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano' || a.category === 'Organ') && a.noteCount > 0
+    ) || candidates.find(a =>
       a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano' || a.category === 'Organ')
     );
     if (chord2Cand && !partToSourceChannelMap.has('Chord2')) {

@@ -1,6 +1,36 @@
 import type { YamahaFileParsed } from '../models/types';
 import { resolveYamahaVoiceWithAlias } from '../data/yamaha-voices';
 
+export interface EffectiveChannelVoice {
+  channel: number;
+  bar: number;
+  tick: number;
+  msb: number;
+  lsb: number;
+  pc: number;
+  rawMsb: number;
+  rawLsb: number;
+  rawPc: number;
+  voiceName: string;
+  panelCode: string;
+  category: string;
+  isDrum: boolean;
+  volume: number;
+  pan: number;
+}
+
+export interface MidiProgramChangePoint {
+  tick: number;
+  bar: number;
+  channel: number;
+  msb: number;
+  lsb: number;
+  pc: number;
+  voiceName: string;
+  category: string;
+  panelCode: string;
+}
+
 export interface MidiChannelAnalysis {
   channel: number;            // 0~15 (對應 MIDI CH 1 ~ CH 16)
   displayChannel: number;     // 1~16
@@ -28,6 +58,7 @@ export interface MidiChannelAnalysis {
   reverb: number;
   chorus: number;
   programChangesCount: number;
+  programChangeTimeline?: MidiProgramChangePoint[];
 }
 
 export interface MidiTempoPoint {
@@ -149,12 +180,15 @@ export class MidiSongAnalyzer {
       msb: number | undefined;
       lsb: number | undefined;
       pc: number | undefined;
+      runningMsb: number | undefined;
+      runningLsb: number | undefined;
       volume: number | undefined;
       pan: number | undefined;
       reverb: number | undefined;
       chorus: number | undefined;
       programChangesCount: number;
       hasAnyEvent: boolean;
+      rawProgramChanges: Array<{ tick: number; bar: number; msb?: number; lsb?: number; pc: number }>;
     }
 
     const chMap: Map<number, ChAccum> = new Map();
@@ -170,12 +204,15 @@ export class MidiSongAnalyzer {
         msb: part?.bankMsb,
         lsb: part?.bankLsb,
         pc: part?.programChange,
+        runningMsb: part?.bankMsb,
+        runningLsb: part?.bankLsb,
         volume: part?.volume,
         pan: part?.pan,
         reverb: part?.reverb,
         chorus: part?.chorus,
         programChangesCount: 0,
         hasAnyEvent: !!part,
+        rawProgramChanges: [],
       });
     }
 
@@ -263,17 +300,30 @@ export class MidiSongAnalyzer {
             if (curTick > maxNoteTick) maxNoteTick = curTick;
           }
         } else if (ev.type === 'controlChange' && ev.controller !== undefined && ev.value !== undefined) {
-          if (ev.controller === 0 && acc.msb === undefined) acc.msb = ev.value;
-          else if (ev.controller === 32 && acc.lsb === undefined) acc.lsb = ev.value;
-          else if (ev.controller === 7 && acc.volume === undefined) acc.volume = ev.value;
+          if (ev.controller === 0) {
+            acc.runningMsb = ev.value;
+            if (acc.msb === undefined) acc.msb = ev.value;
+          } else if (ev.controller === 32) {
+            acc.runningLsb = ev.value;
+            if (acc.lsb === undefined) acc.lsb = ev.value;
+          } else if (ev.controller === 7 && acc.volume === undefined) acc.volume = ev.value;
           else if (ev.controller === 10 && acc.pan === undefined) acc.pan = ev.value;
           else if (ev.controller === 91 && acc.reverb === undefined) acc.reverb = ev.value;
           else if (ev.controller === 93 && acc.chorus === undefined) acc.chorus = ev.value;
-        } else if (ev.type === 'programChange' && ev.program !== undefined) {
+        } else if (ev.type === 'programChange' && (ev.program !== undefined || (ev as any).programChange !== undefined)) {
+          const pc = ev.program !== undefined ? ev.program : (ev as any).programChange;
           acc.programChangesCount++;
           if (acc.pc === undefined) {
-            acc.pc = ev.program;
+            acc.pc = pc;
           }
+          const bar = Math.floor(curTick / ticksPerBar) + 1;
+          acc.rawProgramChanges.push({
+            tick: curTick,
+            bar,
+            msb: acc.runningMsb,
+            lsb: acc.runningLsb,
+            pc,
+          });
         }
       }
     }
@@ -333,6 +383,26 @@ export class MidiSongAnalyzer {
       const firstBar = acc.firstTick !== null ? Math.floor(acc.firstTick / ticksPerBar) + 1 : null;
       const lastBar = acc.lastTick !== null ? Math.min(totalBars, Math.max(firstBar || 1, Math.ceil(Math.max(1, acc.lastTick) / ticksPerBar))) : null;
 
+      const programChangeTimeline: MidiProgramChangePoint[] = acc.rawProgramChanges.map((rpc) => {
+        const rMsb = rpc.msb ?? (ch === 9 ? 127 : 0);
+        const rLsb = rpc.lsb ?? 0;
+        const effLookupMsb = ch === 9 && rMsb === 0 ? 127 : rMsb;
+        const rResolved = resolveYamahaVoiceWithAlias(effLookupMsb, rLsb, rpc.pc);
+        const isD = ch === 9 || effLookupMsb === 127 || effLookupMsb === 126 || rResolved.voice?.category === 'Drums';
+        const cat = isD ? 'Drums' : (rResolved.voice?.category || 'Piano');
+        return {
+          tick: rpc.tick,
+          bar: rpc.bar,
+          channel: ch,
+          msb: rResolved.msb,
+          lsb: rResolved.lsb,
+          pc: rResolved.pc,
+          voiceName: rResolved.voiceName,
+          category: cat,
+          panelCode: rResolved.panelCode,
+        };
+      });
+
       activeChannels.push({
         channel: ch,
         displayChannel: ch + 1,
@@ -360,6 +430,7 @@ export class MidiSongAnalyzer {
         reverb: acc.reverb ?? 40,
         chorus: acc.chorus ?? 0,
         programChangesCount: acc.programChangesCount,
+        programChangeTimeline,
       });
     }
 
@@ -475,5 +546,128 @@ export class MidiSongAnalyzer {
     }
 
     return `${NOTE_NAMES[bestRoot]} ${bestMode} (智慧推算)`;
+  }
+
+  /**
+   * 回溯嗅探指定小節起始點 (startBar) 該通道當下最新生效的原廠音色與混音參數
+   * 支援曲中音色切換 (Mid-song Program Change / Bank Select Lookback)
+   */
+  public static getEffectiveVoiceAtBar(
+    parsed: YamahaFileParsed,
+    channel: number,
+    bar: number
+  ): EffectiveChannelVoice {
+    const division = parsed.division || 480;
+    const timeSig = parsed.timeSignature || { numerator: 4, denominator: 4 };
+    const num = timeSig.numerator || 4;
+    const den = timeSig.denominator || 4;
+    const ticksPerBar = Math.max(1, Math.round(division * num * (4 / den)));
+    const targetTick = Math.max(0, (bar - 1) * ticksPerBar);
+
+    // 收集該通道的所有 CC0, CC32, CC7, CC10, ProgramChange 事件
+    const chEvents: Array<{
+      tick: number;
+      type: string;
+      controller?: number;
+      value?: number;
+      program?: number;
+    }> = [];
+
+    for (const track of parsed.tracks) {
+      let curTick = 0;
+      for (const ev of track.events) {
+        curTick += ev.delta;
+        if (ev.channel !== channel) continue;
+
+        if (
+          ev.type === 'controlChange' &&
+          (ev.controller === 0 || ev.controller === 32 || ev.controller === 7 || ev.controller === 10)
+        ) {
+          chEvents.push({ tick: curTick, type: 'controlChange', controller: ev.controller, value: ev.value });
+        } else if (ev.type === 'programChange') {
+          const pc = ev.program !== undefined ? ev.program : (ev as any).programChange;
+          if (pc !== undefined) {
+            chEvents.push({ tick: curTick, type: 'programChange', program: pc });
+          }
+        }
+      }
+    }
+
+    chEvents.sort((a, b) => a.tick - b.tick);
+
+    let currentMsb = channel === 9 ? 127 : 0;
+    let currentLsb = 0;
+    let currentPc = 0;
+    let currentVol = 100;
+    let currentPan = 64;
+    let hasExplicitPc = false;
+
+    // 優先掃描 targetTick 以前 (含 targetTick 當下設定) 的所有事件
+    const priorEvents = chEvents.filter((e) => e.tick <= targetTick);
+    for (const ev of priorEvents) {
+      if (ev.type === 'controlChange') {
+        if (ev.controller === 0 && ev.value !== undefined) currentMsb = ev.value;
+        else if (ev.controller === 32 && ev.value !== undefined) currentLsb = ev.value;
+        else if (ev.controller === 7 && ev.value !== undefined) currentVol = ev.value;
+        else if (ev.controller === 10 && ev.value !== undefined) currentPan = ev.value;
+      } else if (ev.type === 'programChange' && ev.program !== undefined) {
+        currentPc = ev.program;
+        hasExplicitPc = true;
+      }
+    }
+
+    // 若 targetTick 之前完全未定義 PC，但在該小節開頭緊接著有音色切換指令 (targetTick ~ targetTick + ticksPerBar)
+    if (!hasExplicitPc) {
+      const nearFutureEvents = chEvents.filter(
+        (e) => e.tick > targetTick && e.tick < targetTick + ticksPerBar
+      );
+      for (const ev of nearFutureEvents) {
+        if (ev.type === 'controlChange') {
+          if (ev.controller === 0 && ev.value !== undefined) currentMsb = ev.value;
+          else if (ev.controller === 32 && ev.value !== undefined) currentLsb = ev.value;
+        } else if (ev.type === 'programChange' && ev.program !== undefined) {
+          currentPc = ev.program;
+          hasExplicitPc = true;
+          break;
+        }
+      }
+
+      // 若全曲後半段有任何 PC，取第一筆
+      if (!hasExplicitPc) {
+        const firstPc = chEvents.find((e) => e.type === 'programChange');
+        if (firstPc && firstPc.program !== undefined) {
+          currentPc = firstPc.program;
+        }
+      }
+    }
+
+    const effectiveLookupMsb = channel === 9 && currentMsb === 0 ? 127 : currentMsb;
+    const resolved = resolveYamahaVoiceWithAlias(effectiveLookupMsb, currentLsb, currentPc);
+
+    const isDrum =
+      channel === 9 ||
+      effectiveLookupMsb === 127 ||
+      effectiveLookupMsb === 126 ||
+      resolved.voice?.category === 'Drums';
+
+    const category = isDrum ? 'Drums' : (resolved.voice?.category || 'Piano');
+
+    return {
+      channel,
+      bar,
+      tick: targetTick,
+      msb: resolved.msb,
+      lsb: resolved.lsb,
+      pc: resolved.pc,
+      rawMsb: currentMsb,
+      rawLsb: currentLsb,
+      rawPc: currentPc,
+      voiceName: resolved.voiceName,
+      panelCode: resolved.panelCode,
+      category,
+      isDrum,
+      volume: currentVol,
+      pan: currentPan,
+    };
   }
 }

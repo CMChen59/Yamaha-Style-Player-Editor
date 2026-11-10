@@ -1924,7 +1924,7 @@ export class YamahaStyleModifier {
       const absEnd = Math.min(range.endTick, absStart + dur);
       const noteNum = Math.max(0, Math.min(127, Math.round(n.noteNumber)));
       const vel = Math.max(1, Math.min(127, Math.round(n.velocity)));
-      const ch = n.sourceChannel !== undefined ? n.sourceChannel : targetMidiChannel;
+      const ch = targetChannelOverride !== undefined ? targetChannelOverride : (n.sourceChannel !== undefined ? n.sourceChannel : targetMidiChannel);
 
       keptEvents.push({
         ev: { delta: 0, type: 'noteOn', channel: ch, noteNumber: noteNum, velocity: vel },
