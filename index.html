@@ -1348,8 +1348,12 @@
       cursor: pointer;
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
       transition: all 0.15s;
+      min-width: 130px;
+      box-sizing: border-box;
+      white-space: nowrap;
     }
 
     .btn-banner-action:hover {
@@ -5242,6 +5246,162 @@
       background: linear-gradient(90deg, #38bdf8, #10b981);
       border-radius: 999px;
     }
+
+    /* 🔍 伴奏映射指派總表 (Part Assign Matrix Panel) 樣式 */
+    .part-matrix-container {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 12px;
+      margin-bottom: 16px;
+    }
+
+    .part-matrix-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .part-matrix-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .part-matrix-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      font-weight: 600;
+    }
+
+    .part-matrix-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .part-assign-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-left: 4px solid var(--part-accent, #38bdf8);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .part-assign-card:hover {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    .part-assign-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .part-target-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .part-role-desc {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+
+    .part-source-box {
+      background: rgba(9, 13, 22, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .part-source-voice {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .part-source-meta {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .part-source-select {
+      background: #090d16;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      font-size: 0.78rem;
+      padding: 4px 6px;
+      border-radius: 5px;
+      outline: none;
+      width: 100%;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    .melody-excluded-box {
+      margin-top: 14px;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    .melody-excluded-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #f87171;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .melody-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 4px 0;
+      border-bottom: 1px dashed rgba(239, 68, 68, 0.15);
+      font-size: 0.76rem;
+      color: #cbd5e1;
+    }
+
+    .melody-item-row:last-child {
+      border-bottom: none;
+    }
   </style>
 </head>
 <body>
@@ -5515,6 +5675,9 @@
           <span id="label-midi-total-bars-hint" style="font-size: 0.8rem; color: #94a3b8;">小節 (全曲共 1 小節)</span>
           <button id="btn-apply-midi-bar-range" class="midi-locator-btn active" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981; color: #ffffff;" title="立即套用指定小節區間並開始循環播放">▶ 套用並播放區間</button>
           <button id="btn-stop-midi-bar-range" class="midi-locator-btn" style="background: rgba(244, 63, 94, 0.16); border-color: rgba(244, 63, 94, 0.45); color: #fda4af;" title="停止播放">⏹ 停止</button>
+          <button id="btn-open-slice-modal" class="midi-locator-btn" style="background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; color: #ffffff; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;" title="開啟小節切片指派彈窗，設定 8 伴奏聲部映射並組裝至 Yamaha 段落">
+            <span>✂️ 切片指派至段落...</span>
+          </button>
         </div>
         <div id="midi-quick-range-btns" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
           <button type="button" class="midi-locator-btn" data-range="all">▶ 全曲完整播放</button>
@@ -5527,9 +5690,20 @@
       <!-- 發聲通道與使用樂器明細卡片網格 -->
       <div>
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-          <span id="midi-ch-section-title" style="font-size: 0.85rem; font-weight: 700; color: #e2e8f0;">🎛️ 通道與使用樂器明細 (Active Channels &amp; Instruments)</span>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span id="midi-ch-section-title" style="font-size: 0.85rem; font-weight: 700; color: #e2e8f0;">🎛️ 通道與使用樂器明細 (Active Channels &amp; Instruments)</span>
+            <button id="btn-toggle-part-matrix" class="midi-locator-btn" style="background: rgba(56, 189, 248, 0.16); border-color: #38bdf8; color: #7dd3fc; display: inline-flex; align-items: center; gap: 6px; font-weight: 700;" title="一鍵查看與確認 16 通道對應 Yamaha 8 大伴奏聲部的映射指派總表">
+              <span>🔍 檢視伴奏映射指派總表 (Part Assign Matrix)</span>
+            </button>
+          </div>
           <span id="midi-markers-summary" style="font-size: 0.75rem; color: #94a3b8;"></span>
         </div>
+
+        <!-- 🔍 伴奏映射指派總表面板 (點擊按鈕展開/收合) -->
+        <div id="part-assign-matrix-panel" class="part-matrix-container" style="display: none;">
+          <!-- 動態渲染伴奏 8 聲部對照卡與排除主旋律提示 -->
+        </div>
+
         <div id="midi-ch-grid" class="midi-ch-grid"></div>
       </div>
     </section>

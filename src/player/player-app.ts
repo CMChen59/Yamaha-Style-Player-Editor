@@ -13,9 +13,16 @@ import { SectionCloneModal } from './section-clone-modal';
 import { SectionImportModal } from './section-import-modal';
 import { AddSectionModal, type AddSectionConfig } from './add-section-modal';
 import { NewStyleModal, type NewStyleModalConfig } from './new-style-modal';
+import { MidiSliceAssignModal, type MidiSliceAssignConfig } from './midi-slice-assign-modal';
 import { YamahaStyleSynthesizer } from '../core/writer/style-synthesizer';
 import { ChordTransposer, POPULAR_AUDITION_CHORDS, CHORD_TYPE_INTERVALS, type ChordDefinition, type ChordType } from '../core/writer/chord-transposer';
 import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
+import {
+  MidiPartAssignMatrix,
+  YAMAHA_ARRANGER_PARTS,
+  type SongPartMappingPlan,
+  type YamahaPartType
+} from '../core/writer/midi-part-assign-matrix';
 
 // Yamaha 標準 8 伴奏聲部定義
 interface PartDef {
@@ -56,6 +63,10 @@ export class PlayerApp {
   private labelMidiTotalBarsHint: HTMLElement | null = null;
   private btnApplyMidiBarRange: HTMLButtonElement | null = null;
   private btnStopMidiBarRange: HTMLButtonElement | null = null;
+  private btnTogglePartMatrix: HTMLButtonElement | null = null;
+  private partAssignMatrixPanel: HTMLElement | null = null;
+  private isPartMatrixVisible: boolean = false;
+  private currentPartMappingPlan: SongPartMappingPlan | null = null;
   private chordAuditionBar: HTMLElement | null = null;
   private sectionMatrixPanel: HTMLElement | null = null;
   private mixerPanel: HTMLElement | null = null;
@@ -120,6 +131,9 @@ export class PlayerApp {
   private btnOpenSectionImport!: HTMLButtonElement;
   private addSectionModal!: AddSectionModal;
   private btnOpenAddSection!: HTMLButtonElement;
+  private midiSliceAssignModal!: MidiSliceAssignModal;
+  private btnOpenSliceModal: HTMLButtonElement | null = null;
+  private currentlyAuditionMutedChannels: number[] = [];
   private newStyleModal!: NewStyleModal;
   private btnOpenNewStyle!: HTMLButtonElement;
   // 🎹 虛擬和弦轉調測試元件
@@ -176,6 +190,7 @@ export class PlayerApp {
     this.sectionImportModal = new SectionImportModal();
     this.addSectionModal = new AddSectionModal();
     this.newStyleModal = new NewStyleModal();
+    this.midiSliceAssignModal = new MidiSliceAssignModal();
 
     this.setFocusedChannel(8); // 預設聚焦 CH 9 Rhythm 1
     this.initMidi();
@@ -264,6 +279,9 @@ export class PlayerApp {
     this.labelMidiTotalBarsHint = document.getElementById('label-midi-total-bars-hint');
     this.btnApplyMidiBarRange = document.getElementById('btn-apply-midi-bar-range') as HTMLButtonElement | null;
     this.btnStopMidiBarRange = document.getElementById('btn-stop-midi-bar-range') as HTMLButtonElement | null;
+    this.btnTogglePartMatrix = document.getElementById('btn-toggle-part-matrix') as HTMLButtonElement | null;
+    this.partAssignMatrixPanel = document.getElementById('part-assign-matrix-panel');
+    this.btnOpenSliceModal = document.getElementById('btn-open-slice-modal') as HTMLButtonElement | null;
     this.chordAuditionBar = document.getElementById('chord-audition-bar');
     this.sectionMatrixPanel = document.getElementById('section-matrix-panel');
     this.mixerPanel = document.getElementById('mixer-panel');
@@ -543,6 +561,47 @@ export class PlayerApp {
         const eBar = parseInt(this.inputMidiEndBar?.value || String(total), 10) || total;
         this.labelPosition.textContent = `小節 ${s.toString().padStart(2, '0')} / ${eBar.toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
       }
+    });
+
+    // 🔍 伴奏映射指派總表面板切換開關
+    this.btnTogglePartMatrix?.addEventListener('click', () => {
+      this.isPartMatrixVisible = !this.isPartMatrixVisible;
+      if (this.partAssignMatrixPanel) {
+        this.partAssignMatrixPanel.style.display = this.isPartMatrixVisible ? 'block' : 'none';
+      }
+      if (this.btnTogglePartMatrix) {
+        this.btnTogglePartMatrix.classList.toggle('active', this.isPartMatrixVisible);
+        this.btnTogglePartMatrix.innerHTML = this.isPartMatrixVisible
+          ? `<span>✖ 收合伴奏映射指派總表</span>`
+          : `<span>🔍 檢視伴奏映射指派總表 (Part Assign Matrix)</span>`;
+      }
+      if (this.isPartMatrixVisible && this.currentSongAnalysis) {
+        this.renderPartAssignMatrix(this.currentSongAnalysis);
+      }
+    });
+
+    // ✂️ 開啟小節切片指派至伴奏段落彈窗
+    this.btnOpenSliceModal?.addEventListener('click', () => {
+      if (!this.currentSongAnalysis || !styPlaybackEngine.getIsSongMode()) {
+        alert('請先拖入或開啟一般 MIDI 音樂檔以進行小節切片！');
+        return;
+      }
+      const total = this.currentSongAnalysis.totalBars;
+      const s = Math.max(1, Math.min(total, parseInt(this.inputMidiStartBar?.value || '1', 10) || 1));
+      const e = Math.max(s, Math.min(total, parseInt(this.inputMidiEndBar?.value || String(total), 10) || total));
+
+      this.midiSliceAssignModal.open(
+        this.currentSongAnalysis,
+        s,
+        e,
+        this.currentPartMappingPlan,
+        (sliceConfig) => {
+          this.handleMidiSliceAssignConfirm(sliceConfig);
+        },
+        (isSoloAccomp, excludedChannels) => {
+          this.handleAccompAudition(isSoloAccomp, excludedChannels);
+        }
+      );
     });
 
     document.querySelectorAll('#midi-quick-range-btns .midi-locator-btn').forEach((btn) => {
@@ -1071,6 +1130,234 @@ export class PlayerApp {
 
       this.midiChGrid!.appendChild(card);
     });
+
+    // 5. 若伴奏映射總表處於開啟狀態，同步重新渲染總表
+    if (this.isPartMatrixVisible) {
+      this.renderPartAssignMatrix(analysis);
+    }
+  }
+
+  /**
+   * 渲染 Yamaha 8 大伴奏聲部映射指派總表 (Part Assign Matrix)
+   * 採用以「樂器名稱與音樂角色為主、原 MIDI Ch 為輔助備註」的直覺排版
+   */
+  private renderPartAssignMatrix(analysis: MidiSongAnalysis) {
+    if (!this.partAssignMatrixPanel) return;
+
+    if (!this.currentPartMappingPlan) {
+      this.currentPartMappingPlan = MidiPartAssignMatrix.createAutoMappingPlan(analysis);
+    }
+    const plan = this.currentPartMappingPlan;
+
+    const availableChannels = analysis.activeChannels.filter(c => c.hasNotes && c.noteCount > 0);
+
+    // 建立 8 伴奏聲部卡片 HTML
+    const partsCardsHtml = YAMAHA_ARRANGER_PARTS.map((pDef) => {
+      const currentSrcCh = plan.partToSourceChannelMap.get(pDef.part);
+      const matchedAssignment = currentSrcCh !== undefined
+        ? plan.assignments.find(a => a.sourceChannel === currentSrcCh)
+        : null;
+
+      const voiceDisplay = matchedAssignment ? matchedAssignment.voiceName : '未指派 (此伴奏聲部靜音)';
+      const trackDisplay = matchedAssignment && matchedAssignment.trackNames.length > 0
+        ? matchedAssignment.trackNames.join(' / ')
+        : (matchedAssignment ? '原曲音軌' : '無');
+      const catIcon = pDef.part.includes('Rhythm') ? '🥁' : (pDef.part === 'Bass' ? '🎸' : (pDef.part.includes('Chord') ? '🎹' : (pDef.part === 'Pad' ? '🎻' : '🎷')));
+
+      // 下拉選單選項 (以「樂器名稱」為主，「(CH x)」為小括號備註)
+      const optionsHtml = [
+        `<option value="-1" ${currentSrcCh === undefined ? 'selected' : ''}>-- 靜音此聲部 (未指派) --</option>`,
+        ...availableChannels.map((ch) => {
+          const isSelected = currentSrcCh === ch.channel;
+          const trkLabel = ch.trackNames[0] ? ` · ${ch.trackNames[0]}` : '';
+          return `<option value="${ch.channel}" ${isSelected ? 'selected' : ''}>${ch.voiceName} (${ch.displayChannel}軌${trkLabel}) [${ch.noteCount}音符]</option>`;
+        })
+      ].join('');
+
+      return `
+        <div class="part-assign-card" style="--part-accent: ${this.getChannelPartDef(pDef.channel).color};">
+          <div class="part-assign-top">
+            <span class="part-target-label">${catIcon} ${pDef.nameZh}</span>
+            <span class="part-role-desc">${pDef.defaultRole}</span>
+          </div>
+
+          <div class="part-source-box">
+            <div class="part-source-voice" title="${voiceDisplay}">
+              <span>${voiceDisplay}</span>
+            </div>
+            <div class="part-source-meta">
+              <span>來源軌道: <strong style="color: #cbd5e1;">${trackDisplay}</strong></span>
+              <span style="color: #64748b;">${matchedAssignment ? `(原曲 CH ${matchedAssignment.displaySourceChannel} · ${matchedAssignment.noteCount}音符)` : ''}</span>
+            </div>
+          </div>
+
+          <select class="part-source-select" data-target-part="${pDef.part}" title="自由變更此 Yamaha 伴奏聲部的樂器來源">
+            ${optionsHtml}
+          </select>
+        </div>
+      `;
+    }).join('');
+
+    // 建立被排除之主旋律清單 HTML
+    const excludedList = plan.assignments.filter(a => a.isExcluded);
+    const excludedRowsHtml = excludedList.length > 0
+      ? excludedList.map((a) => {
+          return `
+            <div class="melody-item-row">
+              <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span style="font-weight: 700; color: #fca5a5;">${a.voiceName}</span>
+                <span style="color: #94a3b8;">· 軌道: ${a.trackNames.join(' / ') || '無'}</span>
+                <span style="color: #64748b;">(原曲 CH ${a.displaySourceChannel} · ${a.noteCount} 音符)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                <span style="font-size: 0.7rem; color: #f87171; background: rgba(239, 68, 68, 0.15); padding: 1px 6px; border-radius: 4px;">
+                  ${a.melodyInfo.reasons[0] || '偵測為主旋律'} (${a.melodyInfo.confidence}%)
+                </span>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 0.72rem; cursor: pointer; color: #38bdf8;">
+                  <input type="checkbox" class="chk-include-melody" data-channel="${a.sourceChannel}" title="打勾取消排除，強制納入伴奏聲部供指派">
+                  <span>納入伴奏</span>
+                </label>
+              </div>
+            </div>
+          `;
+        }).join('')
+      : `<div style="font-size: 0.74rem; color: #94a3b8; padding: 4px 0;">全曲各軌皆判定為常規伴奏樂器，無自動排除項目。</div>`;
+
+    this.partAssignMatrixPanel.innerHTML = `
+      <div class="part-matrix-header">
+        <div class="part-matrix-title">
+          <span>🎼 Yamaha 8 大伴奏聲部映射對照總表 (Part Assign Matrix)</span>
+          <span class="part-matrix-badge">已指派 ${plan.assignedCount} 聲部 / 排除 ${plan.excludedCount} 旋律軌</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button id="btn-reset-part-mapping" class="midi-locator-btn" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); color: #cbd5e1;" title="恢復演算法最佳化自動分配建議">🔄 恢復自動建議</button>
+        </div>
+      </div>
+
+      <div class="part-matrix-grid">
+        ${partsCardsHtml}
+      </div>
+
+      <div class="melody-excluded-box">
+        <div class="melody-excluded-title">
+          <span>🎤 智慧偵測主旋律（已預設排除於伴奏之外，避免伴奏複唱主唱旋律）</span>
+        </div>
+        ${excludedRowsHtml}
+      </div>
+    `;
+
+    // 綁定下拉選單切換事件
+    this.partAssignMatrixPanel.querySelectorAll('.part-source-select').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const selectEl = e.target as HTMLSelectElement;
+        const targetPart = selectEl.getAttribute('data-target-part') as YamahaPartType;
+        const newSrcCh = parseInt(selectEl.value, 10);
+
+        if (newSrcCh === -1) {
+          plan.partToSourceChannelMap.delete(targetPart);
+          const old = plan.assignments.find(a => a.targetPart === targetPart);
+          if (old) {
+            old.targetPart = null;
+            old.targetChannel = null;
+          }
+        } else {
+          // 若該來源已被指派給其他聲部，先解開舊聲部
+          for (const [p, ch] of plan.partToSourceChannelMap.entries()) {
+            if (ch === newSrcCh) {
+              plan.partToSourceChannelMap.delete(p);
+            }
+          }
+          const assign = plan.assignments.find(a => a.sourceChannel === newSrcCh);
+          if (assign) {
+            assign.isExcluded = false;
+            MidiPartAssignMatrix['bindPart'](assign, targetPart, plan.partToSourceChannelMap);
+          }
+        }
+        plan.assignedCount = plan.partToSourceChannelMap.size;
+        this.renderPartAssignMatrix(analysis);
+      });
+    });
+
+    // 綁定取消排除主旋律 Checkbox 事件
+    this.partAssignMatrixPanel.querySelectorAll('.chk-include-melody').forEach((chk) => {
+      chk.addEventListener('change', (e) => {
+        const inputEl = e.target as HTMLInputElement;
+        const ch = parseInt(inputEl.getAttribute('data-channel') || '-1', 10);
+        const assign = plan.assignments.find(a => a.sourceChannel === ch);
+        if (assign) {
+          assign.isExcluded = !inputEl.checked;
+          plan.excludedCount = plan.assignments.filter(a => a.isExcluded).length;
+          this.renderPartAssignMatrix(analysis);
+        }
+      });
+    });
+
+    // 綁定恢復預設建議按鈕
+    const btnReset = this.partAssignMatrixPanel.querySelector('#btn-reset-part-mapping');
+    btnReset?.addEventListener('click', () => {
+      this.currentPartMappingPlan = MidiPartAssignMatrix.createAutoMappingPlan(analysis);
+      this.renderPartAssignMatrix(analysis);
+    });
+  }
+
+  /**
+   * 處理純伴奏試聽開關 (暫時 Mute 排除的主旋律通道)
+   */
+  private handleAccompAudition(isSoloAccomp: boolean, excludedChannels: number[]) {
+    if (!styPlaybackEngine.getIsSongMode()) return;
+    if (isSoloAccomp) {
+      // 記錄正在被伴奏試聽靜音的通道
+      this.currentlyAuditionMutedChannels = [...excludedChannels];
+      // 靜音所有主旋律軌與未指派軌
+      for (const ch of excludedChannels) {
+        styPlaybackEngine.setChannelMute(ch, true);
+        const btnMute = document.getElementById(`btn-mute-${ch}`);
+        btnMute?.classList.add('muted');
+      }
+      // 確保播放引擎處於播放狀態
+      if (!styPlaybackEngine.getIsPlaying()) {
+        const ctx = getSharedAudioContext();
+        if (ctx && ctx.state === 'suspended') ctx.resume();
+        styPlaybackEngine.play();
+        this.updatePlayStateUI();
+      }
+    } else {
+      // 停止播放並恢復原曲各軌發聲
+      if (styPlaybackEngine.getIsPlaying()) {
+        styPlaybackEngine.stop();
+        this.updatePlayStateUI();
+      }
+      this.restoreAuditionMutedChannels();
+    }
+  }
+
+  /**
+   * 解除純伴奏試聽時被暫時靜音的軌道，恢復原本發聲狀態
+   */
+  private restoreAuditionMutedChannels() {
+    if (this.currentlyAuditionMutedChannels.length > 0) {
+      for (const ch of this.currentlyAuditionMutedChannels) {
+        styPlaybackEngine.setChannelMute(ch, false);
+        const btnMute = document.getElementById(`btn-mute-${ch}`);
+        btnMute?.classList.remove('muted');
+      }
+      this.currentlyAuditionMutedChannels = [];
+    }
+  }
+
+  /**
+   * 確定執行小節切片指派確認
+   */
+  private handleMidiSliceAssignConfirm(config: MidiSliceAssignConfig) {
+    console.log('🎯 收到切片指派設定:', config);
+    alert(
+      `🎉 切片配置已確認！\n\n` +
+      `切片小節區間: 第 ${config.startBar} ~ ${config.endBar} 小節 (共 ${config.totalBars} 小節)\n` +
+      `目標伴奏段落: ${config.targetSection}\n` +
+      `已指派伴奏聲部: ${config.mappingPlan.assignedCount} 軌\n` +
+      `已排除主旋律: ${config.mappingPlan.excludedCount} 軌\n\n` +
+      `💡 下一步【第 3 階段】：系統將開始提取這 ${config.totalBars} 小節之音符並組裝為 SFF2 段落！`
+    );
   }
 
   private renderSectionButtons() {
@@ -1848,6 +2135,12 @@ export class PlayerApp {
       this.btnPlay.innerHTML = '▶ 播放全曲 (All)';
       this.btnPlaySolo.classList.remove('playing');
       this.btnPlaySolo.innerHTML = '🎧 僅播此軌 (Solo)';
+
+      // 播放停止或播畢時，若伴奏切片彈窗正處於純伴奏試聽模式，自動還原按鈕狀態並解除通道靜音
+      if (this.midiSliceAssignModal?.getIsAuditioningAccomp()) {
+        this.midiSliceAssignModal.resetAuditionState();
+      }
+      this.restoreAuditionMutedChannels();
     }
 
     this.trackEditor?.updateSoloPlayState(isPlaying && currentSolo !== null, currentSolo);
