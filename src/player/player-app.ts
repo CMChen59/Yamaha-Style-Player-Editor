@@ -14,6 +14,7 @@ import { SectionImportModal } from './section-import-modal';
 import { AddSectionModal, type AddSectionConfig } from './add-section-modal';
 import { NewStyleModal, type NewStyleModalConfig } from './new-style-modal';
 import { MidiSliceAssignModal, type MidiSliceAssignConfig } from './midi-slice-assign-modal';
+import { MidiSliceAssembler, type MidiSliceAssembleResult } from '../core/writer/midi-slice-assembler';
 import { YamahaStyleSynthesizer } from '../core/writer/style-synthesizer';
 import { ChordTransposer, POPULAR_AUDITION_CHORDS, CHORD_TYPE_INTERVALS, type ChordDefinition, type ChordType } from '../core/writer/chord-transposer';
 import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
@@ -133,7 +134,12 @@ export class PlayerApp {
   private btnOpenAddSection!: HTMLButtonElement;
   private midiSliceAssignModal!: MidiSliceAssignModal;
   private btnOpenSliceModal: HTMLButtonElement | null = null;
+  private btnReturnToMidi: HTMLButtonElement | null = null;
   private currentlyAuditionMutedChannels: number[] = [];
+  private workingStyleParsed: YamahaFileParsed | null = null;
+  private sourceSongParsed: YamahaFileParsed | null = null;
+  private sourceSongAnalysis: MidiSongAnalysis | null = null;
+  private sourceSongFileName: string = '';
   private newStyleModal!: NewStyleModal;
   private btnOpenNewStyle!: HTMLButtonElement;
   // 🎹 虛擬和弦轉調測試元件
@@ -221,6 +227,7 @@ export class PlayerApp {
     this.mixerContainer = document.getElementById('mixer-grid')!;
     this.midiStatusPill = document.getElementById('midi-status-pill')!;
     this.btnExportSty = document.getElementById('btn-export-sty') as HTMLButtonElement;
+    this.btnReturnToMidi = document.getElementById('btn-return-to-midi') as HTMLButtonElement | null;
     this.btnOpenAddSection = document.getElementById('btn-open-add-section') as HTMLButtonElement;
     this.btnOpenSectionClone = document.getElementById('btn-open-section-clone') as HTMLButtonElement;
     this.btnOpenSectionImport = document.getElementById('btn-open-section-import') as HTMLButtonElement;
@@ -541,6 +548,11 @@ export class PlayerApp {
       this.exportCurrentStyle();
     });
 
+    // 🔙 返回 MIDI 原曲繼續切片
+    this.btnReturnToMidi?.addEventListener('click', () => {
+      this.switchToMidiSongMode();
+    });
+
     // 🎯 MIDI 音樂檔小節區間試聽定位器事件
     this.btnApplyMidiBarRange?.addEventListener('click', () => {
       if (!this.currentSongAnalysis || !styPlaybackEngine.getIsSongMode()) return;
@@ -793,6 +805,11 @@ export class PlayerApp {
 
       // 判斷是否為標準 MIDI 音樂檔 (非 Yamaha STY 伴奏檔)
       if (analysis.isGeneralMidiSong) {
+        this.sourceSongParsed = parsed;
+        this.sourceSongAnalysis = analysis;
+        this.sourceSongFileName = name;
+        if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = 'none';
+
         this.activeSectionName = '__MIDI_SONG__';
         styPlaybackEngine.loadSongMode(1, analysis.totalBars);
 
@@ -1346,18 +1363,256 @@ export class PlayerApp {
   }
 
   /**
-   * 確定執行小節切片指派確認
+   * 確定執行小節切片指派確認，並啟動【第 3 階段】切片裝配引擎
    */
   private handleMidiSliceAssignConfirm(config: MidiSliceAssignConfig) {
-    console.log('🎯 收到切片指派設定:', config);
-    alert(
-      `🎉 切片配置已確認！\n\n` +
-      `切片小節區間: 第 ${config.startBar} ~ ${config.endBar} 小節 (共 ${config.totalBars} 小節)\n` +
-      `目標伴奏段落: ${config.targetSection}\n` +
-      `已指派伴奏聲部: ${config.mappingPlan.assignedCount} 軌\n` +
-      `已排除主旋律: ${config.mappingPlan.excludedCount} 軌\n\n` +
-      `💡 下一步【第 3 階段】：系統將開始提取這 ${config.totalBars} 小節之音符並組裝為 SFF2 段落！`
-    );
+    if (!this.currentParsed || !this.currentSongAnalysis) return;
+
+    try {
+      const result = MidiSliceAssembler.assembleSliceToSection({
+        sourceParsed: this.currentParsed,
+        analysis: this.currentSongAnalysis,
+        startBar: config.startBar,
+        endBar: config.endBar,
+        targetSection: config.targetSection,
+        mappingPlan: config.mappingPlan,
+        baseStyleParsed: this.workingStyleParsed,
+        styleName: `${this.currentFileName.replace(/\.[^/.]+$/, '')}_Arranger`,
+      });
+
+      this.workingStyleParsed = result.styleParsed;
+      this.showSliceAssembleResultModal(result);
+    } catch (err: any) {
+      console.error('切片裝配失敗:', err);
+      alert(`切片裝配失敗: ${err.message || err}`);
+    }
+  }
+
+  /**
+   * 顯示小節切片裝配成功導航對話框
+   */
+  private showSliceAssembleResultModal(result: MidiSliceAssembleResult) {
+    // 移除舊的 Modal (若存在)
+    const existing = document.getElementById('slice-assemble-result-backdrop');
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'slice-assemble-result-backdrop';
+    backdrop.className = 'add-section-backdrop';
+    backdrop.style.display = 'flex';
+
+    const partRowsHtml = result.partDetails.map(p => {
+      const icon = p.part.includes('Rhythm') ? '🥁' : (p.part === 'Bass' ? '🎸' : (p.part.includes('Chord') ? '🎹' : (p.part === 'Pad' ? '🎻' : '🎷')));
+      return `
+        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1rem;">${icon}</span>
+            <span style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${p.part}</span>
+            <span style="font-size: 0.74rem; color: #38bdf8;">(Yamaha CH ${p.targetChannel + 1})</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="color: #cbd5e1; font-size: 0.75rem;">${p.voiceName}</span>
+            <span style="color: #10b981; font-size: 0.75rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); padding: 2px 6px; border-radius: 4px;">${p.noteCount} 音符</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    backdrop.innerHTML = `
+      <div class="add-section-modal" style="max-width: 620px;" role="dialog" aria-modal="true">
+        <div class="as-modal-header">
+          <div class="as-header-left">
+            <span class="as-header-icon">🎉</span>
+            <div>
+              <div class="as-header-title">小節切片裝配成功！</div>
+              <div class="as-header-sub">已成功將小節音符寫入 Yamaha 伴奏段落【${result.targetSection}】</div>
+            </div>
+          </div>
+          <button type="button" class="as-btn-close" id="btn-close-slice-result">✕</button>
+        </div>
+
+        <div class="as-modal-body" style="gap: 12px;">
+          <!-- 統計摘要卡片 -->
+          <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="font-size: 0.75rem; color: #94a3b8;">🎯 目標伴奏段落</div>
+              <div style="font-size: 1.1rem; font-weight: 700; color: #10b981;">${result.targetSection} (共 ${result.totalBars} 小節)</div>
+            </div>
+            <div>
+              <div style="font-size: 0.75rem; color: #94a3b8;">✂️ 來源小節區間</div>
+              <div style="font-size: 0.95rem; font-weight: 700; color: #38bdf8;">第 ${result.startBar} ~ ${result.endBar} 小節</div>
+            </div>
+            <div>
+              <div style="font-size: 0.75rem; color: #94a3b8;">🎼 提取音符總計</div>
+              <div style="font-size: 0.95rem; font-weight: 700; color: #fbbf24;">${result.totalNotesExtracted} 顆音符 (${result.assembledPartsCount} 聲部)</div>
+            </div>
+          </div>
+
+          <!-- 伴奏聲部裝配明細 -->
+          <div>
+            <div style="font-size: 0.78rem; font-weight: 700; color: #cbd5e1; margin-bottom: 6px;">
+              🎹 各伴奏聲部提取配置 (已自動注入 SFF2 CASM 轉調與原廠音色)：
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;">
+              ${partRowsHtml}
+            </div>
+          </div>
+
+          <div style="font-size: 0.72rem; color: #94a3b8; background: rgba(56, 189, 248, 0.08); padding: 8px 10px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+            💡 <strong>下一步建議：</strong>您可以直接點擊「進入伴奏模式試聽」測試和弦轉調；或留在 MIDI 模式繼續切片副歌、加花或尾奏段落！
+          </div>
+        </div>
+
+        <div class="as-modal-footer" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+          <button type="button" id="btn-result-continue-slice" class="as-btn-cancel" style="background: rgba(148, 163, 184, 0.15); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1;">
+            ✂️ 繼續切片其他段落
+          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" id="btn-result-export-sty" class="midi-locator-btn" style="background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fde68a;">
+              💾 匯出 STY 檔
+            </button>
+            <button type="button" id="btn-result-play-style" class="as-btn-confirm" style="background: linear-gradient(135deg, #10b981, #059669); border: none;">
+              ▶ 進入伴奏模式試聽
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+
+    const closeModal = () => {
+      backdrop.remove();
+    };
+
+    backdrop.querySelector('#btn-close-slice-result')?.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal();
+    });
+
+    // 繼續切片其他段落
+    backdrop.querySelector('#btn-result-continue-slice')?.addEventListener('click', () => {
+      closeModal();
+    });
+
+    // 匯出 STY 檔
+    backdrop.querySelector('#btn-result-export-sty')?.addEventListener('click', () => {
+      closeModal();
+      this.exportWorkingStyle();
+    });
+
+    // 進入伴奏模式試聽
+    backdrop.querySelector('#btn-result-play-style')?.addEventListener('click', () => {
+      closeModal();
+      this.switchToAssembledStyleMode(result.targetSection);
+    });
+  }
+
+  /**
+   * 切換至組裝中的 STY 伴奏風格模式並選定指定段落試聽
+   */
+  private switchToAssembledStyleMode(targetSection: string) {
+    if (!this.workingStyleParsed) return;
+
+    // 停止當前任何播放
+    styPlaybackEngine.stop();
+
+    this.currentParsed = this.workingStyleParsed;
+    this.currentSongAnalysis = null;
+    this.currentFileName = `${(this.workingStyleParsed as any).styleName || 'Arranger'}.sty`;
+    this.baseBpm = this.workingStyleParsed.bpm || 120;
+
+    styPlaybackEngine.loadParsed(this.workingStyleParsed);
+    this.syncMixerVolumes();
+    this.trackEditor?.clearHistory();
+
+    // 更新介面元素可見度 (切換為 Yamaha STY 伴奏模式)
+    if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'none';
+    if (this.chordAuditionBar) this.chordAuditionBar.style.display = '';
+    if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = '';
+    if (this.mixerPanel) this.mixerPanel.style.display = '';
+    if (this.btnExportSty) this.btnExportSty.style.display = '';
+    if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = this.sourceSongParsed ? 'inline-flex' : 'none';
+
+    this.labelStyleTitle.textContent = `🎵 ${this.currentFileName} (由 MIDI 切片裝配)`;
+    this.labelStyleInfo.textContent = `格式: SFF2 伴奏風格 | 速度: ${this.baseBpm} BPM | 拍號: ${this.workingStyleParsed.timeSignature.numerator}/${this.workingStyleParsed.timeSignature.denominator} | 段落數: ${this.workingStyleParsed.sections.length} 個段落`;
+
+    this.sliderBpm.value = this.baseBpm.toString();
+    this.labelBpmValue.textContent = this.baseBpm.toString();
+
+    // 渲染段落按鈕並選取剛剛切片組裝的段落
+    this.renderSectionButtons();
+    this.selectSection(targetSection);
+    this.updatePlayStateUI();
+  }
+
+  /**
+   * 從伴奏模式切回原來的 MIDI 原曲模式，方便繼續切片其他段落
+   */
+  private switchToMidiSongMode() {
+    if (!this.sourceSongParsed || !this.sourceSongAnalysis) return;
+
+    styPlaybackEngine.stop();
+
+    this.currentParsed = this.sourceSongParsed;
+    this.currentSongAnalysis = this.sourceSongAnalysis;
+    this.currentFileName = this.sourceSongFileName;
+    this.baseBpm = this.sourceSongAnalysis.initialBpm || 120;
+
+    styPlaybackEngine.loadParsed(this.sourceSongParsed);
+    this.syncMixerVolumes();
+    this.trackEditor?.clearHistory();
+
+    this.activeSectionName = '__MIDI_SONG__';
+    const s = Math.max(1, parseInt(this.inputMidiStartBar?.value || '1', 10) || 1);
+    const e = Math.max(s, parseInt(this.inputMidiEndBar?.value || String(this.sourceSongAnalysis.totalBars), 10) || this.sourceSongAnalysis.totalBars);
+    styPlaybackEngine.loadSongMode(s, e);
+
+    // 切換為 MIDI 音樂檔模式介面
+    if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'flex';
+    if (this.chordAuditionBar) this.chordAuditionBar.style.display = 'none';
+    if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = 'none';
+    if (this.mixerPanel) this.mixerPanel.style.display = 'none';
+    if (this.btnExportSty) this.btnExportSty.style.display = 'none';
+    if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = 'none';
+
+    this.labelStyleTitle.textContent = `🎼 ${this.sourceSongFileName} (標準 MIDI 音樂檔)`;
+    const tempoStr = this.sourceSongAnalysis.hasTempoChanges
+      ? `${this.sourceSongAnalysis.initialBpm} BPM (曲中變速 ${this.sourceSongAnalysis.minBpm}~${this.sourceSongAnalysis.maxBpm} BPM)`
+      : `${this.sourceSongAnalysis.initialBpm} BPM`;
+    this.labelStyleInfo.textContent = `格式: SMF Format ${this.sourceSongAnalysis.midiFormat} ｜ 總小節: ${this.sourceSongAnalysis.totalBars} 小節 ｜ 速度: ${tempoStr} ｜ 拍號: ${this.sourceSongAnalysis.timeSignature.numerator}/${this.sourceSongAnalysis.timeSignature.denominator}`;
+
+    this.sliderBpm.value = this.baseBpm.toString();
+    this.labelBpmValue.textContent = this.baseBpm.toString();
+
+    this.renderMidiSongInspector(this.sourceSongAnalysis);
+    this.updatePlayStateUI();
+  }
+
+  /**
+   * 匯出當前組裝中的伴奏風格檔
+   */
+  private exportWorkingStyle() {
+    const target = this.workingStyleParsed || this.currentParsed;
+    if (!target) {
+      alert('目前尚無可匯出的伴奏風格資料！');
+      return;
+    }
+    try {
+      const bytes = YamahaWriter.write(target);
+      const blob = new Blob([bytes as any], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(target as any).styleName || 'Arranger'}.sty`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('匯出 STY 失敗:', err);
+      alert(`匯出 STY 失敗: ${err.message || err}`);
+    }
   }
 
   private renderSectionButtons() {

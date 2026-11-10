@@ -5448,10 +5448,16 @@
         <div id="style-title" class="style-title">準備就緒</div>
         <div id="style-info" class="style-info">請載入 STY 檔案以開始播放</div>
       </div>
-      <button id="btn-export-sty" class="btn-export" title="匯出當前編輯後的完整 STY 伴奏檔 (保留 SFF2 / CASM / OTS)">
-        <span>💾</span>
-        <span>匯出 STY 伴奏檔</span>
-      </button>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button id="btn-return-to-midi" class="btn-banner-action" style="display: none; background: rgba(99, 102, 241, 0.2); border-color: #6366f1; color: #a5b4fc; min-width: 170px;" title="返回原本載入的 MIDI 原曲繼續切片提取其他段落">
+          <span>🔙</span>
+          <span>返回 MIDI 原曲繼續切片</span>
+        </button>
+        <button id="btn-export-sty" class="btn-export" title="匯出當前編輯後的完整 STY 伴奏檔 (保留 SFF2 / CASM / OTS)">
+          <span>💾</span>
+          <span>匯出 STY 伴奏檔</span>
+        </button>
+      </div>
     </section>
 
     <!-- 聲音發聲來源選擇 (Audio Output Routing) -->

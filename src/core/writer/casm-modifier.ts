@@ -382,7 +382,11 @@ export class CasmModifier {
       return { success: true, message: `成功為無 CASM 伴奏檔案建立標準轉調規則` };
     }
 
-    const casmData = casmChunk.data;
+    const casmData = casmChunk.data instanceof Uint8Array
+      ? casmChunk.data
+      : new Uint8Array(Object.values(casmChunk.data || {}));
+    casmChunk.data = casmData;
+
     const view = new DataView(casmData.buffer, casmData.byteOffset, casmData.byteLength);
     const targetSecLower = sectionName.trim().toLowerCase();
     const targetSecNoSpace = targetSecLower.replace(/\s+/g, '');

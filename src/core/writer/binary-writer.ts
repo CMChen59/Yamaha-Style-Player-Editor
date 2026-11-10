@@ -39,42 +39,46 @@ export class BinaryWriter {
     this.totalLength += buf.length;
   }
 
-  public writeBytes(bytes: Uint8Array): void {
-    if (bytes.length === 0) return;
-    this.chunks.push(bytes);
-    this.totalLength += bytes.length;
+  public writeBytes(bytes: Uint8Array | number[]): void {
+    if (!bytes) return;
+    const buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (buf.length === 0) return;
+    this.chunks.push(buf);
   }
 
   /**
    * 寫入 MIDI 變長數值 (Variable-Length Quantity, VLQ)
+   * 遵循標準 MIDI 規格 (最大 0x0FFFFFFF)，並防禦負數與 NaN 死循環
    */
   public writeVarInt(value: number): void {
-    let buffer = value & 0x7f;
-    const bytes: number[] = [];
+    let val = Math.max(0, Math.floor(isNaN(value) ? 0 : value)) & 0x0fffffff;
+    const bytes: number[] = [val & 0x7f];
 
-    while ((value >>= 7)) {
-      buffer <<= 8;
-      buffer |= (value & 0x7f) | 0x80;
-    }
-
-    while (true) {
-      bytes.push(buffer & 0xff);
-      if (buffer & 0x80) {
-        buffer >>= 8;
-      } else {
-        break;
-      }
+    while ((val >>= 7) > 0) {
+      bytes.unshift((val & 0x7f) | 0x80);
     }
 
     this.writeBytes(new Uint8Array(bytes));
   }
 
   public toUint8Array(): Uint8Array {
-    const result = new Uint8Array(this.totalLength);
+    let actualTotal = 0;
+    for (let i = 0; i < this.chunks.length; i++) {
+      const chunk = this.chunks[i];
+      if (!chunk || typeof chunk.length !== 'number' || isNaN(chunk.length)) {
+        console.error(`Invalid chunk detected at ${i}:`, chunk);
+      } else {
+        actualTotal += chunk.length;
+      }
+    }
+    const result = new Uint8Array(actualTotal);
     let offset = 0;
-    for (const chunk of this.chunks) {
-      result.set(chunk, offset);
-      offset += chunk.length;
+    for (let i = 0; i < this.chunks.length; i++) {
+      const chunk = this.chunks[i];
+      if (chunk && chunk.length > 0) {
+        result.set(chunk, offset);
+        offset += chunk.length;
+      }
     }
     return result;
   }
