@@ -1403,16 +1403,21 @@ export class PlayerApp {
 
     const partRowsHtml = result.partDetails.map(p => {
       const icon = p.part.includes('Rhythm') ? '🥁' : (p.part === 'Bass' ? '🎸' : (p.part.includes('Chord') ? '🎹' : (p.part === 'Pad' ? '🎻' : '🎷')));
+      const isSilent = p.noteCount === 0;
+      const badgeHtml = isSilent
+        ? `<span style="color: #94a3b8; font-size: 0.72rem; background: rgba(148, 163, 184, 0.12); border: 1px dashed rgba(148, 163, 184, 0.3); padding: 2px 7px; border-radius: 4px;">💤 此區間未進場 (0 音符)</span>`
+        : `<span style="color: #10b981; font-size: 0.75rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 7px; border-radius: 4px;">🎯 ${p.noteCount} 音符</span>`;
+
       return `
-        <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: ${isSilent ? 'rgba(30, 41, 59, 0.4)' : 'rgba(30, 41, 59, 0.8)'}; border: 1px solid ${isSilent ? 'rgba(100, 116, 139, 0.2)' : 'rgba(56, 189, 248, 0.25)'}; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; opacity: ${isSilent ? 0.75 : 1};">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 1rem;">${icon}</span>
-            <span style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${p.part}</span>
+            <span style="font-weight: 700; color: ${isSilent ? '#94a3b8' : '#f8fafc'}; font-size: 0.8rem;">${p.part}</span>
             <span style="font-size: 0.74rem; color: #38bdf8;">(Yamaha CH ${p.targetChannel + 1})</span>
           </div>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="color: #cbd5e1; font-size: 0.75rem;">${p.voiceName}</span>
-            <span style="color: #10b981; font-size: 0.75rem; font-weight: 700; background: rgba(16, 185, 129, 0.15); padding: 2px 6px; border-radius: 4px;">${p.noteCount} 音符</span>
+            <span style="color: ${isSilent ? '#94a3b8' : '#cbd5e1'}; font-size: 0.75rem;">${p.voiceName}</span>
+            ${badgeHtml}
           </div>
         </div>
       `;
@@ -1458,8 +1463,11 @@ export class PlayerApp {
             </div>
           </div>
 
-          <div style="font-size: 0.72rem; color: #94a3b8; background: rgba(56, 189, 248, 0.08); padding: 8px 10px; border-radius: 6px; border-left: 3px solid #38bdf8;">
-            💡 <strong>下一步建議：</strong>您可以直接點擊「進入伴奏模式試聽」測試和弦轉調；或留在 MIDI 模式繼續切片副歌、加花或尾奏段落！
+          <div style="font-size: 0.72rem; color: #94a3b8; background: rgba(56, 189, 248, 0.08); padding: 8px 10px; border-radius: 6px; border-left: 3px solid #38bdf8; line-height: 1.5;">
+            💡 <strong>所有切片段落皆會自動累積整合於同一個 STY 伴奏檔中！</strong><br>
+            • <strong>「▶ 進入伴奏模式試聽」</strong>：可立刻試聽當前段落與測試和弦轉調；試聽後隨時點擊右上角<strong>「🔙 返回 MIDI 原曲繼續切片」</strong>繼續組裝。<br>
+            • <strong>「✂️ 繼續切片其他段落」</strong>：直接留在原曲視圖，選取其他小節繼續裝配 Main B、Fill In 或 Intro 等段落。<br>
+            • <strong>「💾 匯出 STY 檔」</strong>：隨時將目前所有已切片段落打包匯出為標準 Yamaha 伴奏檔。
           </div>
         </div>
 
