@@ -152,6 +152,32 @@ flowchart LR
     4. 一鍵透過 USB 直傳 SX920 User 磁區的 Multi Pad 目錄！
   - **工時**：2.5 天 ｜ **優先級**：⭐⭐⭐⭐
 
+- [ ] **【任務 4-1A】Multi Pad CASM 視覺化編輯與智慧和弦轉調修復器 (Smart Pad CASM & Chord Match Studio)**
+  - **背景與痛點**：
+    - 使用者實戰回報：Multi Pad 包含旋律插音（如吉他/薩克斯風 Fill-in），開啟 `Chord Match`（和弦跟隨）後，原調（如 Am）聽感正常，但換和弦（如 Em）後旋律完全走音變形。
+    - 根因分析：
+      1. NTT 誤設為 `Chord`（和弦對照表），非和弦經過音被粗暴壓平/吸附到三和弦音上。
+      2. Source Root 誤設為預設的 `C`，導致琴端音程計算偏移 3 個半音（小三度差）。
+      3. HiKey 折返點導致旋律被跨八度腰斬。
+  - **具體實作**：
+    1. **檔案支援與格式自適應**：
+       - `file-input` 增加 `.pad` 副檔名過濾，支援拖曳任意 `.pad` 檔案即刻解析載入。
+       - 自動識別 `fallbackFormat = 'PAD'` 並讀取內部 `padConfig` 與 `CASM` 區塊。
+    2. **視覺化 Pad 1 ~ 4 卡片工作台 (Pad Dashboard)**：
+       - 呈現 Pad 1~4 獨立名稱、圖示 (Icon)、音色 (Voice)、時長小節數。
+       - 提供直覺的硬體開關：🔁 Repeat（循環）與 🎵 Chord Match（和弦跟隨）。
+    3. **智慧樂句型態選單 (Smart Phrase Preset)**：
+       - 【旋律插音 / 副旋律 (Melodic Lead / Solo Fill)】➔ 自動配置 `NTT = Melody`、`NTR = Root Transpose`（保證線性音階平移，不壓扁經過音）。
+       - 【和弦節奏 / 刷弦伴奏 (Chords / Strumming)】➔ 自動配置 `NTT = Chord`。
+       - 【打擊樂 / 罐頭音效 (Drums / SFX)】➔ 自動配置 `Chord Match = OFF`、`NTT = Bypass`。
+    4. **基準和弦智慧偵測 (Auto Detect Source Chord)**：
+       - 自動掃描音軌第一小節音符與貝斯，自動識別原曲調性（如 Am），將 `Source Root` 設為 A、`Chord Type` 設為 Minor，杜絕預設 C 大調計算偏差。
+    5. **專家 CASM 進階微調抽屜**：
+       - 支援自訂調整 `HiKey`（0~11）與 `Note Limits`（Low Limit ~ High Limit）。
+    6. **虛擬和弦即時轉調試聽條 (In-App Audition Bar)**：
+       - 畫面提供 C, Am, Em, F, G, Dm 即時和弦按鈕，點擊即時調用音訊引擎模擬琴端轉調發聲，確認無走音再一鍵匯出 `.PAD` 檔！
+  - **工時**：2 天 ｜ **優先級**：⭐⭐⭐⭐⭐
+
 - [ ] **【任務 4-2】樣式組合器 (Style Assembler / Part Stager)**
   - **具體實作**：
     - 跨檔案音軌混搭：抽取 A 伴奏的鼓組 ＋ B 伴奏的吉他 ＋ C 伴奏的弦樂，自由組裝成全新風格。
