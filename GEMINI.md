@@ -47,6 +47,14 @@
 - **多段落累積工作流**：
   - 切片裝配後不論點擊「▶ 進入伴奏模式試聽」、「✂️ 繼續切片其他段落」或「💾 匯出 STY 檔」，所有段落皆自動累積保存在同一個 `workingStyleParsed` 伴奏專案中；區間內 0 音符之聲部統一標示為 `💤 此區間未進場 (0 音符)`。
 
+### 4. Yamaha Multi Pad (.PAD) 與 Chord Match 樂理與二進位規範
+- **Multi Pad 二進位結構**：標準 Yamaha Multi Pad (`.PAD`) 為 SMF Format 1 (5 軌)，Track 0 透過 `CMxxxx` (Chord Match 0/1) 與 `RPxxxx` (Repeat 0/1) 控制 Pad 1~4。原廠標準 PAD 通常無 CASM 區塊。
+- **琴端 Chord Match 鐵律與轉調陷阱**：
+  - 琴端在無 CASM 時強制假定來源為 C 大調母體 (CM7)。
+  - **嚴禁齊頭式半音平移至 C minor**：對小調樂句直接 +3 半音平移會產生 `Eb`、`Ab`，導致琴端 NTT「雙重小調降音（Double Minor Distortion）」，彈奏 Am 也會嚴重走調。
+  - **小調和聲/旋律導音保護**：小調樂句常有導音（如 A 小調之 `G#`，琴端顯示為 Ab）與旋律小調大六度 `F#`（全音下跳），在轉換時嚴禁縮水為半音（如誤算為 `Bb`）。
+  - **追蹤中 Issue**：琴端 NTT 在將 C 大調母體轉換回小調時是否將導音降格為自然小調（modal minor），需依據 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) 之 `ISSUE-20261119-PAD-CHORD-MATCH` 進行排查，嚴禁未經分析重複嘗試已被證實無效的平移方法。
+
 ---
 
 ## 三、 上工與收工標準作業程序 (Session Lifecycle & Sync SOP)
