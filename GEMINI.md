@@ -51,9 +51,17 @@
 - **Multi Pad 二進位結構**：標準 Yamaha Multi Pad (`.PAD`) 為 SMF Format 1 (5 軌)，Track 0 透過 `CMxxxx` (Chord Match 0/1) 與 `RPxxxx` (Repeat 0/1) 控制 Pad 1~4。原廠標準 PAD 通常無 CASM 區塊。
 - **琴端 Chord Match 鐵律與轉調陷阱**：
   - 琴端在無 CASM 時強制假定來源為 C 大調母體 (CM7)。
+  - **為什麼開啟 Chord Match 會走音**：若原曲為 A minor（如 `2011-2` 的 E-D-B 或 `2010-1`《空港》），一旦開啟 Chord Match，琴端誤認 E 為 C 大調的大三度、B 為大七度；手彈 Cm 時琴端不僅不做 +3 半音根音位移，反而透過 NTT 把 E 降為 Eb、B 降為 Bb，徹底破壞旋律。
+  - **為什麼關閉 Chord Match 反而轉調無誤**：當 `Chord Match = OFF`（或 Intro 段落為 `NTR = Root Transpose, NTT = Bypass`），琴端不進行大小調音階吸附，而是直接依據目標根音做「純剛體平行平移（+3 半音）」，E-D-B 直接精準命中 Cm 的 G-F-D！
   - **嚴禁齊頭式半音平移至 C minor**：對小調樂句直接 +3 半音平移會產生 `Eb`、`Ab`，導致琴端 NTT「雙重小調降音（Double Minor Distortion）」，彈奏 Am 也會嚴重走調。
   - **小調和聲/旋律導音保護**：小調樂句常有導音（如 A 小調之 `G#`，琴端顯示為 Ab）與旋律小調大六度 `F#`（全音下跳），在轉換時嚴禁縮水為半音（如誤算為 `Bb`）。
-  - **追蹤中 Issue**：琴端 NTT 在將 C 大調母體轉換回小調時是否將導音降格為自然小調（modal minor），需依據 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) 之 `ISSUE-20261119-PAD-CHORD-MATCH` 進行排查，嚴禁未經分析重複嘗試已被證實無效的平移方法。
+- **Multi Pad 4 大音樂型態與工程處置準則**：
+  1. **打擊節奏 / 罐頭音效 (Drums / Percussion / SFX)**：鐵律必須 `Chord Match = OFF`，防止鼓點音高被移調破壞。
+  2. **開放骨幹音短動機 (如 `2011-2` Pad 1，無 3 度與導音)**：設定 `Chord Match = OFF` 或 `NTT = Bypass`，純根音平移容錯率極高。
+  3. **和聲織體 / 分解和弦 / 刷弦 (Arpeggio / Strumming)**：鐵律必須 `Chord Match = ON` 並做 `CM7` 正規化，確保左手彈小和弦時自動出小三度。
+  4. **帶導音與變化音之長主旋律 (如 `2010-1`《空港》)**：嚴禁套用 CM7 伴奏 NTT，必須注入小調專用 CASM（`Source Chord = Minor`, `NTT = Melody / Bypass`）或維持純平行平移。
+- **實機驗證先於系統整合原則**：
+  - 所有 Multi Pad 和弦轉調與 CASM 修復演算法，一律在家中搭配 PSR-SX920 實體琴聆聽驗證確認無誤後，再行封裝上線至系統 UI，嚴禁未經實機驗證盲目修改系統主程式。
 
 ---
 
