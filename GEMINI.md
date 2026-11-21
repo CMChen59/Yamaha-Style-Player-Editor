@@ -41,6 +41,10 @@
 - **Multi Pad 實測經驗反哺 STY（小調轉調音符走味根本成因）**：
   - **病因診斷**：今日在 Multi Pad 實測中徹底證實，Yamaha 琴端若以預設 CM7 母體進行即時轉調運算，當左手彈奏小和弦時，琴端韌體會強制以自然小調（Aeolian）音階吸附，導致小調第 6 度花音與第 7 度導音被強制削平降半音。這正是過去部分 STY 切片在琴端聽覺上「音符怪異、走味」的同源底層原因。
   - **STY 之 CASM 強大解法**：與無 CASM 的 Multi Pad 不同，STY 擁有完整 CASM 結構，支援 `NTT = Melody / Harmonic Minor / Bypass` 以及獨立的 Minor Chord Table (`Ctb2`)。未來重審與優化 STY 切片時，必須運用此大小調音階與導音保護經驗，精確配置 CASM 聲部屬性。
+- **STY 三合一基準和弦與 Cm 小調原廠跟隨鐵律（2026-11-21 逆向 4006 SX900 原廠伴奏定案）**：
+  - **Cm 小調基準（`CM_MINOR`）**：小調曲目（如《雲中月圓》、《空港》、《容易受傷的女人》在 Am）切片時，音符純剛體平行平移至 Cm（如 Am ➔ Cm 為 +3 半音），CASM 寫入 `sourceChordRoot = 0 (C), sourceChordType = 8 (Minor)`，NTT 設為 `Minor (0x07)` 或 `Bass (0x81)`。琴端左手彈奏任意小和弦（Am、Dm、Em、Gm）時，琴端執行純半音平行移調，小三度 Eb 與導音 100% 完美呈現，徹底消除走音削平現象。
+  - **CM7 大調基準（`CM7_MAJOR`）**：大調曲目之 Main / Fill 律動段落歸一化為純淨 CM7 四音母體，CASM 標記 `sourceChordRoot = 0, sourceChordType = 2 (Maj7)`。
+  - **原曲和弦直通（`ORIGINAL_PASS_THROUGH`）**：大樂隊齊奏或複雜前奏/尾奏，音符保持原調（0 移調），CASM 配置 `NTT = Bypass (0x00)`，琴端按單音根音即可原汁原味直通播放。
 
 ### 3. MIDI 全景透視與切片 UI 已定案設計
 - **Yamaha Style `fn:` 全名標籤防呆隔離鐵律**：

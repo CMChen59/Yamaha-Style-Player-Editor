@@ -8,20 +8,22 @@ import type { YamahaFileParsed, YamahaCustomChunk } from '../models/types';
 import { DEFAULT_STYLE_PARTS, type StylePartId } from '../models/style-types';
 
 export type NtrRule = 'Root Transpose' | 'Root Fixed' | 'Guitar';
-export type NttRule = 'Bypass' | 'Chord' | 'Bass' | 'Melody' | 'Maj-min' | 'Maj-min (Intro)';
+export type NttRule = 'Bypass' | 'Chord' | 'Bass' | 'Melody' | 'Maj-min' | 'Maj-min (Intro)' | 'Minor';
 export type RetriggerRule = 'Stop' | 'Pitch Shift' | 'Retrigger';
 
 export interface CasmPartRule {
   channel: number;              // MIDI Channel (8 ~ 15, 對應 Ch 9 ~ 16)
   partId: StylePartId;          // 'Rhythm1', 'Rhythm2', 'Bass', etc.
-  partName: string;             // 8-character tag (e.g. 'Rhy1Main', 'BassMain')
+  partName: string;             // 8-character tag (e.g. 'Rhy1Main', 'BassMain', 'BassIntr', 'Maj-min ')
   ntr: NtrRule;                 // 0 = Root Transpose, 1 = Root Fixed
-  ntt: NttRule;                 // 0 = Bypass, 1 = Chord, 2 = Bass, 3 = Melody
+  ntt: NttRule;                 // 0 = Bypass, 1 = Chord, 2 = Bass, 3 = Melody, 7 = Minor/Maj-min
   noteLowLimit: number;         // 0 ~ 127
   noteHighLimit: number;        // 0 ~ 127
   retriggerRule: RetriggerRule; // RTR: 'Stop', 'Pitch Shift', 'Retrigger'
   isDrum: boolean;
   hiKey?: number;               // 0 ~ 11 (C to B), default 6 (F#), Bass default 5 (F)
+  sourceChordRoot?: number;     // 0 ~ 11 (C to B), default 0 (C)
+  sourceChordType?: number;     // 0 = Maj, 2 = Maj7, 8 = min, etc. Default 2 for Major, 8 for Minor
 }
 
 export const CASM_STANDARD_PRESETS: Record<string, { label: string; rules: Partial<Record<StylePartId, Partial<CasmPartRule>>> }> = {
@@ -159,6 +161,8 @@ export class CasmModifier {
                 if (srcCh === destCh) {
                   updatedExact.add(destCh);
                 }
+                const chordRootByte = ctb.length > 18 ? ctb[18] : 0;
+                const chordTypeByte = ctb.length > 19 ? ctb[19] : 2;
                 const ntrByte = ctb[28];
                 const nttByte = ctb[29];
                 const hiKeyByte = ctb.length > 30 && ctb[30] <= 11 ? ctb[30] : (existing.partId === 'Bass' ? 5 : 6);
@@ -166,8 +170,11 @@ export class CasmModifier {
                 const highLim = ctb[32];
                 const rtrByte = ctb[33];
 
+                existing.sourceChordRoot = chordRootByte <= 11 ? chordRootByte : 0;
+                existing.sourceChordType = chordTypeByte;
                 existing.ntr = ntrByte === 2 ? 'Guitar' : (ntrByte === 1 ? 'Root Fixed' : 'Root Transpose');
                 if (nttByte === 0) existing.ntt = 'Bypass';
+                else if (nttByte === 7) existing.ntt = 'Minor';
                 else if (nttByte === 0x81 || hiKeyByte === 5) existing.ntt = 'Bass';
                 else if (nttByte === 3) existing.ntt = 'Melody';
                 else existing.ntt = 'Chord';
@@ -268,8 +275,8 @@ export class CasmModifier {
     ctbData[16] = 0xff;
     ctbData[17] = 0xff;
 
-    ctbData[18] = 0x00;
-    ctbData[19] = 0x02;
+    ctbData[18] = rule.sourceChordRoot !== undefined ? Math.max(0, Math.min(11, rule.sourceChordRoot)) : 0x00;
+    ctbData[19] = rule.sourceChordType !== undefined ? rule.sourceChordType : 0x02;
     ctbData[20] = 0x00;
     ctbData[21] = 0x7f; // High Limit
 
@@ -286,6 +293,8 @@ export class CasmModifier {
     // NTT (Byte 29)
     if (rule.ntt === 'Bypass') {
       ctbData[29] = 0x00;
+    } else if (rule.ntt === 'Minor' || rule.ntt === 'Maj-min' || rule.ntt === 'Maj-min (Intro)') {
+      ctbData[29] = 0x07;
     } else if (rule.ntt === 'Bass') {
       ctbData[29] = 0x81;
     } else if (rule.ntt === 'Melody') {
@@ -307,7 +316,7 @@ export class CasmModifier {
     // Byte 34~39: 小和弦轉調規則表 (Minor Chord Table)
     if (rule.ntr === 'Root Fixed') {
       ctbData[34] = 0x01; // 小和弦同為 Root Fixed 固定音高，徹底杜絕大小和弦切換時跳八度
-      ctbData[35] = rule.ntt === 'Bypass' ? 0x00 : 0x01;
+      ctbData[35] = rule.ntt === 'Bypass' ? 0x00 : (rule.ntt === 'Minor' || rule.ntt === 'Maj-min' || rule.ntt === 'Maj-min (Intro)' ? 0x07 : 0x01);
       ctbData[36] = effectiveHiKey;
       ctbData[37] = ctbData[31];
       ctbData[38] = ctbData[32];
@@ -316,6 +325,8 @@ export class CasmModifier {
       ctbData[34] = 0x00; // Root Transpose 跟隨根音
       if (rule.ntt === 'Bypass') {
         ctbData[35] = 0x00;
+      } else if (rule.ntt === 'Minor' || rule.ntt === 'Maj-min' || rule.ntt === 'Maj-min (Intro)') {
+        ctbData[35] = 0x07;
       } else if (rule.ntt === 'Bass') {
         ctbData[35] = 0x81;
       } else if (rule.ntt === 'Melody') {
@@ -447,6 +458,12 @@ export class CasmModifier {
       if (foundExistingCtb2Offset >= 0) {
         // 該段落內已存在此聲部之 Ctb2 規則：直接原地覆寫 47-byte 內容
         const ctbData = this.buildCtb2Data(rule, channel);
+        if (rule.sourceChordRoot === undefined && casmData.length > foundExistingCtb2Offset + 8 + 18) {
+          ctbData[18] = casmData[foundExistingCtb2Offset + 8 + 18];
+        }
+        if (rule.sourceChordType === undefined && casmData.length > foundExistingCtb2Offset + 8 + 19) {
+          ctbData[19] = casmData[foundExistingCtb2Offset + 8 + 19];
+        }
         const updatedData = new Uint8Array(casmData);
         updatedData.set(ctbData, foundExistingCtb2Offset + 8);
         casmChunk.data = updatedData;

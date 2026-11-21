@@ -1385,6 +1385,7 @@ export class PlayerApp {
         mappingPlan: config.mappingPlan,
         baseStyleParsed: this.workingStyleParsed,
         styleName: `${this.currentFileName.replace(/\.[^/.]+$/, '')}_Arranger`,
+        chordMode: config.chordMode,
         normalizeChordsToC: config.normalizeChordsToC,
       });
 
@@ -1461,8 +1462,8 @@ export class PlayerApp {
             </div>
             <div>
               <div style="font-size: 0.75rem; color: #94a3b8;">🎹 和弦模式</div>
-              <div style="font-size: 0.88rem; font-weight: 700; color: ${result.isHarmonicallyNormalized ? '#c084fc' : '#94a3b8'};">
-                ${result.isHarmonicallyNormalized ? '✅ C 基準大調 (已歸一)' : '直通原曲進行'}
+              <div style="font-size: 0.88rem; font-weight: 700; color: ${result.chordMode === 'CM_MINOR' ? '#38bdf8' : (result.chordMode === 'CM7_MAJOR' ? '#c084fc' : '#34d399')};">
+                ${result.chordMode === 'CM_MINOR' ? '🎯 Cm 小調基準 (SFF2)' : (result.chordMode === 'CM7_MAJOR' ? '✅ CM7 大調基準' : '直通原曲進行 (Bypass)')}
               </div>
             </div>
           </div>

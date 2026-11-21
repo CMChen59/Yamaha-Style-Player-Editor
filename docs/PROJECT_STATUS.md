@@ -14,6 +14,7 @@
 | **【任務 2-1】** | **MIDI 音樂檔全景透視儀表板與 16 通道檢測器** | [`midi-song-analyzer.ts`](../src/core/parser/midi-song-analyzer.ts), [`yamaha-parser.ts`](../src/core/parser/yamaha-parser.ts) | ✅ 已完成（含曲中變速積分、Big5/GBK 解碼、16 通道獨立 Solo/Mute/混音） |
 | **【任務 2-2】** | **MIDI 小節區間循環試聽定位器** | [`player-app.ts`](../src/player/player-app.ts) | ✅ 已完成（支援自訂起訖小節、1~4/8/16 快速鍵、停止重設指針、防跳動獨奏鈕） |
 | **【任務 2-3】** | **智慧聲部映射、主旋律排除與小節切片裝配引擎** | [`midi-part-assign-matrix.ts`](../src/core/writer/midi-part-assign-matrix.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) | ✅ 已完成（含純伴奏試聽自動復原、曲中生效音色回溯 `getEffectiveVoiceAtBar`、多段落累積整合至同一 STY） |
+| **【任務 2-4A】** | **基準和弦三合一模式（大調 CM7 / 小調 Cm / 原曲直通）与琴端和弦跟隨架構** | [`casm-modifier.ts`](../src/core/writer/casm-modifier.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts), [`player-app.ts`](../src/player/player-app.ts) | ✅ 已完成（支援 SFF2 原廠 Cm 小調基準平行位移與 CASM `chordType=8` / Minor Table、CM7 大調基準、原曲直通 `Bypass`、調性雙重自動預判與 UI 模式單選推薦） |
 | **【任務 2-4 初版】** | **Main/Fill 段落和弦反向正規化初版 & 原曲 vs STY 實測解密** | [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`inspect-rongyi-user-midi.test.ts`](../tests/inspect-rongyi-user-midi.test.ts) | ✅ 已完成初版（解開《容易受傷的女人》1~5 節 Intro A、6~13 節 Main A、26~33 節 Intro B 7 軌齊奏規律） |
 | **【任務 4-1 基礎】** | **Multi Pad (.PAD) 二進位結構解析與全軌屬性寫入** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`yamaha-writer.ts`](../src/core/writer/yamaha-writer.ts) | ✅ 已完成（完整支援 5 軌 SMF1 結構、`CMxxxx` / `RPxxxx` / `N1~N4` 控制標記） |
 | **【任務 4-1 終極】** | **Multi Pad 和弦跟隨適用邊界、固定調性鐵律與 STY 插音分工架構實機結案** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`GEMINI.md`](../GEMINI.md), `2010_空港_Intro_Am調.PAD` | ✅ 已完成並實機結案（PSR-SX920 雙向驗收：證實長旋律開 CM 必走音，CM0000 指定調性為 100% 依譜還原唯一解；插音歸 STY Phrase 聲部） |
@@ -42,22 +43,20 @@
 
 ### 🔥 伴奏主線：【任務 2-4 進階】MIDI 切片音樂性與智慧段落升級
 
-1. **[待處理 A] 基準和弦模式選擇器（`CM7` 大調基準 / `Cm` 小調基準 / 原曲直通）与琴端和弦跟隨架構**
-   - **背景與診斷**：結合 2026-11-21 Multi Pad 實機驗證成果與《雲中月圓》（`4006_SX900.T547.sty`）原廠 10 小節 Intro A 逆向分析，證實過去 STY 小調歌曲在琴端聽覺走味的主因在於 CASM 被寫死為 `CM7 大調`（`chordRoot=0, chordType=2`），導致琴端強制啟動 Aeolian 降音削平小調導音與花音。
-   - **完整解決方案（已定案）**：
-     1. **全自動調性雙重預判**：結合 MIDI 調號 Meta 0x59、全曲音高分佈與切片第 1 小節和弦/低音 Bass 辨識，自動判斷大調/小調。
-     2. **Cm 小調基準（Yamaha 原廠規範）**：若為小調曲（如 Am），音符自動平行位移 +3 半音至 Cm，CASM 寫入 `chordRoot = 0 (C), chordType = 8 (Minor)`。確保 STY 存入 PSR-SX920 琴端後，左手彈奏任意小和弦（$Am \to Dm \to Em$）伴奏 100% 精準即時跟隨且零音符失真！
-     3. **原調直通模式（Intro/Ending 推薦）**：音符 100% 保持原調（如 Am），CASM 配置 `NTR = Root Transpose, NTT = Bypass`，琴端不進行任何音階吸附，100% 原版樂隊編曲依譜發聲。
-     4. **CM7 大調基準**：供標準大調流行曲使用。
-     5. **切片彈窗 UI 升級**：在彈窗提供模式單選開關，自動預設最佳模式，並允許使用者隨手一鍵覆蓋。
+1. **[✅ 已完成] 基準和弦三合一模式（`CM7` 大調基準 / `Cm` 小調基準 / 原曲直通）与琴端和弦跟隨架構**
+   - **完成成果**：
+     - 已實裝 `SliceChordMode` 三大模式：`'CM_MINOR'`、`'CM7_MAJOR'`、`'ORIGINAL_PASS_THROUGH'`。
+     - `CasmModifier` 支援動態配置 CASM `sourceChordRoot`、`sourceChordType` (8=Minor) 與 `NTT = Minor / Bypass / Chord / Bass`。
+     - `MidiSliceAssignModal` 新增三合一單選器與調性智慧分析推薦徽章，自動偵測切片起點調性。
+     - 單元測試 `tests/test-slice-chord-modes.test.ts` 全數通過驗證。
 
-2. **[待處理 B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
+2. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
    - **背景**：如《容易受傷的女人》第 26~33 小節切為 `Intro B` 時，需要連同前奏/間奏 Solo 電吉他與弦樂鋪底共 7 軌齊開；而切為 `Main A`（第 6~13 小節）時則應維持純伴奏律動，排除斷續 Solo。
    - **目標**：
      - 當目標段落選為 `Intro A~D` 或 `Ending` 時，自動切換為「全軌道大樂隊直通模式」（納入副奏/前奏 Solo 樂器，預設原曲和弦直通）。
      - 當目標段落選為 `Main A~D` 或 `Fill In` 時，維持「純伴奏律動模式」（排除主旋律與單次 Solo，開啟和弦正規化）。
 
-3. **[待處理 C] 藉由小節樂器出入場與密度變化自動推薦段落（Auto Section Detection）**
+3. **[後續待處理 📋 任務 2-4C] 藉由小節樂器出入場與密度變化自動推薦段落（Auto Section Detection）**
    - **目標**：自動掃描 MIDI 各小節的樂器進退場、Program Change 與音符密度，在切片介面提供一鍵選取建議區間。
 
 ---

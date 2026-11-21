@@ -13,6 +13,7 @@ import {
 import type { MidiSongAnalysis } from '../core/parser/midi-song-analyzer';
 import type { YamahaFileParsed } from '../core/models/types';
 import { ALL_STANDARD_SECTIONS } from '../core/models/style-types';
+import { MidiSliceAssembler, type SliceChordMode } from '../core/writer/midi-slice-assembler';
 
 export interface MidiSliceAssignConfig {
   startBar: number;
@@ -20,6 +21,7 @@ export interface MidiSliceAssignConfig {
   totalBars: number;
   targetSection: string;       // e.g. 'Main A', 'Intro A'
   mappingPlan: SongPartMappingPlan;
+  chordMode: SliceChordMode;
   normalizeChordsToC: boolean;
 }
 
@@ -33,9 +35,11 @@ export class MidiSliceAssignModal {
   private btnCancel!: HTMLButtonElement;
   private btnCloseHeader!: HTMLButtonElement;
   private btnAuditionAccomp!: HTMLButtonElement;
-  private chkNormalizeChords!: HTMLInputElement;
+  private radioMinorEl!: HTMLInputElement;
+  private radioMajorEl!: HTMLInputElement;
+  private radioPassThroughEl!: HTMLInputElement;
+  private chordHintBadgeEl!: HTMLElement;
   private normDescEl!: HTMLElement;
-  private normLabelEl!: HTMLElement;
 
   private currentAnalysis: MidiSongAnalysis | null = null;
   private currentPlan: SongPartMappingPlan | null = null;
@@ -91,19 +95,38 @@ export class MidiSliceAssignModal {
             </div>
           </div>
 
-          <!-- 和弦正規化模式控制列 (Yamaha C 基準大調 vs 直通原曲進行) -->
-          <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 1.1rem;">🎼</span>
-              <div>
-                <span style="font-size: 0.82rem; font-weight: 700; color: #c4b5fd;">和弦正規化模式 (Harmonic Normalization)：</span>
-                <span id="ms-norm-desc" style="font-size: 0.73rem; color: #94a3b8; display: block;">Main / Fill 伴奏段落：自動將各小節和弦歸一化為 C 基準大調，琴端左手換和弦 100% 精準轉調。</span>
+          <!-- 和弦基準模式控制列 (三合一：小調 Cm 基準 / 大調 CM7 基準 / 原曲直通) -->
+          <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.1rem;">🎼</span>
+                <span style="font-size: 0.85rem; font-weight: 700; color: #c4b5fd;">和弦基準模式 (Harmonic Normalization Mode)：</span>
+              </div>
+              <!-- 智慧分析推薦徽章 -->
+              <div id="ms-chord-hint-badge" style="font-size: 0.75rem; color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 8px; border-radius: 4px;">
+                💡 智慧分析中...
               </div>
             </div>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-              <input type="checkbox" id="ms-chk-normalize-chords" style="width: 16px; height: 16px; accent-color: #8b5cf6;" checked>
-              <span id="ms-norm-label" style="font-size: 0.82rem; font-weight: 700; color: #a78bfa;">啟用 C 基準大調正規化</span>
-            </label>
+
+            <!-- 三合一 Radio 選擇器 -->
+            <div style="display: flex; gap: 14px; flex-wrap: wrap; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.15);">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                <input type="radio" name="ms-chord-mode" value="CM_MINOR" id="ms-radio-minor" style="accent-color: #38bdf8;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: #38bdf8;">Cm 小調基準 (Yamaha SFF2 標準)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                <input type="radio" name="ms-chord-mode" value="CM7_MAJOR" id="ms-radio-major" style="accent-color: #a78bfa;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: #a78bfa;">CM7 大調基準 (Yamaha 原廠標準)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+                <input type="radio" name="ms-chord-mode" value="ORIGINAL_PASS_THROUGH" id="ms-radio-passthrough" style="accent-color: #34d399;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: #34d399;">原曲和弦直通 (NTT = Bypass)</span>
+              </label>
+            </div>
+
+            <div id="ms-norm-desc" style="font-size: 0.74rem; color: #94a3b8; line-height: 1.4;">
+              <!-- 動態說明文字 -->
+            </div>
           </div>
 
           <!-- 伴奏 8 聲部對照卡網格 (樂器為主、原曲 Ch 為輔) -->
@@ -143,9 +166,11 @@ export class MidiSliceAssignModal {
     this.btnCancel = wrap.querySelector('#btn-cancel-ms-modal') as HTMLButtonElement;
     this.btnCloseHeader = wrap.querySelector('#btn-close-ms-modal') as HTMLButtonElement;
     this.btnAuditionAccomp = wrap.querySelector('#btn-ms-audition-accomp') as HTMLButtonElement;
-    this.chkNormalizeChords = wrap.querySelector('#ms-chk-normalize-chords') as HTMLInputElement;
+    this.radioMinorEl = wrap.querySelector('#ms-radio-minor') as HTMLInputElement;
+    this.radioMajorEl = wrap.querySelector('#ms-radio-major') as HTMLInputElement;
+    this.radioPassThroughEl = wrap.querySelector('#ms-radio-passthrough') as HTMLInputElement;
+    this.chordHintBadgeEl = wrap.querySelector('#ms-chord-hint-badge') as HTMLElement;
     this.normDescEl = wrap.querySelector('#ms-norm-desc') as HTMLElement;
-    this.normLabelEl = wrap.querySelector('#ms-norm-label') as HTMLElement;
   }
 
   private bindEvents() {
@@ -160,27 +185,26 @@ export class MidiSliceAssignModal {
     });
 
     this.selectSectionEl.addEventListener('change', () => {
-      this.updateNormalizeModeBySection();
+      this.updateNormalizeModeBySection(true);
     });
 
-    this.chkNormalizeChords.addEventListener('change', () => {
-      if (this.chkNormalizeChords.checked) {
-        this.normLabelEl.style.color = '#a78bfa';
-      } else {
-        this.normLabelEl.style.color = '#94a3b8';
-      }
-    });
+    const onRadioChange = () => this.updateNormDescription();
+    this.radioMinorEl.addEventListener('change', onRadioChange);
+    this.radioMajorEl.addEventListener('change', onRadioChange);
+    this.radioPassThroughEl.addEventListener('change', onRadioChange);
 
     this.btnConfirm.addEventListener('click', () => {
       if (!this.currentPlan) return;
       const totalBars = Math.max(1, (this.currentEndBar - this.currentStartBar) + 1);
+      const selectedMode = (this.backdropEl.querySelector('input[name="ms-chord-mode"]:checked') as HTMLInputElement)?.value as SliceChordMode || 'CM7_MAJOR';
       const config: MidiSliceAssignConfig = {
         startBar: this.currentStartBar,
         endBar: this.currentEndBar,
         totalBars,
         targetSection: this.selectSectionEl.value || 'Main A',
         mappingPlan: this.currentPlan,
-        normalizeChordsToC: this.chkNormalizeChords.checked,
+        chordMode: selectedMode,
+        normalizeChordsToC: selectedMode !== 'ORIGINAL_PASS_THROUGH',
       };
 
       if (this.onConfirmCallback) {
@@ -190,16 +214,65 @@ export class MidiSliceAssignModal {
     });
   }
 
-  private updateNormalizeModeBySection() {
+  private updateNormalizeModeBySection(autoSelect: boolean = true) {
     const sec = this.selectSectionEl.value || 'Main A';
-    const isMainOrFill = /^(main|fill|break)/i.test(sec.trim());
-    this.chkNormalizeChords.checked = isMainOrFill;
-    if (isMainOrFill) {
-      this.normDescEl.textContent = 'Main / Fill 伴奏段落：自動將各小節和弦歸一化為 C 基準大調，琴端左手換和弦 100% 精準轉調。';
-      this.normLabelEl.style.color = '#a78bfa';
+    const isIntroOrEnding = /^(intro|ending)/i.test(sec.trim());
+
+    // 取得切片起始小節調性
+    let startChord: { chordName: string; isMinor: boolean; rootName: string } | null = null;
+    if (this.currentSourceParsed) {
+      const srcPpq = this.currentSourceParsed.division || 480;
+      const timeSig = this.currentSourceParsed.timeSignature || { numerator: 4, denominator: 4 };
+      const beats = timeSig.numerator * (4 / timeSig.denominator);
+      const ticksPerBar = Math.round(srcPpq * beats);
+      const bassAssign = this.currentPlan?.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
+      startChord = MidiSliceAssembler.detectBarChord(
+        this.currentSourceParsed,
+        this.currentStartBar,
+        ticksPerBar,
+        bassAssign?.sourceChannel
+      );
+    }
+
+    const isMinor = startChord ? startChord.isMinor : (this.currentAnalysis?.keySignatureLabel?.toLowerCase().includes('m') ?? false);
+    const chordDesc = startChord ? startChord.chordName : (isMinor ? '小調' : '大調');
+
+    if (autoSelect) {
+      if (isIntroOrEnding) {
+        // 前奏 / 尾奏：小調推薦 Cm 基準 (Yamaha SX900 標準)，大調推薦原曲直通
+        if (isMinor) {
+          this.radioMinorEl.checked = true;
+        } else {
+          this.radioPassThroughEl.checked = true;
+        }
+      } else {
+        // 循環伴奏 Main / Fill：小調選 Cm，大調選 CM7
+        if (isMinor) {
+          this.radioMinorEl.checked = true;
+        } else {
+          this.radioMajorEl.checked = true;
+        }
+      }
+    }
+
+    // 更新推薦徽章
+    if (this.chordHintBadgeEl) {
+      const recMode = isIntroOrEnding
+        ? (isMinor ? 'Cm 小調 (或原曲直通)' : '原曲和弦直通')
+        : (isMinor ? 'Cm 小調基準' : 'CM7 大調基準');
+      this.chordHintBadgeEl.innerHTML = `💡 偵測調性：<strong>${chordDesc}</strong> (${isMinor ? '小調' : '大調'}) ➔ 系統推薦：<strong>${recMode}</strong>`;
+    }
+
+    this.updateNormDescription();
+  }
+
+  private updateNormDescription() {
+    if (this.radioMinorEl.checked) {
+      this.normDescEl.innerHTML = '<span style="color: #38bdf8; font-weight: 700;">【Cm 小調基準 (Yamaha SFF2 標準)】</span>：將全段樂句移調至 Cm (保留小三度 Eb 與小調和聲，CASM 標記 Source Chord = Cm)。在 PSR-SX920 琴端左手彈奏 Am、Dm、Em、Gm 等小和弦時，琴端執行純剛體平行移調，<strong>零音階吸附失真</strong>！';
+    } else if (this.radioMajorEl.checked) {
+      this.normDescEl.innerHTML = '<span style="color: #a78bfa; font-weight: 700;">【CM7 大調基準 (Yamaha 原廠標準)】</span>：將各小節和弦歸一化為純淨 C-E-G-B 四音母體 (CASM 標記 Source Chord = CM7)。適用於大調曲目之 Main / Fill 循環伴奏，琴端左手換大和弦時 100% 精準跟隨。';
     } else {
-      this.normDescEl.textContent = 'Intro / Ending 獨立樂段：維持直通原曲和弦進行，樂手在琴端按單音 C 即可完整播放原曲旋律。';
-      this.normLabelEl.style.color = '#94a3b8';
+      this.normDescEl.innerHTML = '<span style="color: #34d399; font-weight: 700;">【原曲和弦直通 (NTT = Bypass)】</span>：維持原曲原始音高與跨小節和弦進行，CASM 配置 NTT = Bypass。在琴端單按根音 C 即可原汁原味直通播放原曲前奏/尾奏編曲。';
     }
   }
 

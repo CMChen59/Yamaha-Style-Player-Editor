@@ -23,6 +23,8 @@ export interface BarChordInfo {
   chordName: string;
 }
 
+export type SliceChordMode = 'CM_MINOR' | 'CM7_MAJOR' | 'ORIGINAL_PASS_THROUGH';
+
 export interface MidiSliceAssembleOptions {
   /** 來源 MIDI 解析結果 */
   sourceParsed: YamahaFileParsed;
@@ -40,7 +42,9 @@ export interface MidiSliceAssembleOptions {
   baseStyleParsed?: YamahaFileParsed | null;
   /** 風格名稱 (可選) */
   styleName?: string;
-  /** 是否啟用和弦反向正規化為 C 基準大調 (若未指定，Main/Fill/Break 預設為 true，Intro/Ending 預設為 false) */
+  /** 和弦基準模式 (三合一模式：'CM_MINOR' 小調 Cm / 'CM7_MAJOR' 大調 CM7 / 'ORIGINAL_PASS_THROUGH' 原曲直通) */
+  chordMode?: SliceChordMode;
+  /** @deprecated 相容舊欄位：是否啟用和弦反向正規化為 C 基準大調 (若未指定 chordMode 則使用此欄位) */
   normalizeChordsToC?: boolean;
 }
 
@@ -62,6 +66,7 @@ export interface MidiSliceAssembleResult {
   totalNotesExtracted: number;
   assembledPartsCount: number;
   partDetails: AssembledPartInfo[];
+  chordMode: SliceChordMode;
   isHarmonicallyNormalized: boolean;
   detectedChordsByBar?: Array<{ bar: number; chordName: string; shiftToC: number }>;
   message: string;
@@ -129,25 +134,43 @@ export class MidiSliceAssembler {
     // 4. 清除目標段落中所有舊音符，以便寫入全新的切片音符
     YamahaStyleModifier.clearSectionNotes(styleParsed, targetSection);
 
-    // 5. 提取來源 MIDI 中指定小節區間之音符
-    // 判定是否啟用和弦反向正規化 (Main / Fill / Break 預設啟用，Intro / Ending 預設直通保留)
-    const isMainOrFill = /^(main|fill|break)/i.test(targetSection.trim());
-    const shouldNormalize = options.normalizeChordsToC !== undefined
-      ? options.normalizeChordsToC
-      : isMainOrFill;
+    // 5. 判定和弦模式與分析切片和弦進行
+    const isIntroOrEnding = /^(intro|ending)/i.test(targetSection.trim());
+
+    const bassAssign = mappingPlan.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
+    const bassCh = bassAssign ? bassAssign.sourceChannel : undefined;
+
+    // 分析切片起始小節和弦
+    const startChord = MidiSliceAssembler.detectBarChord(sourceParsed, startBar, ticksPerBarSrc, bassCh);
+    const isSongMinor = startChord.isMinor || (analysis.keySignatureLabel && analysis.keySignatureLabel.toLowerCase().includes('m'));
+
+    let effectiveChordMode: SliceChordMode;
+    if (options.chordMode) {
+      effectiveChordMode = options.chordMode;
+    } else if (options.normalizeChordsToC !== undefined) {
+      effectiveChordMode = options.normalizeChordsToC ? (isSongMinor ? 'CM_MINOR' : 'CM7_MAJOR') : 'ORIGINAL_PASS_THROUGH';
+    } else {
+      if (isIntroOrEnding) {
+        effectiveChordMode = 'ORIGINAL_PASS_THROUGH';
+      } else {
+        effectiveChordMode = isSongMinor ? 'CM_MINOR' : 'CM7_MAJOR';
+      }
+    }
 
     const barChordMap = new Map<number, BarChordInfo>();
     const detectedChordsByBar: Array<{ bar: number; chordName: string; shiftToC: number }> = [];
 
-    if (shouldNormalize) {
-      const bassAssign = mappingPlan.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
-      const bassCh = bassAssign ? bassAssign.sourceChannel : undefined;
+    // 計算全曲/段落均一移調至 Cm 所需半音數 (例如 Am -> Cm 為 +3)
+    const songOrStartRootName = startChord.rootName;
+    const uniformShiftToCm = -ROOT_SEMITONES_FROM_C[songOrStartRootName] || 0;
 
-      for (let b = startBar; b <= endBar; b++) {
-        const cInfo = MidiSliceAssembler.detectBarChord(sourceParsed, b, ticksPerBarSrc, bassCh);
-        barChordMap.set(b, cInfo);
-        detectedChordsByBar.push({ bar: b, chordName: cInfo.chordName, shiftToC: cInfo.shiftToC });
-      }
+    for (let b = startBar; b <= endBar; b++) {
+      const cInfo = MidiSliceAssembler.detectBarChord(sourceParsed, b, ticksPerBarSrc, bassCh);
+      barChordMap.set(b, cInfo);
+      const displayShift = effectiveChordMode === 'ORIGINAL_PASS_THROUGH'
+        ? 0
+        : (effectiveChordMode === 'CM_MINOR' && isIntroOrEnding ? uniformShiftToCm : cInfo.shiftToC);
+      detectedChordsByBar.push({ bar: b, chordName: cInfo.chordName, shiftToC: displayShift });
     }
 
     // 建立 sourceChannel -> assignment 快速索引
@@ -205,7 +228,10 @@ export class MidiSliceAssembler {
               scaleFactor,
               maxSectionTicksTarget,
               barChordMap,
-              ticksPerBarSrc
+              ticksPerBarSrc,
+              effectiveChordMode,
+              uniformShiftToCm,
+              isIntroOrEnding
             );
           }
           activeNotes.set(noteKey, { startAbsTick: absTick, velocity: ev.velocity! });
@@ -226,7 +252,10 @@ export class MidiSliceAssembler {
               scaleFactor,
               maxSectionTicksTarget,
               barChordMap,
-              ticksPerBarSrc
+              ticksPerBarSrc,
+              effectiveChordMode,
+              uniformShiftToCm,
+              isIntroOrEnding
             );
           }
         }
@@ -252,7 +281,10 @@ export class MidiSliceAssembler {
             scaleFactor,
             maxSectionTicksTarget,
             barChordMap,
-            ticksPerBarSrc
+            ticksPerBarSrc,
+            effectiveChordMode,
+            uniformShiftToCm,
+            isIntroOrEnding
           );
         }
       }
@@ -312,12 +344,68 @@ export class MidiSliceAssembler {
     // 7. 確保目標段落具備合法合規的 CASM 轉調規則 (PSR-SX920 原廠標準)
     const stdRules = CasmModifier.getDefaultPartRules();
     for (const r of stdRules) {
+      if (r.isDrum) {
+        // 打擊樂聲部一律固定根音、Bypass、Drum 標籤
+        r.ntr = 'Root Fixed';
+        r.ntt = 'Bypass';
+        r.sourceChordRoot = 0;
+        r.sourceChordType = 2;
+      } else if (effectiveChordMode === 'CM_MINOR') {
+        // 小調 Cm 基準模式：Source Chord = Cm (Root 0, Type 8)
+        r.sourceChordRoot = 0;
+        r.sourceChordType = 8;
+        r.ntr = 'Root Transpose';
+        r.hiKey = 2; // Yamaha 小調標準 HiKey = 2 (D)
+        r.retriggerRule = 'Pitch Shift';
+        if (r.partId === 'Bass') {
+          r.partName = isIntroOrEnding ? 'BassIntr' : 'BassMain';
+          r.ntt = 'Bass';
+          r.noteLowLimit = isIntroOrEnding ? 0 : 28;
+          r.noteHighLimit = isIntroOrEnding ? 127 : 55;
+        } else {
+          r.partName = isIntroOrEnding ? 'Maj-min ' : r.partName;
+          r.ntt = 'Minor'; // 0x07 (Maj-min Minor Table)
+          r.noteLowLimit = 0;
+          r.noteHighLimit = 127;
+        }
+      } else if (effectiveChordMode === 'ORIGINAL_PASS_THROUGH') {
+        // 原曲直通模式：NTT = Bypass (0x00)，源根音為原曲起始根音
+        r.sourceChordRoot = startChord.rootPitchClass;
+        r.sourceChordType = startChord.isMinor ? 8 : 0;
+        r.ntr = 'Root Transpose';
+        r.ntt = 'Bypass'; // 0x00 (琴端不做和弦音階吸附，原汁原味直通播放)
+        r.retriggerRule = 'Pitch Shift';
+        r.noteLowLimit = 0;
+        r.noteHighLimit = 127;
+      } else {
+        // 大調 CM7 基準模式：Source Chord = CM7 (Root 0, Type 2)
+        r.sourceChordRoot = 0;
+        r.sourceChordType = 2;
+        r.ntr = 'Root Transpose';
+        r.retriggerRule = r.partId === 'Bass' ? 'Retrigger' : 'Pitch Shift';
+        if (r.partId === 'Bass') {
+          r.ntt = 'Bass';
+          r.hiKey = 5;
+        } else if (r.partId === 'Phrase1' || r.partId === 'Phrase2') {
+          r.ntt = 'Melody';
+          r.hiKey = 6;
+        } else {
+          r.ntt = 'Chord';
+          r.hiKey = 6;
+        }
+      }
+
       CasmModifier.injectOrUpdateSectionCasmRule(styleParsed, targetSection, r.channel, r);
     }
 
-    const normDesc = shouldNormalize
-      ? ` [已自動執行 C 基準大調和弦正規化: ${detectedChordsByBar.map(c => `第${c.bar}小節(${c.chordName})`).join(' ➔ ')}]`
-      : ` [原曲和弦進行直通保留模式]`;
+    let modeDesc = '';
+    if (effectiveChordMode === 'CM_MINOR') {
+      modeDesc = ` [Cm 小調基準模式 (Yamaha SFF2 標準，源和弦 Cm/Type 8，琴端按小和弦純平行移調無失真)]`;
+    } else if (effectiveChordMode === 'CM7_MAJOR') {
+      modeDesc = ` [CM7 大調基準正規化模式 (源和弦 CM7/Type 2，琴端左手換和弦 100% 精準轉調)]`;
+    } else {
+      modeDesc = ` [原曲和弦進行直通保留模式 (NTT = Bypass，琴端按單音直通播放原曲編曲)]`;
+    }
 
     return {
       success: true,
@@ -329,9 +417,10 @@ export class MidiSliceAssembler {
       totalNotesExtracted,
       assembledPartsCount: partDetails.length,
       partDetails,
-      isHarmonicallyNormalized: shouldNormalize,
+      chordMode: effectiveChordMode,
+      isHarmonicallyNormalized: effectiveChordMode !== 'ORIGINAL_PASS_THROUGH',
       detectedChordsByBar,
-      message: `成功提取第 ${startBar} ~ ${endBar} 小節（共 ${totalBars} 小節），並裝配至伴奏段落【${targetSection}】！共提取 ${totalNotesExtracted} 顆音符至 ${partDetails.length} 個伴奏聲部。${normDesc}`,
+      message: `成功提取第 ${startBar} ~ ${endBar} 小節（共 ${totalBars} 小節），並裝配至伴奏段落【${targetSection}】！共提取 ${totalNotesExtracted} 顆音符至 ${partDetails.length} 個伴奏聲部。${modeDesc}`,
     };
   }
 
@@ -351,7 +440,10 @@ export class MidiSliceAssembler {
     scaleFactor: number,
     maxSectionTicksTarget: number,
     barChordMap?: Map<number, BarChordInfo>,
-    ticksPerBarSrc?: number
+    ticksPerBarSrc?: number,
+    chordMode: SliceChordMode = 'ORIGINAL_PASS_THROUGH',
+    uniformShiftToCm: number = 0,
+    isIntroOrEnding: boolean = false
   ) {
     // 檢查音符是否與切片區間 [startTickSrc, endTickSrc) 有交集
     if (endAbsTick <= startTickSrc || startAbsTick >= endTickSrc) {
@@ -372,28 +464,61 @@ export class MidiSliceAssembler {
     // 確保不會溢出段落最大邊界
     if (relTickTarget >= maxSectionTicksTarget) return;
 
-    // 若啟用和弦反向正規化且此聲部非打擊樂 (Target Channel 不為 8、9，即非 Rhythm 1 / 2)：
+    // 根據 chordMode 判定音高位移 (打擊樂 targetChannel 8, 9 永遠不移調)
     let effectiveNote = noteNumber;
-    if (barChordMap && ticksPerBarSrc && targetChannel !== 8 && targetChannel !== 9) {
-      const noteBar = Math.floor(clippedStart / ticksPerBarSrc) + 1;
-      const cInfo = barChordMap.get(noteBar);
-      if (cInfo && cInfo.shiftToC !== 0) {
-        effectiveNote += cInfo.shiftToC;
-
-        // 若原和弦為小調，將小三度 (Eb, pitchClass 3) 轉為大三度 (E, pitchClass 4)，以形成 Yamaha 規範之純淨 C 大調基準樣式
-        if (cInfo.isMinor && (effectiveNote % 12 === 3)) {
-          effectiveNote += 1;
-        }
-
-        // 音域保護限制 (防止移調後衝出樂器正常演奏音區)
-        if (targetChannel === 10) {
-          // Bass 聲部安全音域：E1 (28) ~ G3 (55)
-          while (effectiveNote < 28) effectiveNote += 12;
-          while (effectiveNote > 55) effectiveNote -= 12;
+    if (targetChannel !== 8 && targetChannel !== 9) {
+      if (chordMode === 'ORIGINAL_PASS_THROUGH') {
+        // 原曲直通：保持原音高，零移調
+        effectiveNote = noteNumber;
+      } else if (chordMode === 'CM_MINOR') {
+        // 小調 Cm 基準模式 (Yamaha SFF2 標準)
+        if (isIntroOrEnding) {
+          // 前奏/尾奏：全段樂句純剛體平行平移至 Cm (保留所有導音與旋律小調音程，如 4006 Intro A)
+          effectiveNote += uniformShiftToCm;
+          if (targetChannel === 10) {
+            // Bass 安全音域
+            while (effectiveNote < 28) effectiveNote += 12;
+            while (effectiveNote > 60) effectiveNote -= 12;
+          } else {
+            while (effectiveNote < 36) effectiveNote += 12;
+            while (effectiveNote > 96) effectiveNote -= 12;
+          }
         } else {
-          // 和弦 / 鋪底吉他 / 鍵盤安全音域：A2 (45) ~ C6 (84)
-          while (effectiveNote < 45) effectiveNote += 12;
-          while (effectiveNote > 84) effectiveNote -= 12;
+          // Main / Fill 伴奏段落：逐小節移調至 C minor (保留小三度 Eb，不強升大三度！)
+          if (barChordMap && ticksPerBarSrc) {
+            const noteBar = Math.floor(clippedStart / ticksPerBarSrc) + 1;
+            const cInfo = barChordMap.get(noteBar);
+            if (cInfo && cInfo.shiftToC !== 0) {
+              effectiveNote += cInfo.shiftToC;
+            }
+          }
+          if (targetChannel === 10) {
+            while (effectiveNote < 28) effectiveNote += 12;
+            while (effectiveNote > 55) effectiveNote -= 12;
+          } else {
+            while (effectiveNote < 40) effectiveNote += 12;
+            while (effectiveNote > 84) effectiveNote -= 12;
+          }
+        }
+      } else if (chordMode === 'CM7_MAJOR') {
+        // 大調 CM7 基準模式 (Yamaha 原廠標準)
+        if (barChordMap && ticksPerBarSrc) {
+          const noteBar = Math.floor(clippedStart / ticksPerBarSrc) + 1;
+          const cInfo = barChordMap.get(noteBar);
+          if (cInfo && cInfo.shiftToC !== 0) {
+            effectiveNote += cInfo.shiftToC;
+            // 若原和弦為小調，將小三度 (Eb, pitchClass 3) 轉為大三度 (E, pitchClass 4)
+            if (cInfo.isMinor && (effectiveNote % 12 === 3)) {
+              effectiveNote += 1;
+            }
+            if (targetChannel === 10) {
+              while (effectiveNote < 28) effectiveNote += 12;
+              while (effectiveNote > 55) effectiveNote -= 12;
+            } else {
+              while (effectiveNote < 45) effectiveNote += 12;
+              while (effectiveNote > 84) effectiveNote -= 12;
+            }
+          }
         }
       }
     }
