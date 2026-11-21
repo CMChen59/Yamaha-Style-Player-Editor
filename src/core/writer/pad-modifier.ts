@@ -159,34 +159,50 @@ export class YamahaPadModifier {
 
   /**
    * 同步 Pad 控制標籤 (RP, CM, N1~N4, I1~I4) 至 Track 0
+   * 遵循 Yamaha 官方 Multi Pad 標準規範：所有控制標籤皆為 Tick 0 之 MIDI Text Event (Meta 0x01)
    */
   private static syncControlTagsToTrack0(parsed: YamahaFileParsed): void {
     if (!parsed.padConfig || parsed.tracks.length === 0) return;
     const track0 = parsed.tracks[0];
     const cfg = parsed.padConfig;
 
-    // 1. 移除舊有的控制 Marker (RP, CM, N1~N4, I1~I4)
+    // 1. 移除舊有的控制標籤 (RP, CM, N1~N4, I1~I4) 以及殘留的伴奏段落標記 (Intro, Main, Fill 等)
     track0.events = track0.events.filter((ev) => {
-      if (ev.type === 'meta' && (ev.metaType === 6 || ev.metaType === 7) && ev.text) {
+      if (ev.type === 'meta' && (ev.metaType === 1 || ev.metaType === 6 || ev.metaType === 7) && ev.text) {
         const t = ev.text.trim();
         if (t.startsWith('RP') || t.startsWith('CM') || /^N[1-4]/.test(t) || /^I[1-4]/.test(t)) {
           return false;
+        }
+        // 若為 Multi Pad，排除殘留的 Style 段落標記，避免琴端韌體誤判
+        if (parsed.format === 'PAD') {
+          const lower = t.toLowerCase();
+          if (lower.startsWith('intro') || lower.startsWith('main') || lower.startsWith('fill') || lower.startsWith('ending')) {
+            return false;
+          }
         }
       }
       return true;
     });
 
-    // 2. 找到 End of Track (Meta 0x2F) 的位置，在其前方插入新的控制標籤
-    const endMetaIdx = track0.events.findIndex((e) => e.type === 'meta' && e.metaType === 0x2f);
-    const insertPos = endMetaIdx >= 0 ? endMetaIdx : track0.events.length;
+    // 2. 確保控制標籤插入在 Track 0 最前端（Tick 0），遵循 Yamaha 原廠規範
+    // 找到第一個 delta > 0 的事件或 EndOfTrack，將標籤置於 Tick 0
+    let insertPos = 0;
+    // 跳過開頭的 TrackName (0x03)、Copyright (0x02)、TimeSignature (0x58)、Tempo (0x51)
+    while (insertPos < track0.events.length && track0.events[insertPos].delta === 0) {
+      const m = track0.events[insertPos];
+      if (m.type === 'meta' && (m.metaType === 0x2f || m.metaType === 1 || m.metaType === 6)) {
+        break;
+      }
+      insertPos++;
+    }
 
-    // 生成標籤字串
-    const rpTag = `RP${cfg.repeatFlags.map((f) => (f ? '1' : '0')).join('')}`;
+    // 生成標籤字串 (CMxxxx 必須優先於 RPxxxx)
     const cmTag = `CM${cfg.chordMatchFlags.map((f) => (f ? '1' : '0')).join('')}`;
+    const rpTag = `RP${cfg.repeatFlags.map((f) => (f ? '1' : '0')).join('')}`;
 
     const newControlEvents: MidiEvent[] = [
-      this.createMarkerEvent(rpTag),
       this.createMarkerEvent(cmTag),
+      this.createMarkerEvent(rpTag),
     ];
 
     for (let i = 0; i < 4; i++) {
@@ -209,7 +225,7 @@ export class YamahaPadModifier {
     return {
       delta: 0,
       type: 'meta',
-      metaType: 6, // Marker
+      metaType: 1, // Yamaha Multi Pad 官方標準為 Meta 0x01 (Text Event)
       text,
       metaData,
     };

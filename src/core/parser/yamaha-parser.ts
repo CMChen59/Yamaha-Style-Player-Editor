@@ -207,8 +207,8 @@ export class YamahaParser {
             trackName = metaText;
           }
 
-          // Yamaha Section Marker 通常為 Meta 0x06 (Marker) 或 0x07 (Cue Point)
-          if ((metaType === 0x06 || metaType === 0x07) && metaText) {
+          // Yamaha Section Marker 通常為 Meta 0x06 (Marker)、0x07 (Cue Point) 或 0x01 (Text Event，如 Multi Pad 控制標記)
+          if ((metaType === 0x01 || metaType === 0x06 || metaType === 0x07) && metaText) {
             const trimmed = metaText.trim();
 
             // 檢查是否為 Yamaha Pad 專屬控制標籤 (非實際音樂段落)
