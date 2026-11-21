@@ -43,15 +43,18 @@
 
 ### 🔥 伴奏主線：【任務 2-4 進階】MIDI 切片音樂性與智慧段落升級
 
-1. **[✅ 已完成] 基準和弦三合一模式（`CM7` 大調基準 / `Cm` 小調基準 / 原曲直通）与段落起始和弦智慧分流**
+1. **[✅ 已完成] 基準和弦三合一模式（`CM7` 大調基準 / `Cm` 小調基準 / 原曲直通）与半小節高解析度正規化（完整保留 8 節插音）**
    - **完成成果**：
      - 已實裝 `SliceChordMode` 三大模式：`'CM_MINOR'`、`'CM7_MAJOR'`、`'ORIGINAL_PASS_THROUGH'`。
      - `CasmModifier` 支援動態配置 CASM `sourceChordRoot`、`sourceChordType` (8=Minor) 與 `NTT = Minor / Bypass / Chord / Bass`。
      - **段落起始和弦智慧分流（結合實機演奏譜驗證定案）**：
        - **Intro / Ending**：預設一律推薦**【原曲和弦直通（NTT = Bypass）】**，保持 0 移調，琴端左手單按根音（`Sync Start = C`）即可 100% 還原原汁原味前奏編曲，第 5 節木吉他自然落在 C 和弦完美銜接主歌進歌點。
-       - **Main / Fill（循環律動伴奏）**：依切片起始小節代表和弦（`repChord`）分流：起點為大調（如《容易受傷的女人》第 6 節 C）自動推薦**【CM7 大調基準】**，音符 0 位移，琴端左手依譜彈奏 C、Em、Am、Dm、F、G 100% 完美即時移調；起點為小調（如副歌 Am）自動推薦**【Cm 小調基準】**。
+       - **Main / Fill（循環律動伴奏）**：依切片起始小節代表和弦（`repChord`）分流：起點為大調（如《容易受傷的女人》第 6 節 C）自動推薦**【CM7 大調基準】**，音符 0 位移；起點為小調（如副歌 Am）自動推薦**【Cm 小調基準】**。
+     - **半小節（2 拍）高解析度和弦反向正規化（`detectSubBarChords`，徹底保留 8 節呼吸感與插音）**：
+       - 攻克一小節雙和弦（如第 7 節 Em-Am、第 8 節 Em-Dm）整小節統一移調導致後半節走音的痛點，以 2 拍為單位獨立分析根音與移調量。
+       - 整段 8 小節 Main 伴奏與第 4 節、第 8 節之過門插音（Phrase 1/2）每一拍徹底鎖定在 CM7 大調母體上（`NTT = Melody`），琴端手彈 C ➔ Em ➔ Am ➔ Dm 轉調 100% 精準無瑕疵！
      - **Meta 0x59 大調標籤審查**：當 MIDI 宣告大調時，微弱差距堅定尊重 C Major，避免全曲副歌小調音符比重高導致大調主歌被誤套用小調移調。
-     - 單元測試 `tests/test-slice-chord-modes.test.ts` 與 `tests/test-rongyi-minor-detection.test.ts` 全數通過驗證。
+     - 單元測試 `tests/test-slice-chord-modes.test.ts` 與 `tests/test-rongyi-minor-detection.test.ts` (5/5) 全數通過驗證。
 
 2. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
    - **背景**：如《容易受傷的女人》第 26~33 小節切為 `Intro B` 時，需要連同前奏/間奏 Solo 電吉他與弦樂鋪底共 7 軌齊開；而切為 `Main A`（第 6~13 小節）時則應維持純伴奏律動，排除斷續 Solo。

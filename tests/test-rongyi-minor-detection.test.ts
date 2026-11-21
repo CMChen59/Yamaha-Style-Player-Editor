@@ -109,5 +109,28 @@ describe('《容易受傷的女人》C 大調主歌與段落和弦基準模式�
     expect(bassRule?.sourceChordType).toBe(2); // Maj7 / Maj
     expect(phraseRule?.sourceChordRoot).toBe(0); // C
     expect(phraseRule?.sourceChordType).toBe(2); // Maj7 / Maj
+
+    // 檢查半小節和弦分析結果 (Sub-bar 2-beat resolution)
+    const chords = result.detectedChordsByBar;
+    expect(chords.find(c => c.bar === 6)?.chordName).toBe('G-C');
+    expect(chords.find(c => c.bar === 7)?.chordName).toBe('Em-Am');
+    expect(chords.find(c => c.bar === 8)?.chordName).toBe('Em-Dm');
+    expect(chords.find(c => c.bar === 9)?.chordName).toBe('Am-F');
+    expect(chords.find(c => c.bar === 10)?.chordName).toBe('G-C');
+  });
+
+  it('5. 半小節和弦分析 (detectSubBarChords) 應精準將一小節雙和弦 (如 Bar 7 Em-Am) 拆解為 2 拍一個子區間', () => {
+    if (!fs.existsSync(filePath)) return;
+    const buf = new Uint8Array(fs.readFileSync(filePath));
+    const parsed = YamahaParser.parse(buf, 'MIDI');
+    const ppq = parsed.division || 96;
+    const ticksPerBar = ppq * 4;
+
+    const subChords = MidiSliceAssembler.detectSubBarChords(parsed, 7, ticksPerBar, 1);
+    expect(subChords).toHaveLength(2);
+    expect(subChords[0].chordName).toBe('Em');
+    expect(subChords[0].shiftToC).toBe(-4);
+    expect(subChords[1].chordName).toBe('Am');
+    expect(subChords[1].shiftToC).toBe(3);
   });
 });
