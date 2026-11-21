@@ -13,7 +13,7 @@ import {
 import type { MidiSongAnalysis } from '../core/parser/midi-song-analyzer';
 import type { YamahaFileParsed } from '../core/models/types';
 import { ALL_STANDARD_SECTIONS } from '../core/models/style-types';
-import { MidiSliceAssembler, type SliceChordMode } from '../core/writer/midi-slice-assembler';
+import { MidiSliceAssembler, type SliceChordMode, type BarChordInfo } from '../core/writer/midi-slice-assembler';
 
 export interface MidiSliceAssignConfig {
   startBar: number;
@@ -218,14 +218,28 @@ export class MidiSliceAssignModal {
     const sec = this.selectSectionEl.value || 'Main A';
     const isIntroOrEnding = /^(intro|ending)/i.test(sec.trim());
 
-    // 取得切片起始小節調性
-    let startChord: { chordName: string; isMinor: boolean; rootName: string } | null = null;
+    // 取得全曲主調判定
+    const isSongMinor = this.currentAnalysis?.isMinorKey ?? (this.currentAnalysis?.keySignatureLabel?.toLowerCase().includes('minor') ?? false);
+    const songTonic = this.currentAnalysis?.detectedTonic || (isSongMinor ? 'A' : 'C');
+
+    // 取得切片代表性和弦與起始小節和弦 (支援弱起前奏向後嗅探 Lookahead Fallback)
+    let repChord: (BarChordInfo & { effectiveBar: number }) | null = null;
+    let startChord: BarChordInfo | null = null;
+
     if (this.currentSourceParsed) {
       const srcPpq = this.currentSourceParsed.division || 480;
       const timeSig = this.currentSourceParsed.timeSignature || { numerator: 4, denominator: 4 };
       const beats = timeSig.numerator * (4 / timeSig.denominator);
       const ticksPerBar = Math.round(srcPpq * beats);
       const bassAssign = this.currentPlan?.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
+
+      repChord = MidiSliceAssembler.detectRepresentativeChord(
+        this.currentSourceParsed,
+        this.currentStartBar,
+        this.currentEndBar,
+        ticksPerBar,
+        bassAssign?.sourceChannel
+      );
       startChord = MidiSliceAssembler.detectBarChord(
         this.currentSourceParsed,
         this.currentStartBar,
@@ -234,20 +248,20 @@ export class MidiSliceAssignModal {
       );
     }
 
-    const isMinor = startChord ? startChord.isMinor : (this.currentAnalysis?.keySignatureLabel?.toLowerCase().includes('m') ?? false);
-    const chordDesc = startChord ? startChord.chordName : (isMinor ? '小調' : '大調');
+    // 判定小調屬性：全曲為主調小調，或代表性和弦為小調
+    const isEffectiveMinor = isSongMinor || (repChord?.isMinor ?? false);
 
     if (autoSelect) {
       if (isIntroOrEnding) {
-        // 前奏 / 尾奏：小調推薦 Cm 基準 (Yamaha SX900 標準)，大調推薦原曲直通
-        if (isMinor) {
+        // 前奏 / 尾奏：小調預設推薦 Cm 基準 (Yamaha SFF2 原廠標準)，大調推薦原曲直通
+        if (isEffectiveMinor) {
           this.radioMinorEl.checked = true;
         } else {
           this.radioPassThroughEl.checked = true;
         }
       } else {
         // 循環伴奏 Main / Fill：小調選 Cm，大調選 CM7
-        if (isMinor) {
+        if (isEffectiveMinor) {
           this.radioMinorEl.checked = true;
         } else {
           this.radioMajorEl.checked = true;
@@ -258,9 +272,21 @@ export class MidiSliceAssignModal {
     // 更新推薦徽章
     if (this.chordHintBadgeEl) {
       const recMode = isIntroOrEnding
-        ? (isMinor ? 'Cm 小調 (或原曲直通)' : '原曲和弦直通')
-        : (isMinor ? 'Cm 小調基準' : 'CM7 大調基準');
-      this.chordHintBadgeEl.innerHTML = `💡 偵測調性：<strong>${chordDesc}</strong> (${isMinor ? '小調' : '大調'}) ➔ 系統推薦：<strong>${recMode}</strong>`;
+        ? (isEffectiveMinor ? 'Cm 小調 (或原曲直通)' : '原曲和弦直通')
+        : (isEffectiveMinor ? 'Cm 小調基準' : 'CM7 大調基準');
+
+      let detailHint = '';
+      if (isSongMinor) {
+        if (startChord?.isPickupOrSparse) {
+          detailHint = `全曲主調：<strong>${songTonic} Minor (小調)</strong> · 第 ${this.currentStartBar} 節弱起 (第 ${repChord?.effectiveBar ?? this.currentStartBar} 節 ${repChord?.chordName || '進場'})`;
+        } else {
+          detailHint = `全曲主調：<strong>${songTonic} Minor (小調)</strong> · 起點 [${startChord?.chordName || songTonic}]`;
+        }
+      } else {
+        detailHint = `全曲主調：<strong>${songTonic} Major (大調)</strong> · 起點 [${repChord?.chordName || songTonic}]`;
+      }
+
+      this.chordHintBadgeEl.innerHTML = `💡 偵測調性：${detailHint} ➔ 系統推薦：<strong>${recMode}</strong>`;
     }
 
     this.updateNormDescription();

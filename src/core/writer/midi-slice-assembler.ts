@@ -21,6 +21,8 @@ export interface BarChordInfo {
   isMinor: boolean;
   shiftToC: number;
   chordName: string;
+  isSilent?: boolean;
+  isPickupOrSparse?: boolean;
 }
 
 export type SliceChordMode = 'CM_MINOR' | 'CM7_MAJOR' | 'ORIGINAL_PASS_THROUGH';
@@ -140,9 +142,14 @@ export class MidiSliceAssembler {
     const bassAssign = mappingPlan.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
     const bassCh = bassAssign ? bassAssign.sourceChannel : undefined;
 
-    // 分析切片起始小節和弦
+    // 分析切片代表性和弦與起始小節和弦 (支援弱起前奏向後探測 Lookahead Fallback)
+    const repChord = MidiSliceAssembler.detectRepresentativeChord(sourceParsed, startBar, endBar, ticksPerBarSrc, bassCh);
     const startChord = MidiSliceAssembler.detectBarChord(sourceParsed, startBar, ticksPerBarSrc, bassCh);
-    const isSongMinor = startChord.isMinor || (analysis.keySignatureLabel && analysis.keySignatureLabel.toLowerCase().includes('m'));
+
+    // 全曲調性小調判定：優先讀取 analysis.isMinorKey，或分析調性名稱是否包含 'minor' (修復以前 includes('m') 誤判 'major' 的 bug)
+    const isSongMinor = analysis.isMinorKey !== undefined
+      ? analysis.isMinorKey
+      : (repChord.isMinor || (analysis.keySignatureLabel && analysis.keySignatureLabel.toLowerCase().includes('minor')));
 
     let effectiveChordMode: SliceChordMode;
     if (options.chordMode) {
@@ -151,7 +158,7 @@ export class MidiSliceAssembler {
       effectiveChordMode = options.normalizeChordsToC ? (isSongMinor ? 'CM_MINOR' : 'CM7_MAJOR') : 'ORIGINAL_PASS_THROUGH';
     } else {
       if (isIntroOrEnding) {
-        effectiveChordMode = 'ORIGINAL_PASS_THROUGH';
+        effectiveChordMode = isSongMinor ? 'CM_MINOR' : 'ORIGINAL_PASS_THROUGH';
       } else {
         effectiveChordMode = isSongMinor ? 'CM_MINOR' : 'CM7_MAJOR';
       }
@@ -160,8 +167,8 @@ export class MidiSliceAssembler {
     const barChordMap = new Map<number, BarChordInfo>();
     const detectedChordsByBar: Array<{ bar: number; chordName: string; shiftToC: number }> = [];
 
-    // 計算全曲/段落均一移調至 Cm 所需半音數 (例如 Am -> Cm 為 +3)
-    const songOrStartRootName = startChord.rootName;
+    // 計算全曲/段落均一移調至 Cm 所需半音數 (若全曲為小調且有主音標記，優先依據全曲主音平移；例如 Am -> Cm 為 +3)
+    const songOrStartRootName = isSongMinor && analysis.detectedTonic ? analysis.detectedTonic : repChord.rootName;
     const uniformShiftToCm = -ROOT_SEMITONES_FROM_C[songOrStartRootName] || 0;
 
     for (let b = startBar; b <= endBar; b++) {
@@ -578,6 +585,23 @@ export class MidiSliceAssembler {
       }
     }
 
+    const totalNotes = pitchCounts.reduce((s, v) => s + v, 0);
+    const distinctPitches = pitchCounts.filter(c => c > 0).length;
+
+    // 若小節完全無音符 (空小節 / 靜音)
+    if (totalNotes === 0) {
+      return {
+        bar,
+        rootName: 'C',
+        rootPitchClass: 0,
+        isMinor: false,
+        shiftToC: 0,
+        chordName: 'N.C.',
+        isSilent: true,
+        isPickupOrSparse: true,
+      };
+    }
+
     // 決定根音音級 (Root Pitch Class: 0 ~ 11)
     let rootPc = 0;
     if (bassPitch !== null) {
@@ -599,6 +623,9 @@ export class MidiSliceAssembler {
     const majorThirdCount = pitchCounts[(rootPc + 4) % 12];
     const isMinor = minorThirdCount > majorThirdCount;
 
+    // 若無明確貝斯且音級少於 3 個，或者同時缺乏小三度與大三度音，標記為弱起前導音或稀疏小節
+    const isPickupOrSparse = bassPitch === null && (distinctPitches < 3 || (minorThirdCount === 0 && majorThirdCount === 0));
+
     // 計算反向移調至 C 基準大調所需的半音位移量 (shiftToC)
     // 依據 ROOT_SEMITONES_FROM_C，shiftToC = -ROOT_SEMITONES_FROM_C[rootName]
     const semitonesFromC = ROOT_SEMITONES_FROM_C[rootName] ?? 0;
@@ -613,7 +640,36 @@ export class MidiSliceAssembler {
       isMinor,
       shiftToC,
       chordName,
+      isSilent: false,
+      isPickupOrSparse,
     };
+  }
+
+  /**
+   * 智慧偵測切片區間 [startBar, endBar] 之代表性起點和弦 (具備弱起拍向後探測 Lookahead Fallback)
+   * 若 startBar 為空小節或弱起前導音，自動向後嗅探區間內第一個真正具備和聲/低音進場的小節
+   */
+  public static detectRepresentativeChord(
+    sourceParsed: YamahaFileParsed,
+    startBar: number,
+    endBar: number,
+    ticksPerBar: number,
+    bassChannel?: number
+  ): BarChordInfo & { effectiveBar: number } {
+    let firstNonSilent: BarChordInfo | null = null;
+
+    for (let b = startBar; b <= endBar; b++) {
+      const chord = this.detectBarChord(sourceParsed, b, ticksPerBar, bassChannel);
+      if (!chord.isSilent && !chord.isPickupOrSparse) {
+        return { ...chord, effectiveBar: b };
+      }
+      if (!firstNonSilent && !chord.isSilent) {
+        firstNonSilent = chord;
+      }
+    }
+
+    const fallback = firstNonSilent || this.detectBarChord(sourceParsed, startBar, ticksPerBar, bassChannel);
+    return { ...fallback, effectiveBar: fallback.bar };
   }
 
   /**

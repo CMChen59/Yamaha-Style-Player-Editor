@@ -95,6 +95,8 @@ export interface MidiSongAnalysis {
   timeSignature: { numerator: number; denominator: number };
   timeSignatureEvents: MidiTimeSignaturePoint[];
   keySignatureLabel: string;
+  detectedTonic?: string;                     // 樂曲主音 (如 'A', 'C', 'G')
+  isMinorKey?: boolean;                       // 是否為小調 (true: 小調, false: 大調)
   totalTicks: number;
   ticksPerBar: number;
   totalBars: number;
@@ -167,7 +169,7 @@ export class MidiSongAnalyzer {
     const tempoEvents: MidiTempoPoint[] = [];
     const timeSignatureEvents: MidiTimeSignaturePoint[] = [];
     const songMarkers: MidiMarkerPoint[] = [];
-    let metaKeySig: string | null = null;
+    let metaKeySigRaw: { sharpsFlats: number; isMinor: number } | null = null;
 
     // 16 通道統計容器
     interface ChAccum {
@@ -253,10 +255,10 @@ export class MidiSongAnalyzer {
             timeSignatureEvents.push({ tick: curTick, bar, numerator: tNum, denominator: tDen });
           }
           // Key Signature (0x59)
-          else if (ev.metaType === 0x59 && ev.metaData && ev.metaData.length >= 2 && !metaKeySig) {
+          else if (ev.metaType === 0x59 && ev.metaData && ev.metaData.length >= 2 && !metaKeySigRaw) {
             const sf = ev.metaData[0] > 127 ? ev.metaData[0] - 256 : ev.metaData[0];
             const mi = ev.metaData[1];
-            metaKeySig = this.formatKeySignatureMeta(sf, mi);
+            metaKeySigRaw = { sharpsFlats: sf, isMinor: mi };
           }
           // Marker / Cue (0x06 / 0x07)
           else if ((ev.metaType === 0x06 || ev.metaType === 0x07) && ev.text) {
@@ -348,8 +350,9 @@ export class MidiSongAnalyzer {
     const durationSeconds = this.computeDurationSeconds(totalTicks, division, tempoEvents);
     const formattedDuration = formatDurationMmSs(durationSeconds);
 
-    // 調號判定
-    const keySignatureLabel = metaKeySig || this.estimateKeyFromHistogram(pitchClassHistogram);
+    // 調號判定 (結合 Meta 0x59 與 K-S 十二音級演算法之關係大小調智慧校驗)
+    const keyAnalysis = this.determineKeySignature(metaKeySigRaw, pitchClassHistogram);
+    const keySignatureLabel = keyAnalysis.label;
 
     // 整理 16 通道樂器與音符統計
     const activeChannels: MidiChannelAnalysis[] = [];
@@ -452,6 +455,8 @@ export class MidiSongAnalyzer {
       timeSignature: { numerator: num, denominator: den },
       timeSignatureEvents,
       keySignatureLabel,
+      detectedTonic: keyAnalysis.tonic,
+      isMinorKey: keyAnalysis.isMinor,
       totalTicks,
       ticksPerBar,
       totalBars,
@@ -513,9 +518,26 @@ export class MidiSongAnalyzer {
     return `${majorKeys[sharpsFlats] || 'C Major'} (MIDI 內嵌標記)`;
   }
 
-  private static estimateKeyFromHistogram(hist: number[]): string {
+  private static determineKeySignature(
+    metaRaw: { sharpsFlats: number; isMinor: number } | null,
+    hist: number[]
+  ): { label: string; tonic: string; isMinor: boolean } {
     const total = hist.reduce((s, v) => s + v, 0);
-    if (total === 0) return 'C Major (預設)';
+    if (total === 0) {
+      if (metaRaw) {
+        const sf = metaRaw.sharpsFlats;
+        const isMin = metaRaw.isMinor === 1;
+        const majorRoot = ((sf * 7) % 12 + 12) % 12;
+        const minorRoot = (majorRoot + 9) % 12;
+        const tonic = isMin ? NOTE_NAMES[minorRoot] : NOTE_NAMES[majorRoot];
+        return {
+          label: this.formatKeySignatureMeta(sf, metaRaw.isMinor),
+          tonic,
+          isMinor: isMin,
+        };
+      }
+      return { label: 'C Major (預設)', tonic: 'C', isMinor: false };
+    }
 
     // Krumhansl-Schmuckler 大調與小調權重模板
     const majorProfile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
@@ -525,6 +547,8 @@ export class MidiSongAnalyzer {
     let bestMode: 'Major' | 'Minor' = 'Major';
     let bestScore = -Infinity;
 
+    const scores: Array<{ root: number; mode: 'Major' | 'Minor'; score: number }> = [];
+
     for (let root = 0; root < 12; root++) {
       let majScore = 0;
       let minScore = 0;
@@ -533,6 +557,9 @@ export class MidiSongAnalyzer {
         majScore += count * majorProfile[i];
         minScore += count * minorProfile[i];
       }
+      scores.push({ root, mode: 'Major', score: majScore });
+      scores.push({ root, mode: 'Minor', score: minScore });
+
       if (majScore > bestScore) {
         bestScore = majScore;
         bestRoot = root;
@@ -545,7 +572,57 @@ export class MidiSongAnalyzer {
       }
     }
 
-    return `${NOTE_NAMES[bestRoot]} ${bestMode} (智慧推算)`;
+    if (metaRaw) {
+      const sf = metaRaw.sharpsFlats;
+      // 若原標記已明確指定為小調 (isMinor === 1)，採信其小調標記
+      if (metaRaw.isMinor === 1) {
+        const majorRoot = ((sf * 7) % 12 + 12) % 12;
+        const minorRoot = (majorRoot + 9) % 12;
+        return {
+          label: this.formatKeySignatureMeta(sf, 1),
+          tonic: NOTE_NAMES[minorRoot],
+          isMinor: true,
+        };
+      }
+
+      // 若原標記為大調 (isMinor === 0，在多數 DAW 為預設值)：
+      // 檢驗該調號對應之「關係大調」與「關係小調」
+      const majorRoot = ((sf * 7) % 12 + 12) % 12;
+      const minorRoot = (majorRoot + 9) % 12;
+
+      const majScore = scores.find(s => s.root === majorRoot && s.mode === 'Major')?.score ?? -Infinity;
+      const minScore = scores.find(s => s.root === minorRoot && s.mode === 'Minor')?.score ?? -Infinity;
+
+      // 若關係小調的分數高於關係大調 (例如 《容易受傷的女人》 A Minor 12445 > C Major 12090)：
+      if (minScore > majScore) {
+        return {
+          label: `${NOTE_NAMES[minorRoot]} Minor (智慧校正關係小調)`,
+          tonic: NOTE_NAMES[minorRoot],
+          isMinor: true,
+        };
+      }
+
+      // 若 K-S 最佳調性非常突出且得分顯著超過 metaKey
+      if (bestScore > majScore * 1.05 && bestMode === 'Minor') {
+        return {
+          label: `${NOTE_NAMES[bestRoot]} Minor (音高分析推算)`,
+          tonic: NOTE_NAMES[bestRoot],
+          isMinor: true,
+        };
+      }
+
+      return {
+        label: `${NOTE_NAMES[majorRoot]} Major (MIDI 內嵌標記)`,
+        tonic: NOTE_NAMES[majorRoot],
+        isMinor: false,
+      };
+    }
+
+    return {
+      label: `${NOTE_NAMES[bestRoot]} ${bestMode} (智慧推算)`,
+      tonic: NOTE_NAMES[bestRoot],
+      isMinor: bestMode === 'Minor',
+    };
   }
 
   /**
