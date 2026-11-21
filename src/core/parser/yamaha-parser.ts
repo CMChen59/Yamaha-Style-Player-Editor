@@ -207,11 +207,12 @@ export class YamahaParser {
             trackName = metaText;
           }
 
-          // Yamaha Section Marker 通常為 Meta 0x06 (Marker)、0x07 (Cue Point) 或 0x01 (Text Event，如 Multi Pad 控制標記)
+          // Yamaha Section Marker 通常為 Meta 0x06 (Marker) 或 0x07 (Cue Point)
+          // Meta 0x01 則用於 Multi Pad 控制標籤 (RP, CM, N1-4, I1-4) 或 Yamaha Style 全名註記 (fn:xxx)
           if ((metaType === 0x01 || metaType === 0x06 || metaType === 0x07) && metaText) {
             const trimmed = metaText.trim();
 
-            // 檢查是否為 Yamaha Pad 專屬控制標籤 (非實際音樂段落)
+            // 1. 檢查是否為 Yamaha Pad 專屬控制標籤 (非實際音樂段落)
             if (trimmed.startsWith('RP') && trimmed.length >= 6) {
               // Repeat Flags: 例如 RP0000 ➔ [false, false, false, false]
               padConfig.repeatFlags = [
@@ -240,14 +241,22 @@ export class YamahaParser {
               if (padIdx >= 0 && padIdx < 4) {
                 padConfig.icons[padIdx] = trimmed.substring(2);
               }
-            } else {
-              // 正式音樂段落標記
-              sections.push({
-                name: trimmed,
-                startTick: currentTick,
-              });
-              if (!['SFF1', 'SFF2', 'SInt'].includes(trimmed)) {
-                isInitialRegion = false;
+            } else if (trimmed.toLowerCase().startsWith('fn:')) {
+              // 2. Yamaha Style Section Full Name 標籤 (例如 "fn:Main A"、"fn:Intro B")，非獨立音樂段落
+              if (sections.length > 0) {
+                sections[sections.length - 1].fullName = trimmed.substring(3).replace(/\0/g, '').trim();
+              }
+            } else if (metaType === 0x06 || metaType === 0x07) {
+              // 3. 正式音樂段落標記 (Meta 0x06 Marker 或 0x07 Cue Point)
+              const lastSec = sections.length > 0 ? sections[sections.length - 1] : null;
+              if (!lastSec || lastSec.startTick !== currentTick || lastSec.name.toLowerCase() !== trimmed.toLowerCase()) {
+                sections.push({
+                  name: trimmed,
+                  startTick: currentTick,
+                });
+                if (!['SFF1', 'SFF2', 'SInt'].includes(trimmed)) {
+                  isInitialRegion = false;
+                }
               }
             }
           }

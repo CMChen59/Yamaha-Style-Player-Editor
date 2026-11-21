@@ -36,6 +36,7 @@ export interface YamahaSectionControllers {
 
 export interface YamahaSection {
   name: string;          // 如 'Main A', 'Intro A', 'Fill In AA'
+  fullName?: string;     // Yamaha 擴充全名標籤 (例如 'fn:Main A' 中的全名)
   startTick: number;     // 區段起始 Tick
   endTick?: number;      // 區段結束 Tick
   measureCount?: number; // 小節數量

@@ -43,6 +43,10 @@
   - **STY 之 CASM 強大解法**：與無 CASM 的 Multi Pad 不同，STY 擁有完整 CASM 結構，支援 `NTT = Melody / Harmonic Minor / Bypass` 以及獨立的 Minor Chord Table (`Ctb2`)。未來重審與優化 STY 切片時，必須運用此大小調音階與導音保護經驗，精確配置 CASM 聲部屬性。
 
 ### 3. MIDI 全景透視與切片 UI 已定案設計
+- **Yamaha Style `fn:` 全名標籤防呆隔離鐵律**：
+  - Yamaha 原廠琴（SX900/SX920/Genos）與 Style Creator 產出之 `.STY` 伴奏檔，在 Track 0 每個段落起始處皆同時寫入 `Meta 0x06 (Marker，如 "Main A")` 與 `Meta 0x01 (Text Event，如 "fn:Main A")`。
+  - 解析器若將 `0x01` 誤判為獨立音樂段落，會因兩者時間軸完全重疊（同 Tick）導致所有正式段落小節長度被腰斬為 0，引發全檔完全無法發聲。
+  - 已在 [`yamaha-parser.ts`](src/core/parser/yamaha-parser.ts) 將 `fn:` 識別為 Section Full Name 屬性並予以過濾隔離，正式段落僅接受 `Meta 0x06/0x07`，徹底杜絕 0 小節段落產生。
 - **Big5 / GBK 雙重編碼自動偵測**：[`yamaha-parser.ts`](src/core/parser/yamaha-parser.ts) 已支援中文軌道名稱與歌詞標記無亂碼解析。
 - **伴奏映射呈現規範**：以**樂器名稱為主、原曲 MIDI Ch 為輔**，方便使用者直覺核對。
 - **按鈕防跳動與狀態同步**：
