@@ -1,6 +1,6 @@
 # 📊 Yamaha Style Player & Editor — 專案進度與待辦總表 (Single Source of Truth)
 
-> **最後更新**：2026-11-20 (收工同步)  
+> **最後更新**：2026-11-21 (收工同步)  
 > **使用說明**：本檔案為跨電腦（公司 ↔ 家裡）的**唯一進度基準**。凡已列入「✅ 已完成並封存」之項目，均已通過測試與實機驗證，請勿重複確認或重做；新對話開始時請直接聚焦於「🚧 當前待處理項目」。
 
 ---
@@ -16,21 +16,21 @@
 | **【任務 2-3】** | **智慧聲部映射、主旋律排除與小節切片裝配引擎** | [`midi-part-assign-matrix.ts`](../src/core/writer/midi-part-assign-matrix.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) | ✅ 已完成（含純伴奏試聽自動復原、曲中生效音色回溯 `getEffectiveVoiceAtBar`、多段落累積整合至同一 STY） |
 | **【任務 2-4 初版】** | **Main/Fill 段落和弦反向正規化初版 & 原曲 vs STY 實測解密** | [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`inspect-rongyi-user-midi.test.ts`](../tests/inspect-rongyi-user-midi.test.ts) | ✅ 已完成初版（解開《容易受傷的女人》1~5 節 Intro A、6~13 節 Main A、26~33 節 Intro B 7 軌齊奏規律） |
 | **【任務 4-1 基礎】** | **Multi Pad (.PAD) 二進位結構解析與全軌屬性寫入** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`yamaha-writer.ts`](../src/core/writer/yamaha-writer.ts) | ✅ 已完成（完整支援 5 軌 SMF1 結構、`CMxxxx` / `RPxxxx` / `N1~N4` 控制標記） |
-| **【任務 4-1 進階】** | **Multi Pad 純調性剛體平移轉換規則與實機驗收** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`compare-am-em-pads.test.ts`](../tests/compare-am-em-pads.test.ts) | ✅ 已完成並實機驗證（PSR-SX920《空港》Am vs Em 原調發聲 100% 正確、演歌導音零失真、CM0000 鎖定） |
+| **【任務 4-1 終極】** | **Multi Pad 和弦跟隨適用邊界、固定調性鐵律與 STY 插音分工架構實機結案** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`GEMINI.md`](../GEMINI.md), `2010_空港_Intro_Am調.PAD` | ✅ 已完成並實機結案（PSR-SX920 雙向驗收：證實長旋律開 CM 必走音，CM0000 指定調性為 100% 依譜還原唯一解；插音歸 STY Phrase 聲部） |
 
 ---
 
 ## 🚧 二、 當前待處理項目 (Active To-Do List)
 
-### 🚨 【重大專案 Issue 追蹤】Multi Pad (.PAD) 和弦跟隨 (Chord Match) 與固定調性轉換（《空港》實測結案）
+### 🚨 【已結案里程碑存檔】Multi Pad (.PAD) 和弦跟隨 (Chord Match) 與固定調性轉換（《空港》實測定案）
 
 - **Issue 編號**：`ISSUE-20261119-PAD-CHORD-MATCH`
-- **狀態**：**✅ 已定案結案並封存 (2026-11-21 實機驗收通過)**
+- **狀態**：**✅ 已徹底定案結案並永久封存 (2026-11-21 PSR-SX920 實機驗收通過)**
 - **實機驗證結論 (Confirmed via PSR-SX920 & Balloon.S910.pad)**：
   1. **原廠黃金標準證實 (`Balloon.S910.pad`)**：
      - 原廠 Multi Pad 無 CASM 區塊。
      - 僅有第 3 軌（純 1、5 音琶音脈衝，C5 與 G5）開啟 `CM0010`。
-     - 第 1、2、4 軌之旋律與切音在原廠琴端手動錄製時一律設為 `CM = OFF`，證實旋律長樂句嚴禁開啟 Chord Match。
+     - 第 1、2、4 軌之旋律與切音在原廠琴端手動錄製時一律設為 `CM = OFF`，證實旋律長樂句原廠鐵律設為 OFF。
   2. **Chord Match 適用邊界與指定調性鐵律（實機雙向驗證）**：
      - **邊界確認**：Multi Pad 和弦跟隨（Chord Match）並非所有樂句皆可行。純 1、5 音琶音可開；但凡帶有內在和聲轉折（如第 7 小節前半拍 $7.6$、後半拍 $Am \to E7$ 導音花音）之長前奏/主旋律，若開 Chord Match，琴端自然小調演算法會強行拔除升記號（$G\# \to G, F\# \to F$），且小節內換和弦會撕裂旋律，純靠即時運算物理上無法成立。
      - **唯一正解**：長旋律前奏依譜 100% 原汁原味完美還原的唯一途徑，即為**「指定調性專屬 PAD (CM0000 剛體平移)」**。
