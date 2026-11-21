@@ -593,8 +593,9 @@ export class MidiSongAnalyzer {
       const majScore = scores.find(s => s.root === majorRoot && s.mode === 'Major')?.score ?? -Infinity;
       const minScore = scores.find(s => s.root === minorRoot && s.mode === 'Minor')?.score ?? -Infinity;
 
-      // 若關係小調的分數高於關係大調 (例如 《容易受傷的女人》 A Minor 12445 > C Major 12090)：
-      if (minScore > majScore) {
+      // 只有當關係小調的分數顯著高於關係大調 (差距超過 15%)，才判定為作者誤設標籤之小調曲目
+      // 若差距微弱 (例如流行歌大調主歌、關係小調副歌交織進行)，堅定尊重原作者內嵌之 Major 標記
+      if (minScore > majScore * 1.15) {
         return {
           label: `${NOTE_NAMES[minorRoot]} Minor (智慧校正關係小調)`,
           tonic: NOTE_NAMES[minorRoot],

@@ -167,9 +167,9 @@ export class MidiSliceAssembler {
     const barChordMap = new Map<number, BarChordInfo>();
     const detectedChordsByBar: Array<{ bar: number; chordName: string; shiftToC: number }> = [];
 
-    // 計算全曲/段落均一移調至 Cm 所需半音數 (若全曲為小調且有主音標記，優先依據全曲主音平移；例如 Am -> Cm 為 +3)
-    const songOrStartRootName = isSongMinor && analysis.detectedTonic ? analysis.detectedTonic : repChord.rootName;
-    const uniformShiftToCm = -ROOT_SEMITONES_FROM_C[songOrStartRootName] || 0;
+    // 計算切片均一移調至 Cm 所需半音數 (若切片代表和弦為小調，以該切片起點根音為準，例如 Am -> Cm 為 +3；若全曲為小調且無起點，回退至全曲主音)
+    const effectiveMinorRoot = repChord.isMinor ? repChord.rootName : (isSongMinor && analysis.detectedTonic ? analysis.detectedTonic : repChord.rootName);
+    const uniformShiftToCm = -ROOT_SEMITONES_FROM_C[effectiveMinorRoot] || 0;
 
     for (let b = startBar; b <= endBar; b++) {
       const cInfo = MidiSliceAssembler.detectBarChord(sourceParsed, b, ticksPerBarSrc, bassCh);
@@ -629,7 +629,7 @@ export class MidiSliceAssembler {
     // 計算反向移調至 C 基準大調所需的半音位移量 (shiftToC)
     // 依據 ROOT_SEMITONES_FROM_C，shiftToC = -ROOT_SEMITONES_FROM_C[rootName]
     const semitonesFromC = ROOT_SEMITONES_FROM_C[rootName] ?? 0;
-    const shiftToC = -semitonesFromC;
+    const shiftToC = semitonesFromC === 0 ? 0 : -semitonesFromC;
 
     const chordName = `${rootName}${isMinor ? 'm' : ''}`;
 

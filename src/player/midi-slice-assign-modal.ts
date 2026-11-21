@@ -218,10 +218,6 @@ export class MidiSliceAssignModal {
     const sec = this.selectSectionEl.value || 'Main A';
     const isIntroOrEnding = /^(intro|ending)/i.test(sec.trim());
 
-    // 取得全曲主調判定
-    const isSongMinor = this.currentAnalysis?.isMinorKey ?? (this.currentAnalysis?.keySignatureLabel?.toLowerCase().includes('minor') ?? false);
-    const songTonic = this.currentAnalysis?.detectedTonic || (isSongMinor ? 'A' : 'C');
-
     // 取得切片代表性和弦與起始小節和弦 (支援弱起前奏向後嗅探 Lookahead Fallback)
     let repChord: (BarChordInfo & { effectiveBar: number }) | null = null;
     let startChord: BarChordInfo | null = null;
@@ -248,20 +244,19 @@ export class MidiSliceAssignModal {
       );
     }
 
-    // 判定小調屬性：全曲為主調小調，或代表性和弦為小調
-    const isEffectiveMinor = isSongMinor || (repChord?.isMinor ?? false);
+    // 切片起點和弦與調性屬性 (以代表性和弦為首要依據)
+    const effectiveChord = repChord || startChord;
+    const isSliceMinor = effectiveChord?.isMinor ?? false;
+    const chordName = effectiveChord?.chordName || (isSliceMinor ? 'Am' : 'C');
+    const effectiveBarNumber = repChord?.effectiveBar ?? startChord?.bar ?? this.currentStartBar;
 
     if (autoSelect) {
       if (isIntroOrEnding) {
-        // 前奏 / 尾奏：小調預設推薦 Cm 基準 (Yamaha SFF2 原廠標準)，大調推薦原曲直通
-        if (isEffectiveMinor) {
-          this.radioMinorEl.checked = true;
-        } else {
-          this.radioPassThroughEl.checked = true;
-        }
+        // 前奏 / 尾奏：標準原廠實踐一律推薦「原曲和弦直通」(保留樂隊齊奏/前奏木吉他/Solo 原汁原味編曲)
+        this.radioPassThroughEl.checked = true;
       } else {
-        // 循環伴奏 Main / Fill：小調選 Cm，大調選 CM7
-        if (isEffectiveMinor) {
+        // 循環伴奏 Main / Fill：切片起點為小調選 Cm，起點為大調選 CM7
+        if (isSliceMinor) {
           this.radioMinorEl.checked = true;
         } else {
           this.radioMajorEl.checked = true;
@@ -271,19 +266,20 @@ export class MidiSliceAssignModal {
 
     // 更新推薦徽章
     if (this.chordHintBadgeEl) {
-      const recMode = isIntroOrEnding
-        ? (isEffectiveMinor ? 'Cm 小調 (或原曲直通)' : '原曲和弦直通')
-        : (isEffectiveMinor ? 'Cm 小調基準' : 'CM7 大調基準');
-
       let detailHint = '';
-      if (isSongMinor) {
-        if (startChord?.isPickupOrSparse) {
-          detailHint = `全曲主調：<strong>${songTonic} Minor (小調)</strong> · 第 ${this.currentStartBar} 節弱起 (第 ${repChord?.effectiveBar ?? this.currentStartBar} 節 ${repChord?.chordName || '進場'})`;
-        } else {
-          detailHint = `全曲主調：<strong>${songTonic} Minor (小調)</strong> · 起點 [${startChord?.chordName || songTonic}]`;
-        }
+      let recMode = '';
+
+      if (isIntroOrEnding) {
+        recMode = '原曲和弦直通 (NTT = Bypass)';
+        detailHint = `段落屬性：<strong>${sec} (固定編曲樂句)</strong> · 起點 [${chordName}]`;
       } else {
-        detailHint = `全曲主調：<strong>${songTonic} Major (大調)</strong> · 起點 [${repChord?.chordName || songTonic}]`;
+        if (isSliceMinor) {
+          recMode = 'Cm 小調基準 (Yamaha SFF2 標準)';
+          detailHint = `切片起點：第 ${effectiveBarNumber} 節 <strong>[${chordName}] (小調)</strong>`;
+        } else {
+          recMode = 'CM7 大調基準 (Yamaha 原廠標準)';
+          detailHint = `切片起點：第 ${effectiveBarNumber} 節 <strong>[${chordName}] (大調)</strong>`;
+        }
       }
 
       this.chordHintBadgeEl.innerHTML = `💡 偵測調性：${detailHint} ➔ 系統推薦：<strong>${recMode}</strong>`;
