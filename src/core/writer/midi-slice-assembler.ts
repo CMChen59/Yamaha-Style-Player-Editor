@@ -237,12 +237,23 @@ export class MidiSliceAssembler {
       srcAssignMap.set(a.sourceChannel, a);
     }
 
-    // 依目標通道 (8 ~ 15) 分組收集提取的音符
+    // 依目標通道 (8 ~ 15) 分組收集提取的音符、彎音與控制器
     const extractedNotesByTargetCh = new Map<number, Array<{
       noteNumber: number;
       relTick: number;
       durationTicks: number;
       velocity: number;
+      sourceChannel: number;
+    }>>();
+    const extractedPitchBendsByTargetCh = new Map<number, Array<{
+      relTick: number;
+      value: number;
+      sourceChannel: number;
+    }>>();
+    const extractedCCsByTargetCh = new Map<number, Array<{
+      relTick: number;
+      controller: number;
+      value: number;
       sourceChannel: number;
     }>>();
 
@@ -318,6 +329,38 @@ export class MidiSliceAssembler {
               subBarChordList
             );
           }
+        } else if (ev.type === 'pitchBend' && ev.value !== undefined) {
+          if (absTick >= startTickSrc && absTick < endTickSrc) {
+            const relTickTarget = Math.round((absTick - startTickSrc) * scaleFactor);
+            if (relTickTarget >= 0 && relTickTarget < maxSectionTicksTarget) {
+              if (!extractedPitchBendsByTargetCh.has(targetChannel)) {
+                extractedPitchBendsByTargetCh.set(targetChannel, []);
+              }
+              extractedPitchBendsByTargetCh.get(targetChannel)!.push({
+                relTick: relTickTarget,
+                value: ev.value,
+                sourceChannel: ev.channel,
+              });
+            }
+          }
+        } else if (ev.type === 'controlChange' && ev.controller !== undefined && ev.value !== undefined) {
+          // 提取表現力相關的動態控制器 (CC1 顫音 Modulation、CC11 表情、CC64 延音)
+          if (ev.controller === 1 || ev.controller === 11 || ev.controller === 64) {
+            if (absTick >= startTickSrc && absTick < endTickSrc) {
+              const relTickTarget = Math.round((absTick - startTickSrc) * scaleFactor);
+              if (relTickTarget >= 0 && relTickTarget < maxSectionTicksTarget) {
+                if (!extractedCCsByTargetCh.has(targetChannel)) {
+                  extractedCCsByTargetCh.set(targetChannel, []);
+                }
+                extractedCCsByTargetCh.get(targetChannel)!.push({
+                  relTick: relTickTarget,
+                  controller: ev.controller,
+                  value: ev.value,
+                  sourceChannel: ev.channel,
+                });
+              }
+            }
+          }
         }
       }
 
@@ -363,13 +406,17 @@ export class MidiSliceAssembler {
       const targetCh = assign.targetChannel;
       const notes = extractedNotesByTargetCh.get(targetCh) || [];
 
-      // 寫入音符至段落指定通道
+      // 寫入音符、真實彎音與控制器至段落指定通道 (同時清除舊範本殘留的幽靈控制器與彎音)
       YamahaStyleModifier.replaceSectionChannelNotes(
         styleParsed,
         targetSection,
         targetCh,
         notes,
-        targetCh
+        targetCh,
+        {
+          pitchBends: extractedPitchBendsByTargetCh.get(targetCh),
+          ccs: extractedCCsByTargetCh.get(targetCh),
+        }
       );
 
       // 同步設定該伴奏聲部的樂器音色與基本混音屬性 (使用起始小節 startBar 當下生效之最新音色與混音參數)
@@ -463,6 +510,9 @@ export class MidiSliceAssembler {
       CasmModifier.injectOrUpdateSectionCasmRule(styleParsed, targetSection, r.channel, r);
     }
 
+    // 8. 全域段落深層淨化與標準時序重整 (確保各段落無舊範本幽靈 CC11，且 CC0/32/PC/CC7 永遠在 NoteOn 之前發送)
+    YamahaStyleModifier.sanitizeAllSectionsEventOrderAndControllers(styleParsed);
+
     let modeDesc = '';
     if (effectiveChordMode === 'CM_MINOR') {
       modeDesc = ` [Cm 小調基準模式 (Yamaha SFF2 標準，源和弦 Cm/Type 8，琴端按小和弦純平行移調無失真)]`;
@@ -520,8 +570,15 @@ export class MidiSliceAssembler {
       return; // 完全在區間之外
     }
 
-    // 裁切音符起訖點至切片區間內
-    const clippedStart = Math.max(startAbsTick, startTickSrc);
+    // [邊界殘留音過濾] 若音符是在切片起點前就已發音 (startAbsTick < startTickSrc)，
+    // 該音符屬於前一小節/樂句的尾音，絕不應在起點處人為重新觸發 NoteOn，
+    // 否則會在第 1 拍產生雙重音、爆音或將前段和弦殘留音帶入新段落。
+    if (startAbsTick < startTickSrc) {
+      return;
+    }
+
+    // 裁切音符起訖點至切片區間內 (收尾結算時 endAbsTick 可能大於 endTickSrc，需截斷)
+    const clippedStart = startAbsTick;
     const clippedEnd = Math.min(endAbsTick, endTickSrc);
     const durationSrc = clippedEnd - clippedStart;
     if (durationSrc <= 0) return;
@@ -533,6 +590,19 @@ export class MidiSliceAssembler {
 
     // 確保不會溢出段落最大邊界
     if (relTickTarget >= maxSectionTicksTarget) return;
+
+    // [微短切片毛邊過濾] 若音符在段落第 1 拍 (relTickTarget === 0) 且長度極短 (< 60 ticks, 約 15ms)，
+    // 屬於前小節切片邊界遺留的微小毛邊雜音 (如 Ending A 之 40-tick 殘留音)，予以排除
+    if (relTickTarget === 0 && durationTarget < 60) {
+      return;
+    }
+
+    // [伴奏起拍防爆音] 伴奏循環段落 (Main A~D) 與前奏 (Intro) 的第 1 拍 (relTickTarget === 0)，
+    // 若為鼓組 (targetChannel 9) 的過渡大碎音鈸 (Note 49 Crash Cymbal 1, Note 57 Crash Cymbal 2)，
+    // 自動過濾排除，避免手彈循環每逢小節起點或前奏開場炸出突兀大鈸
+    if (targetChannel === 9 && relTickTarget === 0 && (noteNumber === 49 || noteNumber === 57)) {
+      return;
+    }
 
     // 尋找當前音符所在之和弦 (優先採信高解析度半小節和弦，無則回退至小節和弦)
     let cInfo: BarChordInfo | undefined;

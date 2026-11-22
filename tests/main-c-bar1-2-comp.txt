@@ -1,0 +1,206 @@
+=== DETAILED EVENT-BY-EVENT COMPARISON: MAIN C BAR 1 & 2 ===
+--- 1122-05 Main C ---
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch 10 Note  36 (C2  ) vel=91
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch 14 Note  48 (C3  ) vel=85
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch 14 Note  55 (G3  ) vel=85
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch 14 Note  52 (E3  ) vel=85
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch 11 Note  60 (C4  ) vel=85
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch 11 Note  48 (C3  ) vel=85
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch 12 Note  60 (C4  ) vel=103
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch  9 Note  42 (F#2 ) vel=86
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch  9 Note  49 (C#3 ) vel=112
+[1122-05] Bar 1 Bt 1.0000 (rel=    0): Ch  9 Note  35 (B1  ) vel=100
+[1122-05] Bar 1 Bt 1.0480 (rel=  480): Ch 11 Note  52 (E3  ) vel=85
+[1122-05] Bar 1 Bt 1.0960 (rel=  960): Ch 11 Note  60 (C4  ) vel=85
+[1122-05] Bar 1 Bt 1.0960 (rel=  960): Ch 12 Note  64 (E4  ) vel=91
+[1122-05] Bar 1 Bt 1.0960 (rel=  960): Ch  9 Note  42 (F#2 ) vel=91
+[1122-05] Bar 1 Bt 1.0960 (rel=  960): Ch  9 Note  75 (Eb5 ) vel=100
+[1122-05] Bar 1 Bt 1.1440 (rel= 1440): Ch 11 Note  64 (E4  ) vel=46
+[1122-05] Bar 1 Bt 2.0000 (rel= 1920): Ch 11 Note  67 (G4  ) vel=65
+[1122-05] Bar 1 Bt 2.0000 (rel= 1920): Ch 11 Note  55 (G3  ) vel=52
+[1122-05] Bar 1 Bt 2.0000 (rel= 1920): Ch 12 Note  67 (G4  ) vel=95
+[1122-05] Bar 1 Bt 2.0000 (rel= 1920): Ch  9 Note  37 (C#2 ) vel=110
+[1122-05] Bar 1 Bt 2.0000 (rel= 1920): Ch  9 Note  46 (Bb2 ) vel=84
+[1122-05] Bar 1 Bt 2.0480 (rel= 2400): Ch 11 Note  72 (C5  ) vel=81
+[1122-05] Bar 1 Bt 2.0960 (rel= 2880): Ch 10 Note  36 (C2  ) vel=96
+[1122-05] Bar 1 Bt 2.0960 (rel= 2880): Ch 11 Note  76 (E5  ) vel=62
+[1122-05] Bar 1 Bt 2.0960 (rel= 2880): Ch 12 Note  64 (E4  ) vel=97
+[1122-05] Bar 1 Bt 2.0960 (rel= 2880): Ch  9 Note  42 (F#2 ) vel=79
+[1122-05] Bar 1 Bt 2.0960 (rel= 2880): Ch  9 Note  35 (B1  ) vel=100
+[1122-05] Bar 1 Bt 2.1440 (rel= 3360): Ch 11 Note  79 (G5  ) vel=76
+[1122-05] Bar 1 Bt 3.0000 (rel= 3840): Ch 10 Note  36 (C2  ) vel=89
+[1122-05] Bar 1 Bt 3.0000 (rel= 3840): Ch 14 Note  55 (G3  ) vel=85
+[1122-05] Bar 1 Bt 3.0000 (rel= 3840): Ch 11 Note  48 (C3  ) vel=81
+[1122-05] Bar 1 Bt 3.0000 (rel= 3840): Ch 12 Note  60 (C4  ) vel=92
+[1122-05] Bar 1 Bt 3.0000 (rel= 3840): Ch  9 Note  42 (F#2 ) vel=81
+[1122-05] Bar 1 Bt 3.0000 (rel= 3840): Ch  9 Note  35 (B1  ) vel=100
+[1122-05] Bar 1 Bt 3.0480 (rel= 4320): Ch 11 Note  52 (E3  ) vel=85
+[1122-05] Bar 1 Bt 3.0960 (rel= 4800): Ch 11 Note  60 (C4  ) vel=85
+[1122-05] Bar 1 Bt 3.0960 (rel= 4800): Ch 12 Note  64 (E4  ) vel=89
+[1122-05] Bar 1 Bt 3.0960 (rel= 4800): Ch  9 Note  42 (F#2 ) vel=89
+[1122-05] Bar 1 Bt 3.1440 (rel= 5280): Ch 11 Note  64 (E4  ) vel=85
+[1122-05] Bar 1 Bt 3.1440 (rel= 5280): Ch 11 Note  55 (G3  ) vel=85
+[1122-05] Bar 1 Bt 4.0000 (rel= 5760): Ch 12 Note  67 (G4  ) vel=86
+[1122-05] Bar 1 Bt 4.0000 (rel= 5760): Ch  9 Note  61 (C#4 ) vel=76
+[1122-05] Bar 1 Bt 4.0000 (rel= 5760): Ch  9 Note  46 (Bb2 ) vel=88
+[1122-05] Bar 1 Bt 4.0000 (rel= 5760): Ch  9 Note  37 (C#2 ) vel=110
+[1122-05] Bar 1 Bt 4.0480 (rel= 6240): Ch 11 Note  67 (G4  ) vel=85
+[1122-05] Bar 1 Bt 4.0480 (rel= 6240): Ch  9 Note  63 (Eb4 ) vel=85
+[1122-05] Bar 1 Bt 4.0960 (rel= 6720): Ch 10 Note  36 (C2  ) vel=98
+[1122-05] Bar 1 Bt 4.0960 (rel= 6720): Ch 11 Note  64 (E4  ) vel=85
+[1122-05] Bar 1 Bt 4.0960 (rel= 6720): Ch 12 Note  64 (E4  ) vel=85
+[1122-05] Bar 1 Bt 4.0960 (rel= 6720): Ch  9 Note  64 (E4  ) vel=85
+[1122-05] Bar 1 Bt 4.0960 (rel= 6720): Ch  9 Note  42 (F#2 ) vel=85
+[1122-05] Bar 1 Bt 4.1440 (rel= 7200): Ch 11 Note  60 (C4  ) vel=85
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch 10 Note  36 (C2  ) vel=111
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch 14 Note  52 (E3  ) vel=85
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch 14 Note  60 (C4  ) vel=91
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch 14 Note  55 (G3  ) vel=85
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch 11 Note  60 (C4  ) vel=85
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch 12 Note  60 (C4  ) vel=103
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch  9 Note  42 (F#2 ) vel=85
+[1122-05] Bar 2 Bt 1.0000 (rel= 7680): Ch  9 Note  35 (B1  ) vel=100
+[1122-05] Bar 2 Bt 1.0480 (rel= 8160): Ch 11 Note  64 (E4  ) vel=74
+[1122-05] Bar 2 Bt 1.0960 (rel= 8640): Ch 11 Note  72 (C5  ) vel=85
+[1122-05] Bar 2 Bt 1.0960 (rel= 8640): Ch 12 Note  64 (E4  ) vel=91
+[1122-05] Bar 2 Bt 1.0960 (rel= 8640): Ch  9 Note  42 (F#2 ) vel=95
+[1122-05] Bar 2 Bt 1.0960 (rel= 8640): Ch  9 Note  75 (Eb5 ) vel=100
+[1122-05] Bar 2 Bt 1.1440 (rel= 9120): Ch 11 Note  76 (E5  ) vel=85
+[1122-05] Bar 2 Bt 1.1440 (rel= 9120): Ch 11 Note  79 (G5  ) vel=76
+[1122-05] Bar 2 Bt 2.0000 (rel= 9600): Ch 11 Note  67 (G4  ) vel=85
+[1122-05] Bar 2 Bt 2.0000 (rel= 9600): Ch 12 Note  67 (G4  ) vel=95
+[1122-05] Bar 2 Bt 2.0000 (rel= 9600): Ch  9 Note  46 (Bb2 ) vel=79
+[1122-05] Bar 2 Bt 2.0000 (rel= 9600): Ch  9 Note  37 (C#2 ) vel=110
+[1122-05] Bar 2 Bt 2.0480 (rel=10080): Ch 11 Note  79 (G5  ) vel=85
+[1122-05] Bar 2 Bt 2.0960 (rel=10560): Ch 10 Note  36 (C2  ) vel=98
+[1122-05] Bar 2 Bt 2.0960 (rel=10560): Ch 11 Note  84 (C6  ) vel=74
+[1122-05] Bar 2 Bt 2.0960 (rel=10560): Ch 12 Note  64 (E4  ) vel=97
+[1122-05] Bar 2 Bt 2.0960 (rel=10560): Ch  9 Note  35 (B1  ) vel=100
+[1122-05] Bar 2 Bt 2.0960 (rel=10560): Ch  9 Note  42 (F#2 ) vel=88
+[1122-05] Bar 2 Bt 2.1440 (rel=11040): Ch 11 Note  76 (E5  ) vel=85
+[1122-05] Bar 2 Bt 3.0000 (rel=11520): Ch 10 Note  36 (C2  ) vel=96
+[1122-05] Bar 2 Bt 3.0000 (rel=11520): Ch 14 Note  55 (G3  ) vel=85
+[1122-05] Bar 2 Bt 3.0000 (rel=11520): Ch 14 Note  52 (E3  ) vel=85
+[1122-05] Bar 2 Bt 3.0000 (rel=11520): Ch 14 Note  48 (C3  ) vel=85
+[1122-05] Bar 2 Bt 3.0000 (rel=11520): Ch 12 Note  60 (C4  ) vel=92
+[1122-05] Bar 2 Bt 3.0000 (rel=11520): Ch  9 Note  42 (F#2 ) vel=79
+[1122-05] Bar 2 Bt 3.0000 (rel=11520): Ch  9 Note  35 (B1  ) vel=100
+[1122-05] Bar 2 Bt 3.0960 (rel=12480): Ch 11 Note  48 (C3  ) vel=85
+[1122-05] Bar 2 Bt 3.0960 (rel=12480): Ch 12 Note  64 (E4  ) vel=89
+[1122-05] Bar 2 Bt 3.0960 (rel=12480): Ch  9 Note  42 (F#2 ) vel=88
+[1122-05] Bar 2 Bt 3.1440 (rel=12960): Ch 11 Note  60 (C4  ) vel=76
+[1122-05] Bar 2 Bt 3.1440 (rel=12960): Ch 11 Note  52 (E3  ) vel=77
+[1122-05] Bar 2 Bt 4.0000 (rel=13440): Ch 11 Note  67 (G4  ) vel=85
+[1122-05] Bar 2 Bt 4.0000 (rel=13440): Ch 11 Note  64 (E4  ) vel=74
+[1122-05] Bar 2 Bt 4.0000 (rel=13440): Ch 12 Note  67 (G4  ) vel=86
+[1122-05] Bar 2 Bt 4.0000 (rel=13440): Ch  9 Note  46 (Bb2 ) vel=86
+[1122-05] Bar 2 Bt 4.0000 (rel=13440): Ch  9 Note  37 (C#2 ) vel=110
+[1122-05] Bar 2 Bt 4.0480 (rel=13920): Ch 11 Note  55 (G3  ) vel=61
+[1122-05] Bar 2 Bt 4.0960 (rel=14400): Ch 10 Note  36 (C2  ) vel=91
+[1122-05] Bar 2 Bt 4.0960 (rel=14400): Ch 11 Note  76 (E5  ) vel=81
+[1122-05] Bar 2 Bt 4.0960 (rel=14400): Ch 11 Note  72 (C5  ) vel=85
+[1122-05] Bar 2 Bt 4.0960 (rel=14400): Ch 12 Note  64 (E4  ) vel=85
+[1122-05] Bar 2 Bt 4.0960 (rel=14400): Ch  9 Note  42 (F#2 ) vel=86
+[1122-05] Bar 2 Bt 4.1440 (rel=14880): Ch 11 Note  79 (G5  ) vel=85
+
+--- Yamaha Official Main C ---
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  1 Note  36 (C2  ) vel=91
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  4 Note  48 (C3  ) vel=85
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  4 Note  52 (E3  ) vel=85
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  4 Note  55 (G3  ) vel=85
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  5 Note  48 (C3  ) vel=85
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  6 Note  57 (A3  ) vel=103
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  9 Note  42 (F#2 ) vel=86
+[Yamaha]  Bar 1 Bt 1.0000 (rel=    0): Ch  9 Note  35 (B1  ) vel=100
+[Yamaha]  Bar 1 Bt 1.0480 (rel=  480): Ch  5 Note  52 (E3  ) vel=85
+[Yamaha]  Bar 1 Bt 1.0960 (rel=  960): Ch  5 Note  59 (B3  ) vel=85
+[Yamaha]  Bar 1 Bt 1.0960 (rel=  960): Ch  6 Note  59 (B3  ) vel=91
+[Yamaha]  Bar 1 Bt 1.0960 (rel=  960): Ch  9 Note  75 (Eb5 ) vel=100
+[Yamaha]  Bar 1 Bt 1.0960 (rel=  960): Ch  9 Note  42 (F#2 ) vel=91
+[Yamaha]  Bar 1 Bt 1.1440 (rel= 1440): Ch  5 Note  64 (E4  ) vel=46
+[Yamaha]  Bar 1 Bt 2.0000 (rel= 1920): Ch  5 Note  67 (G4  ) vel=65
+[Yamaha]  Bar 1 Bt 2.0000 (rel= 1920): Ch  5 Note  55 (G3  ) vel=52
+[Yamaha]  Bar 1 Bt 2.0000 (rel= 1920): Ch  6 Note  71 (B4  ) vel=95
+[Yamaha]  Bar 1 Bt 2.0000 (rel= 1920): Ch  9 Note  46 (Bb2 ) vel=84
+[Yamaha]  Bar 1 Bt 2.0000 (rel= 1920): Ch  9 Note  37 (C#2 ) vel=110
+[Yamaha]  Bar 1 Bt 2.0480 (rel= 2400): Ch  5 Note  71 (B4  ) vel=81
+[Yamaha]  Bar 1 Bt 2.0960 (rel= 2880): Ch  1 Note  36 (C2  ) vel=96
+[Yamaha]  Bar 1 Bt 2.0960 (rel= 2880): Ch  5 Note  76 (E5  ) vel=62
+[Yamaha]  Bar 1 Bt 2.0960 (rel= 2880): Ch  6 Note  69 (A4  ) vel=97
+[Yamaha]  Bar 1 Bt 2.0960 (rel= 2880): Ch  9 Note  42 (F#2 ) vel=79
+[Yamaha]  Bar 1 Bt 2.0960 (rel= 2880): Ch  9 Note  35 (B1  ) vel=100
+[Yamaha]  Bar 1 Bt 2.1440 (rel= 3360): Ch  5 Note  79 (G5  ) vel=76
+[Yamaha]  Bar 1 Bt 3.0000 (rel= 3840): Ch  1 Note  36 (C2  ) vel=89
+[Yamaha]  Bar 1 Bt 3.0000 (rel= 3840): Ch  4 Note  48 (C3  ) vel=85
+[Yamaha]  Bar 1 Bt 3.0000 (rel= 3840): Ch  5 Note  52 (E3  ) vel=81
+[Yamaha]  Bar 1 Bt 3.0000 (rel= 3840): Ch  6 Note  67 (G4  ) vel=92
+[Yamaha]  Bar 1 Bt 3.0000 (rel= 3840): Ch  9 Note  42 (F#2 ) vel=81
+[Yamaha]  Bar 1 Bt 3.0000 (rel= 3840): Ch  9 Note  35 (B1  ) vel=100
+[Yamaha]  Bar 1 Bt 3.0480 (rel= 4320): Ch  5 Note  55 (G3  ) vel=85
+[Yamaha]  Bar 1 Bt 3.0960 (rel= 4800): Ch  5 Note  64 (E4  ) vel=85
+[Yamaha]  Bar 1 Bt 3.0960 (rel= 4800): Ch  6 Note  69 (A4  ) vel=89
+[Yamaha]  Bar 1 Bt 3.0960 (rel= 4800): Ch  9 Note  42 (F#2 ) vel=89
+[Yamaha]  Bar 1 Bt 3.1440 (rel= 5280): Ch  5 Note  67 (G4  ) vel=85
+[Yamaha]  Bar 1 Bt 3.1440 (rel= 5280): Ch  5 Note  59 (B3  ) vel=85
+[Yamaha]  Bar 1 Bt 4.0000 (rel= 5760): Ch  6 Note  71 (B4  ) vel=86
+[Yamaha]  Bar 1 Bt 4.0000 (rel= 5760): Ch  9 Note  61 (C#4 ) vel=76
+[Yamaha]  Bar 1 Bt 4.0000 (rel= 5760): Ch  9 Note  37 (C#2 ) vel=110
+[Yamaha]  Bar 1 Bt 4.0000 (rel= 5760): Ch  9 Note  46 (Bb2 ) vel=88
+[Yamaha]  Bar 1 Bt 4.0480 (rel= 6240): Ch  5 Note  71 (B4  ) vel=85
+[Yamaha]  Bar 1 Bt 4.0480 (rel= 6240): Ch  9 Note  63 (Eb4 ) vel=85
+[Yamaha]  Bar 1 Bt 4.0960 (rel= 6720): Ch  1 Note  36 (C2  ) vel=98
+[Yamaha]  Bar 1 Bt 4.0960 (rel= 6720): Ch  5 Note  67 (G4  ) vel=85
+[Yamaha]  Bar 1 Bt 4.0960 (rel= 6720): Ch  6 Note  71 (B4  ) vel=85
+[Yamaha]  Bar 1 Bt 4.0960 (rel= 6720): Ch  9 Note  64 (E4  ) vel=85
+[Yamaha]  Bar 1 Bt 4.0960 (rel= 6720): Ch  9 Note  42 (F#2 ) vel=85
+[Yamaha]  Bar 1 Bt 4.1440 (rel= 7200): Ch  5 Note  64 (E4  ) vel=85
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  1 Note  36 (C2  ) vel=111
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  4 Note  48 (C3  ) vel=85
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  4 Note  59 (B3  ) vel=91
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  4 Note  55 (G3  ) vel=85
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  5 Note  59 (B3  ) vel=85
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  6 Note  67 (G4  ) vel=103
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  9 Note  42 (F#2 ) vel=85
+[Yamaha]  Bar 2 Bt 1.0000 (rel= 7680): Ch  9 Note  35 (B1  ) vel=100
+[Yamaha]  Bar 2 Bt 1.0480 (rel= 8160): Ch  5 Note  59 (B3  ) vel=74
+[Yamaha]  Bar 2 Bt 1.0960 (rel= 8640): Ch  5 Note  71 (B4  ) vel=85
+[Yamaha]  Bar 2 Bt 1.0960 (rel= 8640): Ch  6 Note  69 (A4  ) vel=91
+[Yamaha]  Bar 2 Bt 1.0960 (rel= 8640): Ch  9 Note  75 (Eb5 ) vel=100
+[Yamaha]  Bar 2 Bt 1.0960 (rel= 8640): Ch  9 Note  42 (F#2 ) vel=95
+[Yamaha]  Bar 2 Bt 1.1440 (rel= 9120): Ch  5 Note  76 (E5  ) vel=76
+[Yamaha]  Bar 2 Bt 1.1440 (rel= 9120): Ch  5 Note  71 (B4  ) vel=85
+[Yamaha]  Bar 2 Bt 2.0000 (rel= 9600): Ch  5 Note  64 (E4  ) vel=85
+[Yamaha]  Bar 2 Bt 2.0000 (rel= 9600): Ch  6 Note  67 (G4  ) vel=95
+[Yamaha]  Bar 2 Bt 2.0000 (rel= 9600): Ch  9 Note  46 (Bb2 ) vel=79
+[Yamaha]  Bar 2 Bt 2.0000 (rel= 9600): Ch  9 Note  37 (C#2 ) vel=110
+[Yamaha]  Bar 2 Bt 2.0480 (rel=10080): Ch  5 Note  76 (E5  ) vel=85
+[Yamaha]  Bar 2 Bt 2.0960 (rel=10560): Ch  1 Note  36 (C2  ) vel=98
+[Yamaha]  Bar 2 Bt 2.0960 (rel=10560): Ch  5 Note  79 (G5  ) vel=74
+[Yamaha]  Bar 2 Bt 2.0960 (rel=10560): Ch  6 Note  65 (F4  ) vel=97
+[Yamaha]  Bar 2 Bt 2.0960 (rel=10560): Ch  9 Note  42 (F#2 ) vel=88
+[Yamaha]  Bar 2 Bt 2.0960 (rel=10560): Ch  9 Note  35 (B1  ) vel=100
+[Yamaha]  Bar 2 Bt 2.1440 (rel=11040): Ch  5 Note  83 (B5  ) vel=85
+[Yamaha]  Bar 2 Bt 3.0000 (rel=11520): Ch  1 Note  36 (C2  ) vel=96
+[Yamaha]  Bar 2 Bt 3.0000 (rel=11520): Ch  4 Note  52 (E3  ) vel=85
+[Yamaha]  Bar 2 Bt 3.0000 (rel=11520): Ch  4 Note  55 (G3  ) vel=85
+[Yamaha]  Bar 2 Bt 3.0000 (rel=11520): Ch  4 Note  59 (B3  ) vel=85
+[Yamaha]  Bar 2 Bt 3.0000 (rel=11520): Ch  6 Note  67 (G4  ) vel=92
+[Yamaha]  Bar 2 Bt 3.0000 (rel=11520): Ch  9 Note  35 (B1  ) vel=100
+[Yamaha]  Bar 2 Bt 3.0000 (rel=11520): Ch  9 Note  42 (F#2 ) vel=79
+[Yamaha]  Bar 2 Bt 3.0960 (rel=12480): Ch  5 Note  52 (E3  ) vel=85
+[Yamaha]  Bar 2 Bt 3.0960 (rel=12480): Ch  6 Note  69 (A4  ) vel=89
+[Yamaha]  Bar 2 Bt 3.0960 (rel=12480): Ch  9 Note  42 (F#2 ) vel=88
+[Yamaha]  Bar 2 Bt 3.1440 (rel=12960): Ch  5 Note  55 (G3  ) vel=77
+[Yamaha]  Bar 2 Bt 3.1440 (rel=12960): Ch  5 Note  64 (E4  ) vel=76
+[Yamaha]  Bar 2 Bt 4.0000 (rel=13440): Ch  5 Note  71 (B4  ) vel=85
+[Yamaha]  Bar 2 Bt 4.0000 (rel=13440): Ch  5 Note  67 (G4  ) vel=74
+[Yamaha]  Bar 2 Bt 4.0000 (rel=13440): Ch  6 Note  71 (B4  ) vel=86
+[Yamaha]  Bar 2 Bt 4.0000 (rel=13440): Ch  9 Note  37 (C#2 ) vel=110
+[Yamaha]  Bar 2 Bt 4.0000 (rel=13440): Ch  9 Note  46 (Bb2 ) vel=86
+[Yamaha]  Bar 2 Bt 4.0480 (rel=13920): Ch  5 Note  59 (B3  ) vel=61
+[Yamaha]  Bar 2 Bt 4.0960 (rel=14400): Ch  1 Note  36 (C2  ) vel=91
+[Yamaha]  Bar 2 Bt 4.0960 (rel=14400): Ch  5 Note  79 (G5  ) vel=81
+[Yamaha]  Bar 2 Bt 4.0960 (rel=14400): Ch  5 Note  71 (B4  ) vel=85
+[Yamaha]  Bar 2 Bt 4.0960 (rel=14400): Ch  6 Note  69 (A4  ) vel=85
+[Yamaha]  Bar 2 Bt 4.0960 (rel=14400): Ch  9 Note  42 (F#2 ) vel=86
+[Yamaha]  Bar 2 Bt 4.1440 (rel=14880): Ch  5 Note  83 (B5  ) vel=85

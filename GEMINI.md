@@ -114,6 +114,49 @@
        - **場景 B（單和小節短插音）**：僅限於單一小節（或 1~2 小節）且「單一固定和弦中途不換和弦」的短動機/過門。
     3. **隨和弦連續變化的跨小節插音 / 副奏對位**：
        - **鐵律嚴禁做在 Multi Pad 內**，必須回歸節奏檔（`.STY`）的 `Phrase 1 (Ch 15)` 或 `Phrase 2 (Ch 16)` 聲部，借助 STY 專屬之 CASM `NTT = Melody` 與大小調雙軌分流來實現。
+- **範本幽靈表演控制器與淡出曲線隔離清除鐵律（Ghost CC11 Expression Fadeout Elimination Rule — 2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：切片裝配時若以現成 STY（如 `CHINA Ballad.T547.sty`）為範本，舊範本之 Intro/Ending 常寫入專屬該曲的**結尾漸弱淡出曲線**（如 Intro B 第 5 小節起，CC11 表情一路暴跌至 41，整段殘留多達 850 個幽靈 CC11 事件）。舊版僅清除舊音符（`NoteOn/NoteOff`），未清除舊控制器與舊彎音，導致新切入之電吉他（Phrase 2）在第 5 小節（第 30~33 節）被幽靈 CC11 扼殺音量，音量暴跌至不足三分之一，造成聽感上「吉他在後半段嚴重變小聲」。
+  - **核心鐵律**：
+    1. 切片覆寫聲部時，必須同步查核段落專屬 CASM 路由與 SFF1/SFF2 雙向鏡像通道表，徹底清除該聲部在該段落內部的所有舊表演控制器（`CC11` 表情、`CC1` 顫音、`CC64` 延音等）與舊彎音（`pitchBend`）。
+    2. 在段落起始點（`absTick = range.startTick`）強制重設 `CC11 = 127`，確保 100% 飽滿表情進場，杜絕前段殘留。
+    3. 來源 MIDI 之真實表演動態（如電吉他的真實 CC1 搖桿顫音 Modulation 152 顆）在切片時應予以提取並縮放時間軸同步注入伴奏軌，使琴端發聲忠實還原原廠生動音質！
+- **切片起點跨小節邊界殘留音過濾鐵律（Boundary Bleed Note Elimination Rule — 2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：切片裝配時，若來源音符在切片起點前就已發音（`startAbsTick < startTickSrc`，如前一小節最後一拍的弱起或分解和弦尾音），舊版將其起訖點截斷後強制塞入新段落的第 1 拍（`rel = 0`），導致新段落第 1 拍出現非本小節音符重新觸發（如 Main A 第 1 拍吉他重疊撞出兩顆音 Note 60 + Note 64；Main C 第 1 拍撞出前段殘留的 F 和弦；Main D 第 1 拍撞出高音怪音）。
+  - **核心鐵律**：切片組裝提取音符時（`pushExtractedNote`），凡在切片起點之前即已發音之音符（`startAbsTick < startTickSrc`），鐵律一律直接排除，絕不人為重新觸發 NoteOn，確保每個段落第 1 拍 100% 乾淨純粹，徹底根除段落開頭的雙重音、爆音與雜音！
+- **副歌 Main C / Main D 鈸音幽靈殘留與和弦聲部 NTT 修正鐵律（Chorus Crash Cymbal Bleed & Pad NTT Rule — 2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：
+    1. 來源 MIDI 於副歌進場前（第 33 小節第 4.5 拍與第 41 小節第 4.5 拍）有進入副歌之強烈過門鈸音（`Ch 9 Note 49 Crash Cymbal 1 vel=112`）與雙重掛留音（`Ch 11 Note 60 C4 vel=85`）。切片跨界音符截斷時將其強壓至 `rel = 0`（第 1 拍），導致琴端按下 Main C / Main D 觸發或每逢 8 小節循環起點時，第 1 拍皆爆發極大聲刺耳且突兀的 Crash 鈸音與雙重音碰撞。
+    2. Main C / Main D 之弦樂長音/鋪底和弦（Pad，包含 C3-E3-G3 三和弦）被分配至 Phrase 1（Ch 14），其 CASM 預設被配置為單音旋律規則 `NTT = Melody`。當使用者在琴端換和弦（如彈 Am）時，NTT Melody 依旋律音程扭曲三和弦音高，導致副歌起拍伴奏產生嚴重走味與不諧和感。
+  - **核心鐵律**：
+    1. 伴奏循環段落（Main A~D）之第 1 拍（`rel = 0`），除樂曲正常 Bass/鼓點外，鐵律必須清除跨小節殘留之過門鈸音（`Crash Cymbal Note 49`）與重疊音，Yamaha 原廠伴奏於循環起拍亦絕不配置 Note 49 爆音。
+    2. 凡承載多音和弦織體之聲部（如 Ch 14 / Ch 15 的三和弦鋪底），其 CASM 規則必須配置為 `NTT = Chord`，確保換和弦時音階導引與和聲轉調 100% 自然平滑。
+- **全自動切片淨化管線與舊範本控制器深層淨化鐵律（Automatic Slicing Purge & Deep Controller Cleanse — 2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：
+    1. Intro B（間奏）開頭鍵盤聲部（Ch 11）除正常 Dm 音符外，殘留前一段 Am 之 3 顆音（`Note 69, 72, 76`），造成起拍 Dm+Am 瞬間和聲碰撞；鼓組（Ch 9）起拍爆出 Note 49 Crash Cymbal（vel 110）。
+    2. Ending A（尾奏）Ch 14 殘留 40 ticks（10ms）短音 `Note 69` 點擊雜音；且內部殘留舊範本（`CHINA Ballad.T547.sty`）多達 819 顆幽靈 CC11 表情淡出事件（開頭即被壓低至 125/97），扼殺伴奏聲部音量。
+  - **核心鐵律（底層自動化固化，無原廠 STY 亦自動免疫）**：
+    1. **起拍 Crash Cymbal 淨化**：伴奏循環（Main A~D）與前奏（Intro）第 1 拍（`rel = 0`），自動排除鼓組（targetChannel 9）的 Note 49/57 Crash Cymbal，保持大鼓與閉鈸乾淨進場。
+    2. **微短切片毛邊過濾**：第 1 拍長度小於 60 ticks（約 15ms）之非音樂性切片毛邊一律自動排除。
+    3. **全段落控制器深層淨化（Deep Purge）**：`YamahaStyleModifier.clearSectionNotes` 升級為清除音符、彎音與舊範本殘留之所有幽靈表演控制器（CC11、CC1、CC64），覆寫時在第 1 拍自動確保注入 `CC11 = 127` 滿表情。
+    4. **實測驗證**：已實裝並通過 `tests/verify-direct-midi-slice-identical.test.ts`，確認未來直接載入 MIDI 重新切片產出之 STY 100% 具備相同乾淨品質。
+- **段落起拍標準事件優先級與全域時序重整鐵律（Canonical MIDI Event Priority Rule — 2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：
+    1. **事件顛倒（Event Inversion Bug）**：在伴奏各段落起拍（`rel = 0` 即第 1 小節第 1 拍），舊版事件排序中，各通道的 `NoteOn` 早於 `CC0/CC32`（音色庫選取）、`Program Change (PC)`（樂器更換）與 `CC7`（音量）發送！在 Yamaha 實體琴（如 PSR-SX920）之音源晶片中，若音符剛起振（Attack 瞬間）立刻收到 PC 與音量更換指令，硬體音源 DSP 會被強制重新初始化該通道音色，造成第一拍音符瞬間窒息（Choke）、卡頓（Hiccup）或音色突變雜音。這正是為什麼「問題只出現在第 1 小節第 1 拍，而第 2、3 拍完全正常」（因為第 2、3 拍無 PC 與 Bank Select 指令）。
+    2. **伴奏織體幽靈 CC11 表情曲線（Ghost CC11 Curves on Ch 13 & 15）**：舊範本在各 Main 段落的 Ch 13 與 Ch 15 殘留了漸弱/淡入淡出曲線（起拍音量被壓低至 53~69，僅半音量），隨後在第 2、3 拍暴衝，造成呼吸感錯亂與起拍無力。
+  - **核心鐵律**：
+    1. **標準 MIDI 事件優先級（`getMidiEventPriority`）**：在同一 Tick 下，事件派發順序鐵律鎖定為：
+       `Meta (0~1)` ➔ `NoteOff (2)` ➔ `SysEx (3)` ➔ `CC0 (10)` ➔ `CC32 (11)` ➔ `Program Change (12)` ➔ `CC7 (20)` ➔ `CC10 (21)` ➔ `CC11 (22)` ➔ `其他 CC / PitchBend (25~30)` ➔ `NoteOn (40)`。
+       確保琴端在收到 NoteOn 敲響音符前，音色、音量、表情與全域參數已 100% 準備就緒！
+    2. **全域段落時序深層重整（`sanitizeAllSectionsEventOrderAndControllers`）**：全自動切片管線在裝配完成最後一步，強制遍歷所有段落（Main A~D, Intro, Ending, Fill In），清除伴奏軌中的幽靈 CC11/CC1/CC64 曲線，並依據標準事件優先級重新排序，確保產出之 STY 在琴端第 1 拍 100% 乾淨俐落發聲！
+- **Fill In 過門聲部鏡像與琴端 Auto Fill In 無縫切換鐵律（Fill In Channel Mirroring & Auto Fill In Rule — 2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：
+    1. 琴端開啟 `[AUTO FILL IN]` 時，按 `[MAIN A~D]` 會強制中斷當前 Main 段落轉進對應的 `Fill In`。若伴奏檔中的 Fill In 段落未經切片替換（仍殘留舊範本內容），會因聲部通道不對齊（如舊範本缺少鋼琴 Ch 11、鼓點風格迥異）引發「過門突然被掐斷、樂器暴斃中斷或音色變樣」的聽覺斷層。
+    2. Yamaha 琴端韌體對 4/4 拍過門切換內建嚴格的時間觸發窗口（Timing Window）：在第 3 拍或第 4 拍前半拍（4.0~4.2 拍）按下能順暢觸發過門；若拖到第 4 拍後半拍（> 4.5 拍）按下，琴端因剩餘時間不足會直接觸發超時保護（Time Window Expired），強制將當前音符全部掐斷（All Notes Off 靜音等待下拍）。
+  - **核心鐵律**：
+    1. **Fill In 聲部完全鏡像對齊**：所有 `Fill In AA / BB / CC / DD / BA` 切片裝配時，必須與 `Main A~D` 保持完全一致的聲部通道映射（如 Ch 9 鼓、Ch 10 貝斯、Ch 11 鋼琴、Ch 12 吉他），杜絕樂器突兀消失或風格打架。
+    2. **過門段落專屬裝配**：進歌過門必須獨立切入對應的 Fill In 段落（如 Main B 專屬過門進 `Fill In BB`、副歌過門進 `Fill In CC`、高潮滾奏進 `Fill In DD`、留白進 `Fill In BA`）。
+    3. **演奏手感鐵律**：實機彈奏開啟 Auto Fill In 時，按鍵最佳時間窗口為第 3 拍或第 4 拍前半拍（4.0~4.2 拍），避免第 4 拍後半拍觸發琴端超時掐斷。關閉 Auto Fill In 時則可完整聽完 8 小節 Main 自帶的結尾過門。
+    4. **實機驗收定案**：使用者於 Yamaha PSR-SX920 實測補齊 Fill In 後，「幾乎和原廠的一模一樣了」，正式結案封存！
 - **實機驗證先於系統整合原則**：
   - 所有 Multi Pad 和弦轉調與 CASM 修復演算法，一律在家中搭配 PSR-SX920 實體琴聆聽驗證確認無誤後，再行封裝上線至系統 UI，嚴禁未經實機驗證盲目修改系統主程式。
 

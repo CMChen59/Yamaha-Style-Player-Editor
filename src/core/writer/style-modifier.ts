@@ -70,6 +70,111 @@ export interface StylePartMixingParams {
 
 export class YamahaStyleModifier {
   /**
+   * 取得標準 MIDI 事件時序優先級 (Tie-breaker for events at identical tick)
+   * Yamaha 琴端標準執行順序鐵律：
+   * 1. Meta 事件 (段落標記 0x06, 0x01, 速度 0x51, 拍號 0x58) -> 優先級 0 ~ 1
+   * 2. NoteOff (清除前一小節殘留音符) -> 優先級 2
+   * 3. SysEx / 重置 -> 優先級 3
+   * 4. Bank Select MSB (CC 0) -> 優先級 10
+   * 5. Bank Select LSB (CC 32) -> 優先級 11
+   * 6. Program Change (PC 樂器音色切換) -> 優先級 12
+   * 7. Volume (CC 7) -> 優先級 20
+   * 8. Pan (CC 10) -> 優先級 21
+   * 9. Expression (CC 11) -> 優先級 22
+   * 10. Reverb / Chorus (CC 91, 93) -> 優先級 23
+   * 11. 其他控制器與彎音 (PitchBend, CC 1, CC 64 等) -> 優先級 25 ~ 30
+   * 12. NoteOn (vel > 0 音符正式發音) -> 優先級 40 (鐵律置於音色與控制器之後！)
+   * 13. End of Track (Meta 0x2F) -> 優先級 99
+   */
+  public static getMidiEventPriority(ev: MidiEvent): number {
+    if (ev.type === 'meta') {
+      if (ev.metaType === 0x2f) return 99;
+      if (ev.metaType === 6 || ev.metaType === 7 || ev.metaType === 1) return 0;
+      return 1;
+    }
+    if (ev.type === 'noteOff' || (ev.type === 'noteOn' && (ev.velocity ?? 0) === 0)) return 2;
+    if (ev.type === 'sysex') return 3;
+    if (ev.type === 'controlChange') {
+      if (ev.controller === 0) return 10;
+      if (ev.controller === 32) return 11;
+      if (ev.controller === 7) return 20;
+      if (ev.controller === 10) return 21;
+      if (ev.controller === 11) return 22;
+      if (ev.controller === 91 || ev.controller === 93) return 23;
+      return 25;
+    }
+    if (ev.type === 'programChange') return 12;
+    if (ev.type === 'pitchBend') return 30;
+    if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0) return 40;
+    return 50;
+  }
+
+  /**
+   * 全域伴奏段落深層淨化與標準時序重整 (Canonical Event Ordering & Deep Controller Sanitization)
+   * 1. 徹底清除各段落內部舊範本殘留的幽靈表演控制器 (如 CC11 漸弱淡出曲線、CC1 顫音、CC64 延音)
+   * 2. 嚴格強制同 Tick 下【Bank Select/PC/Volume/Expression 永遠排在 NoteOn 之前發送】，徹底根除起音走味、雜音、爆音與切音
+   */
+  public static sanitizeAllSectionsEventOrderAndControllers(parsed: YamahaFileParsed): void {
+    if (!parsed || !parsed.tracks || parsed.tracks.length === 0) return;
+    const track0 = parsed.tracks[0];
+    if (!track0 || !track0.events || track0.events.length === 0) return;
+
+    let curTick = 0;
+    const annotated: Array<{ ev: MidiEvent; absTick: number; index: number }> = [];
+
+    // 建立段落清單與範圍
+    const sectionRanges = parsed.sections.map(s => {
+      const r = StyleRemixer.getSectionTickRange(parsed, s.name);
+      return { name: s.name, startTick: s.startTick, endTick: r ? r.endTick : s.startTick + (s.measureCount || 1) * 1920 * 4 };
+    });
+
+    for (let i = 0; i < track0.events.length; i++) {
+      const ev = track0.events[i];
+      curTick += ev.delta;
+
+      // 檢查是否落入某段落的內部 (非 startTick)
+      let isGhostController = false;
+      for (const sr of sectionRanges) {
+        if (curTick > sr.startTick && curTick < sr.endTick) {
+          // 清除段落中途的舊範本幽靈 CC11 (除非該通道在此段落無音符)
+          if (ev.type === 'controlChange' && (ev.controller === 11 || ev.controller === 1 || ev.controller === 64)) {
+            isGhostController = true;
+            break;
+          }
+        }
+      }
+
+      if (isGhostController) continue;
+
+      annotated.push({
+        ev: { ...ev },
+        absTick: curTick,
+        index: i,
+      });
+    }
+
+    // 依據 Yamaha 琴端標準優先級進行時序排序
+    annotated.sort((a, b) => {
+      if (a.absTick !== b.absTick) return a.absTick - b.absTick;
+      const pA = YamahaStyleModifier.getMidiEventPriority(a.ev);
+      const pB = YamahaStyleModifier.getMidiEventPriority(b.ev);
+      if (pA !== pB) return pA - pB;
+      return a.index - b.index;
+    });
+
+    // 重新計算 Delta-times
+    let prev = 0;
+    track0.events = annotated.map(item => {
+      item.ev.delta = Math.max(0, item.absTick - prev);
+      prev = item.absTick;
+      return item.ev;
+    });
+
+    YamahaPadModifier.sanitizeTrackDuplicateNotes(track0);
+    YamahaPadModifier.rebuildTrackRawChunk(track0);
+  }
+
+  /**
    * 更新指定 STY 伴奏聲部的混音與音色參數
    * 同步更新 parsed.parts 與 Track 0 開頭對應通道的 CC/PC 初始化事件，並重新編碼 rawChunk
    */
@@ -272,8 +377,9 @@ export class YamahaStyleModifier {
 
       annotated.sort((a, b) => {
         if (a.absTick !== b.absTick) return a.absTick - b.absTick;
-        if (a.ev.type === 'meta' && a.ev.metaType === 6) return -1;
-        if (b.ev.type === 'meta' && b.ev.metaType === 6) return 1;
+        const pA = YamahaStyleModifier.getMidiEventPriority(a.ev);
+        const pB = YamahaStyleModifier.getMidiEventPriority(b.ev);
+        if (pA !== pB) return pA - pB;
         return a.index - b.index;
       });
 
@@ -1822,14 +1928,25 @@ export class YamahaStyleModifier {
 
     for (const ev of track0.events) {
       curTick += ev.delta;
-      const isNote = (ev.type === 'noteOn' || ev.type === 'noteOff') && ev.channel !== undefined && targetChannels.includes(ev.channel);
+      const isTargetChannel = ev.channel !== undefined && targetChannels.includes(ev.channel);
       const inRange = curTick >= range.startTick && curTick < range.endTick;
 
-      if (isNote && inRange) {
+      if (isTargetChannel && inRange) {
         if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0) {
           deletedCount++;
         }
-        continue;
+        // [深層淨化 Deep Purge] 徹底清除段落內之音符、彎音與舊範本幽靈表演控制器 (CC11 表情淡出、CC1 顫音、CC64 延音等)
+        if (ev.type === 'noteOn' || ev.type === 'noteOff' || ev.type === 'pitchBend') {
+          continue;
+        }
+        if (ev.type === 'controlChange') {
+          if (ev.controller === 11 || ev.controller === 1 || ev.controller === 64) {
+            continue;
+          }
+          if (curTick > range.startTick && (ev.controller === 7 || ev.controller === 10)) {
+            continue; // 清除段落中途殘留的動態音量與 Pan
+          }
+        }
       }
       filteredEvents.push(ev);
     }
@@ -1859,7 +1976,11 @@ export class YamahaStyleModifier {
     sectionName: string,
     channel: number,
     notes: Array<{ noteNumber: number; relTick: number; durationTicks: number; velocity: number; sourceChannel?: number }>,
-    targetChannelOverride?: number
+    targetChannelOverride?: number,
+    extraControllers?: {
+      pitchBends?: Array<{ relTick: number; value: number; sourceChannel?: number }>;
+      ccs?: Array<{ relTick: number; controller: number; value: number; sourceChannel?: number }>;
+    }
   ): boolean {
     const range = StyleRemixer.getSectionTickRange(parsed, sectionName);
     if (!range) return false;
@@ -1896,10 +2017,36 @@ export class YamahaStyleModifier {
       }
     }
 
-    // 需自段落中清除的舊音符通道集合 (僅清除實際寫入之通道與音符原本所屬的來源通道，絕不盲目增減 8，避免誤刪相鄰聲部！)
+    // 需自段落中清除的舊音符通道集合 (精確查核 SFF1 <-> SFF2 伴奏雙向對照表，杜絕跨軌誤刪或雙軌幽靈控制器殘留)
+    const sff1Map: Record<number, number> = { 10: 1, 11: 2, 12: 3, 13: 4, 14: 5, 15: 6, 8: 8, 9: 9 };
+    const sff2Map: Record<number, number> = { 1: 10, 2: 11, 3: 12, 4: 13, 5: 14, 6: 15, 8: 8, 9: 9 };
+
     const clearChannels = new Set<number>([targetMidiChannel]);
+    if (sff1Map[targetMidiChannel] !== undefined) {
+      clearChannels.add(sff1Map[targetMidiChannel]);
+    }
+    if (sff2Map[targetMidiChannel] !== undefined) {
+      clearChannels.add(sff2Map[targetMidiChannel]);
+    }
+
+    // 查核段落專屬 CASM 路由表，將所有映射至該目標聲部的來源通道全數加入清除名單 (杜絕 SFF1/SFF2 雙軌幽靈殘留)
+    const secNameLower = sectionName.toLowerCase();
+    const casmSecMap = parsed.casmMappings?.[secNameLower]
+      || parsed.casmMappings?.[secNameLower.replace(/\s+/g, '')];
+    if (casmSecMap) {
+      for (const [srcStr, dst] of Object.entries(casmSecMap)) {
+        if (dst === channel || dst === targetMidiChannel || (targetChannelOverride !== undefined && dst === targetChannelOverride)) {
+          clearChannels.add(parseInt(srcStr, 10));
+        }
+      }
+    }
+
     notes.forEach(n => {
-      if (n.sourceChannel !== undefined) clearChannels.add(n.sourceChannel);
+      if (n.sourceChannel !== undefined) {
+        clearChannels.add(n.sourceChannel);
+        if (sff1Map[n.sourceChannel] !== undefined) clearChannels.add(sff1Map[n.sourceChannel]);
+        if (sff2Map[n.sourceChannel] !== undefined) clearChannels.add(sff2Map[n.sourceChannel]);
+      }
     });
 
     // 標註所有現有事件的絕對 Tick
@@ -1907,17 +2054,44 @@ export class YamahaStyleModifier {
     const keptEvents: Array<{ ev: MidiEvent; absTick: number; index: number }> = [];
     track0.events.forEach((ev, idx) => {
       curTick += ev.delta;
-      const isNote = (ev.type === 'noteOn' || ev.type === 'noteOff') && ev.channel !== undefined && clearChannels.has(ev.channel);
+      const isTargetChannel = ev.channel !== undefined && clearChannels.has(ev.channel);
       const inRange = curTick >= range.startTick && curTick < range.endTick;
-      if (isNote && inRange) {
-        // 清除此段落中該聲部的舊音符
-        return;
+
+      if (isTargetChannel && inRange) {
+        // 1. 清除此段落中該聲部的舊音符 (noteOn / noteOff)
+        if (ev.type === 'noteOn' || ev.type === 'noteOff') {
+          return;
+        }
+        // 2. 清除舊範本殘留的彎音 (pitchBend)
+        if (ev.type === 'pitchBend') {
+          return;
+        }
+        // 3. 清除舊範本殘留的表演控制器 (CC 11 表情淡出、CC 1 顫音、CC 64 延音等)
+        // 避免舊範本中的幽靈淡出曲線 (如 CHINA Ballad 殘留 850 個 CC11) 扼殺新切片樂器音量
+        if (ev.type === 'controlChange') {
+          if (curTick > range.startTick) {
+            return;
+          }
+          if (ev.controller === 11 || ev.controller === 1 || ev.controller === 64) {
+            return;
+          }
+        }
       }
       keptEvents.push({ ev: { ...ev }, absTick: curTick, index: idx });
     });
 
     // 加入新音符的 NoteOn 與 NoteOff
     let virtualIndex = 9000000;
+
+    // 若有新音符寫入，在段落開頭確保該通道具備 100% 飽滿表情 (CC 11 = 127)，杜絕任何前段淡出殘留
+    if (notes.length > 0) {
+      keptEvents.push({
+        ev: { delta: 0, type: 'controlChange', channel: targetMidiChannel, controller: 11, value: 127 },
+        absTick: range.startTick,
+        index: virtualIndex++,
+      });
+    }
+
     for (const n of notes) {
       const absStart = range.startTick + Math.max(0, Math.round(n.relTick));
       const dur = Math.max(12, Math.round(n.durationTicks));
@@ -1938,13 +2112,40 @@ export class YamahaStyleModifier {
       });
     }
 
-    // 按時間排序 (NoteOff 在前，NoteOn 在後，保留 Meta 事件順序)
+    // 加入來源 MIDI 提取的真實彎音 (PitchBend)
+    if (extraControllers?.pitchBends && extraControllers.pitchBends.length > 0) {
+      for (const pb of extraControllers.pitchBends) {
+        const absTick = range.startTick + Math.max(0, Math.round(pb.relTick));
+        if (absTick >= range.endTick) continue;
+        const ch = targetChannelOverride !== undefined ? targetChannelOverride : (pb.sourceChannel !== undefined ? pb.sourceChannel : targetMidiChannel);
+        keptEvents.push({
+          ev: { delta: 0, type: 'pitchBend', channel: ch, value: pb.value },
+          absTick,
+          index: virtualIndex++,
+        });
+      }
+    }
+
+    // 加入來源 MIDI 提取的真實控制器事件 (如 CC1 顫音 Modulation、CC64 延音等)
+    if (extraControllers?.ccs && extraControllers.ccs.length > 0) {
+      for (const c of extraControllers.ccs) {
+        const absTick = range.startTick + Math.max(0, Math.round(c.relTick));
+        if (absTick >= range.endTick) continue;
+        const ch = targetChannelOverride !== undefined ? targetChannelOverride : (c.sourceChannel !== undefined ? c.sourceChannel : targetMidiChannel);
+        keptEvents.push({
+          ev: { delta: 0, type: 'controlChange', channel: ch, controller: c.controller, value: c.value },
+          absTick,
+          index: virtualIndex++,
+        });
+      }
+    }
+
+    // 按時間排序 (嚴格依據 Yamaha 事件優先級：Meta -> NoteOff -> CC0/32 -> PC -> CC7/10/11 -> NoteOn)
     keptEvents.sort((a, b) => {
       if (a.absTick !== b.absTick) return a.absTick - b.absTick;
-      const aIsOff = a.ev.type === 'noteOff' || (a.ev.type === 'noteOn' && (a.ev.velocity ?? 0) === 0);
-      const bIsOff = b.ev.type === 'noteOff' || (b.ev.type === 'noteOn' && (b.ev.velocity ?? 0) === 0);
-      if (aIsOff && !bIsOff) return -1;
-      if (!aIsOff && bIsOff) return 1;
+      const pA = YamahaStyleModifier.getMidiEventPriority(a.ev);
+      const pB = YamahaStyleModifier.getMidiEventPriority(b.ev);
+      if (pA !== pB) return pA - pB;
       return a.index - b.index;
     });
 
