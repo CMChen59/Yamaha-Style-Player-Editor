@@ -100,6 +100,16 @@ export interface MidiSongAnalysis {
   totalTicks: number;
   ticksPerBar: number;
   totalBars: number;
+  /** 全曲第 1 個發聲音符的絕對 Tick (若無音符則為 null) */
+  firstNoteTick?: number | null;
+  /** 全曲第 1 個發聲音符所在小節 (1-based) */
+  firstNoteBar?: number | null;
+  /** 全曲第 1 個發聲音符所在拍數 (1-based, 例如第 3 拍起音則為 3) */
+  firstNoteBeat?: number | null;
+  /** 全曲開頭弱起/空拍偏移 Tick 數 (若首音自第 1 小節第 3 拍進場則為 192 Ticks) */
+  leadInOffsetTicks?: number;
+  /** 全曲開頭弱起/空拍偏移拍數 (例如 2 拍) */
+  leadInOffsetBeats?: number;
   durationSeconds: number;
   formattedDuration: string;
   totalNotes: number;
@@ -223,6 +233,7 @@ export class MidiSongAnalyzer {
     let maxNoteTick = 0;
     let maxAnyEventTick = 0;
     let totalNotes = 0;
+    let globalFirstNoteTick: number | null = null;
 
     for (const trk of parsed.tracks) {
       let curTick = 0;
@@ -289,6 +300,7 @@ export class MidiSongAnalyzer {
           if (acc.pitchMin === null || note < acc.pitchMin) acc.pitchMin = note;
           if (acc.pitchMax === null || note > acc.pitchMax) acc.pitchMax = note;
           if (acc.firstTick === null || curTick < acc.firstTick) acc.firstTick = curTick;
+          if (globalFirstNoteTick === null || curTick < globalFirstNoteTick) globalFirstNoteTick = curTick;
           if (acc.lastTick === null || curTick > acc.lastTick) acc.lastTick = curTick;
           if (curTick > maxNoteTick) maxNoteTick = curTick;
 
@@ -440,6 +452,12 @@ export class MidiSongAnalyzer {
     const channelsWithNotes = activeChannels.filter((c) => c.hasNotes);
     const instrumentCategories = Array.from(new Set(channelsWithNotes.map((c) => c.category)));
 
+    const ticksPerBeat = Math.round(division * (4 / (den || 4)));
+    const firstNoteBar = globalFirstNoteTick !== null ? Math.floor(globalFirstNoteTick / ticksPerBar) + 1 : null;
+    const firstNoteBeat = globalFirstNoteTick !== null ? (Math.floor(globalFirstNoteTick / ticksPerBeat) % (num || 4)) + 1 : null;
+    const leadInOffsetTicks = globalFirstNoteTick !== null ? globalFirstNoteTick : 0;
+    const leadInOffsetBeats = Math.floor(leadInOffsetTicks / ticksPerBeat);
+
     return {
       fileName,
       isStyleFile,
@@ -460,6 +478,11 @@ export class MidiSongAnalyzer {
       totalTicks,
       ticksPerBar,
       totalBars,
+      firstNoteTick: globalFirstNoteTick,
+      firstNoteBar,
+      firstNoteBeat,
+      leadInOffsetTicks,
+      leadInOffsetBeats,
       durationSeconds,
       formattedDuration,
       totalNotes,

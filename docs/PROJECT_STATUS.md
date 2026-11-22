@@ -56,16 +56,15 @@
      - **Meta 0x59 大調標籤審查**：當 MIDI 宣告大調時，微弱差距堅定尊重 C Major，避免全曲副歌小調音符比重高導致大調主歌被誤套用小調移調。
      - 單元測試 `tests/test-slice-chord-modes.test.ts` 與 `tests/test-rongyi-minor-detection.test.ts` (5/5) 全數通過驗證。
 
-2. **[當前第一優先 🚧 任務 2-4C] 智慧起音自動偵測（First Note Offset Snapping）與拍級（Beat）精確切片升級**
-   - **背景與逆向定案**：
-     - 經實證對比 Yamaha 官方《MIDI Song to Style》產出之 `容易受傷的女人.sty`，證實商業 MIDI 檔中超過 60% 存在前置初始化空拍或弱起拍（如本曲第 1 音符出現在第 1 小節第 3 拍，全曲帶有 2 拍相位偏移）。
-     - 整小節硬切導致：Intro A 開頭 2 拍空白、Intro A 結尾 2 拍木吉他被腰斬；Main A 開頭塞進 Intro 殘留尾音、結尾 2 拍主歌丟失且循環撕裂。
-     - Yamaha 官方切片游標為 `Bar : Beat : Tick`（`Intro A` 切於 `001 : 03 : 000 ~ 006 : 03 : 000`，`Main A` 切於 `006 : 03 : 000 ~ 014 : 03 : 000`）。
-   - **明日實裝目標**：
-     - **智慧起音嗅探（First Note Offset Snapping）**：分析 MIDI 首個發聲音符時間點，自動識別空拍/弱起拍偏移量（如 2 拍），切片時自動將取樣網格對齊起音點（0 等待、不腰斬）。
-     - **拍級（Beat）精準切片控制**：切片彈窗支援「起始拍（Beat）」選取或微調，使任何帶弱起/前置空拍之曲目皆能精準對齊。
+2. **[✅ 已完成] 智慧起音自動偵測（First Note Offset Snapping）與拍級（Beat）精確切片升級**
+   - **完成成果**：
+     - `MidiSongAnalyzer` 實裝全域首音時間嗅探（`firstNoteTick`, `firstNoteBar`, `firstNoteBeat`, `leadInOffsetBeats`, `leadInOffsetTicks`）。
+     - `MidiSliceAssembler` 全面升級支援拍級切片（`startBeat`, `endBeat`），切片取樣範圍以 Beat 精確咬合（如從 `Bar 1 Beat 3` 切至 `Bar 6 Beat 3`、`Bar 6 Beat 3` 切至 `Bar 14 Beat 3`）。
+     - 半小節和弦反向正規化（`detectTickRangeChord`）改採切片起始時間軸（`startTickSrc`）逐小節動態對齊，半小節和弦完全對齊簡譜（`C-Em`, `Am-Em`, `Dm-Am`, `F-G`），徹底消除雙和弦走音與半小節相位差。
+     - `MidiSliceAssignModal` UI 增加「起始拍（Beat）」選單與智慧弱起吸附提示徽章，自動偵測到 2 拍空拍時自動吸附至第 3 拍，亦允許手動自訂。
+     - 單元與 E2E 測試 `tests/test-beat-slice-e2e.test.ts` (3/3) 全數通過驗證。
 
-3. **[次要優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
+3. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
    - **背景**：如《容易受傷的女人》第 26~33 小節切為 `Intro B` 時，需要連同前奏/間奏 Solo 電吉他與弦樂鋪底共 7 軌齊開；而切為 `Main A`（第 6~13 小節）時則應維持純伴奏律動，排除斷續 Solo。
    - **目標**：
      - 當目標段落選為 `Intro A~D` 或 `Ending` 時，自動切換為「全軌道大樂隊直通模式」（納入副奏/前奏 Solo 樂器，預設原曲和弦直通）。

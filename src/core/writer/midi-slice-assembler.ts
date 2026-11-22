@@ -42,6 +42,10 @@ export interface MidiSliceAssembleOptions {
   startBar: number;
   /** 結束小節 (1-indexed) */
   endBar: number;
+  /** 起始拍數 (1-indexed, 預設 1；若有弱起/前置空拍偏移可指定如 3) */
+  startBeat?: number;
+  /** 結束拍數 (1-indexed, 可選) */
+  endBeat?: number;
   /** 目標 Yamaha 伴奏段落名稱 (例如 'Main A', 'Intro A', 'Fill In AA') */
   targetSection: string;
   /** 伴奏聲部映射與主旋律排除計畫 */
@@ -70,6 +74,8 @@ export interface MidiSliceAssembleResult {
   targetSection: string;
   startBar: number;
   endBar: number;
+  startBeat?: number;
+  endBeat?: number;
   totalBars: number;
   totalNotesExtracted: number;
   assembledPartsCount: number;
@@ -116,12 +122,16 @@ export class MidiSliceAssembler {
 
     const timeSig = sourceParsed.timeSignature || { numerator: 4, denominator: 4 };
     const beatsPerMeasure = timeSig.numerator * (4 / timeSig.denominator);
+    const beatsPerBar = timeSig.numerator;
+    const ticksPerBeatSrc = Math.round(srcPpq * (4 / timeSig.denominator));
     const srcTicksPerBar = Math.round(srcPpq * beatsPerMeasure);
     const ticksPerBarSrc = srcTicksPerBar;
     const targetTicksPerBar = Math.round(targetPpq * beatsPerMeasure);
 
-    const startTickSrc = (startBar - 1) * srcTicksPerBar;
-    const endTickSrc = endBar * srcTicksPerBar;
+    const startBeat = options.startBeat && options.startBeat >= 1 && options.startBeat <= beatsPerBar ? options.startBeat : 1;
+    const startTickSrc = Math.round((startBar - 1) * srcTicksPerBar + (startBeat - 1) * ticksPerBeatSrc);
+    const totalBeats = totalBars * beatsPerBar;
+    const endTickSrc = Math.round(startTickSrc + totalBeats * ticksPerBeatSrc);
     const maxSectionTicksTarget = totalBars * targetTicksPerBar;
 
     // 3. 確保目標段落存在且小節數吻合
@@ -148,9 +158,17 @@ export class MidiSliceAssembler {
     const bassAssign = mappingPlan.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
     const bassCh = bassAssign ? bassAssign.sourceChannel : undefined;
 
-    // 分析切片代表性和弦與起始小節和弦 (支援弱起前奏向後探測 Lookahead Fallback)
-    const repChord = MidiSliceAssembler.detectRepresentativeChord(sourceParsed, startBar, endBar, ticksPerBarSrc, bassCh);
-    const startChord = MidiSliceAssembler.detectBarChord(sourceParsed, startBar, ticksPerBarSrc, bassCh);
+    // 分析切片代表性和弦與起始小節和弦 (若有 startBeat 偏移，以 startTickSrc 所在位置之真實和弦為起始基準)
+    const repChord = startBeat === 1
+      ? MidiSliceAssembler.detectRepresentativeChord(sourceParsed, startBar, endBar, ticksPerBarSrc, bassCh)
+      : MidiSliceAssembler.detectTickRangeChord(sourceParsed, startTickSrc, Math.min(endTickSrc, startTickSrc + srcTicksPerBar), bassCh, startBar);
+    const startChord = MidiSliceAssembler.detectTickRangeChord(
+      sourceParsed,
+      startTickSrc,
+      startTickSrc + (beatsPerBar === 4 ? Math.round(srcTicksPerBar / 2) : srcTicksPerBar),
+      bassCh,
+      startBar
+    );
 
     // 全曲調性小調判定：優先讀取 analysis.isMinorKey，或分析調性名稱是否包含 'minor' (修復以前 includes('m') 誤判 'major' 的 bug)
     const isSongMinor = analysis.isMinorKey !== undefined
@@ -178,26 +196,46 @@ export class MidiSliceAssembler {
     const effectiveMinorRoot = repChord.isMinor ? repChord.rootName : (isSongMinor && analysis.detectedTonic ? analysis.detectedTonic : repChord.rootName);
     const uniformShiftToCm = -ROOT_SEMITONES_FROM_C[effectiveMinorRoot] || 0;
 
-    for (let b = startBar; b <= endBar; b++) {
-      const cInfo = MidiSliceAssembler.detectBarChord(sourceParsed, b, ticksPerBarSrc, bassCh);
-      barChordMap.set(b, cInfo);
+    const halfTicks = Math.round(srcTicksPerBar / 2);
+    for (let m = 0; m < totalBars; m++) {
+      const currentBar = startBar + m;
+      const measStartTick = startTickSrc + m * srcTicksPerBar;
+      const measEndTick = measStartTick + srcTicksPerBar;
 
-      // 高解析度半小節和弦分析 (Sub-bar / 2-beat resolution)
-      const subChords = MidiSliceAssembler.detectSubBarChords(sourceParsed, b, ticksPerBarSrc, bassCh, sourceParsed.timeSignature);
-      for (const sub of subChords) {
-        subBarChordList.push(sub);
-      }
+      const cInfo = MidiSliceAssembler.detectTickRangeChord(sourceParsed, measStartTick, measEndTick, bassCh, currentBar);
+      barChordMap.set(currentBar, cInfo);
 
-      // 組合顯示名稱 (若前半節與後半節不同，例如 Em-Am)
       let displayChordName = cInfo.chordName;
-      if (subChords.length >= 2 && subChords[0].chordName !== subChords[1].chordName && !subChords[1].isSilent) {
-        displayChordName = `${subChords[0].chordName}-${subChords[1].chordName}`;
+
+      // 若為 4/4 拍，切成兩半 (各 2 拍高解析度分析)
+      if (beatsPerBar === 4) {
+        const h1Start = measStartTick;
+        const h1End = measStartTick + halfTicks;
+        const h2Start = h1End;
+        const h2End = measEndTick;
+
+        let c1 = MidiSliceAssembler.detectTickRangeChord(sourceParsed, h1Start, h1End, bassCh, currentBar);
+        let c2 = MidiSliceAssembler.detectTickRangeChord(sourceParsed, h2Start, h2End, bassCh, currentBar);
+
+        // 若後半節無音符/靜音，繼承前半節
+        if (c2.isSilent && !c1.isSilent) {
+          c2 = { ...c1, isSilent: false };
+        }
+
+        subBarChordList.push({ ...c1, startTick: h1Start, endTick: h1End, subIndex: 0 });
+        subBarChordList.push({ ...c2, startTick: h2Start, endTick: h2End, subIndex: 1 });
+
+        if (c1.chordName !== c2.chordName && !c2.isSilent) {
+          displayChordName = `${c1.chordName}-${c2.chordName}`;
+        }
+      } else {
+        subBarChordList.push({ ...cInfo, startTick: measStartTick, endTick: measEndTick, subIndex: 0 });
       }
 
       const displayShift = effectiveChordMode === 'ORIGINAL_PASS_THROUGH'
         ? 0
         : (effectiveChordMode === 'CM_MINOR' && isIntroOrEnding ? uniformShiftToCm : cInfo.shiftToC);
-      detectedChordsByBar.push({ bar: b, chordName: displayChordName, shiftToC: displayShift });
+      detectedChordsByBar.push({ bar: currentBar, chordName: displayChordName, shiftToC: displayShift });
     }
 
     // 建立 sourceChannel -> assignment 快速索引
@@ -437,12 +475,16 @@ export class MidiSliceAssembler {
       modeDesc = ` [原曲和弦進行直通保留模式 (NTT = Bypass，琴端按單音直通播放原曲編曲)]`;
     }
 
+    const beatInfo = startBeat > 1 ? ` (第 ${startBeat} 拍起音)` : '';
+
     return {
       success: true,
       styleParsed,
       targetSection,
       startBar,
       endBar,
+      startBeat,
+      endBeat: startBeat,
       totalBars,
       totalNotesExtracted,
       assembledPartsCount: partDetails.length,
@@ -450,7 +492,7 @@ export class MidiSliceAssembler {
       chordMode: effectiveChordMode,
       isHarmonicallyNormalized: effectiveChordMode !== 'ORIGINAL_PASS_THROUGH',
       detectedChordsByBar,
-      message: `成功提取第 ${startBar} ~ ${endBar} 小節（共 ${totalBars} 小節），並裝配至伴奏段落【${targetSection}】！共提取 ${totalNotesExtracted} 顆音符至 ${partDetails.length} 個伴奏聲部。${modeDesc}`,
+      message: `成功提取第 ${startBar} ~ ${endBar} 小節${beatInfo}（共 ${totalBars} 小節），並裝配至伴奏段落【${targetSection}】！共提取 ${totalNotesExtracted} 顆音符至 ${partDetails.length} 個伴奏聲部。${modeDesc}`,
     };
   }
 

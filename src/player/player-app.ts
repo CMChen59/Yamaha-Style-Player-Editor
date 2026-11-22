@@ -1381,6 +1381,8 @@ export class PlayerApp {
         analysis: this.currentSongAnalysis,
         startBar: config.startBar,
         endBar: config.endBar,
+        startBeat: config.startBeat,
+        endBeat: config.endBeat,
         targetSection: config.targetSection,
         mappingPlan: config.mappingPlan,
         baseStyleParsed: this.workingStyleParsed,

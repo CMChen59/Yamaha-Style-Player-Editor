@@ -18,6 +18,8 @@ import { MidiSliceAssembler, type SliceChordMode, type BarChordInfo } from '../c
 export interface MidiSliceAssignConfig {
   startBar: number;
   endBar: number;
+  startBeat?: number;
+  endBeat?: number;
   totalBars: number;
   targetSection: string;       // e.g. 'Main A', 'Intro A'
   mappingPlan: SongPartMappingPlan;
@@ -29,6 +31,8 @@ export class MidiSliceAssignModal {
   private backdropEl!: HTMLElement;
   private selectSectionEl!: HTMLSelectElement;
   private rangeBadgeEl!: HTMLElement;
+  private selectStartBeatEl!: HTMLSelectElement;
+  private beatOffsetHintEl!: HTMLElement;
   private gridContainerEl!: HTMLElement;
   private melodyBoxEl!: HTMLElement;
   private btnConfirm!: HTMLButtonElement;
@@ -45,6 +49,7 @@ export class MidiSliceAssignModal {
   private currentPlan: SongPartMappingPlan | null = null;
   private currentStartBar: number = 1;
   private currentEndBar: number = 4;
+  private currentStartBeat: number = 1;
   private currentSourceParsed?: YamahaFileParsed;
   private onConfirmCallback: ((config: MidiSliceAssignConfig) => void) | null = null;
 
@@ -83,9 +88,20 @@ export class MidiSliceAssignModal {
         <div class="as-modal-body" style="gap: 14px; max-height: calc(85vh - 130px); overflow-y: auto;">
           <!-- 區間與目標段落設定列 -->
           <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;">
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
               <span style="font-size: 0.85rem; font-weight: 700; color: #38bdf8;">🎯 當前選定小節：</span>
               <span id="ms-range-badge" style="font-size: 0.88rem; font-weight: 700; color: #f8fafc; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); padding: 3px 10px; border-radius: 6px;">第 1 ~ 4 小節 (共 4 小節)</span>
+              <!-- 拍級精準起音控制 -->
+              <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 4px;">
+                <label for="ms-select-start-beat" style="font-size: 0.82rem; color: #94a3b8; font-weight: 600;">起始拍：</label>
+                <select id="ms-select-start-beat" style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-weight: 700; font-size: 0.82rem; border-radius: 4px; padding: 2px 6px; cursor: pointer;">
+                  <option value="1">第 1 拍 (預設)</option>
+                  <option value="2">第 2 拍</option>
+                  <option value="3">第 3 拍</option>
+                  <option value="4">第 4 拍</option>
+                </select>
+                <span id="ms-beat-offset-hint" style="font-size: 0.72rem; color: #fbbf24; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.3); padding: 2px 6px; border-radius: 4px; display: none;"></span>
+              </div>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
               <label for="ms-select-section" style="font-size: 0.85rem; font-weight: 700; color: #fbbf24;">指派至 Yamaha 段落：</label>
@@ -160,6 +176,8 @@ export class MidiSliceAssignModal {
 
     this.selectSectionEl = wrap.querySelector('#ms-select-section') as HTMLSelectElement;
     this.rangeBadgeEl = wrap.querySelector('#ms-range-badge') as HTMLElement;
+    this.selectStartBeatEl = wrap.querySelector('#ms-select-start-beat') as HTMLSelectElement;
+    this.beatOffsetHintEl = wrap.querySelector('#ms-beat-offset-hint') as HTMLElement;
     this.gridContainerEl = wrap.querySelector('#ms-parts-grid') as HTMLElement;
     this.melodyBoxEl = wrap.querySelector('#ms-melody-box') as HTMLElement;
     this.btnConfirm = wrap.querySelector('#btn-confirm-ms-modal') as HTMLButtonElement;
@@ -193,6 +211,12 @@ export class MidiSliceAssignModal {
     this.radioMajorEl.addEventListener('change', onRadioChange);
     this.radioPassThroughEl.addEventListener('change', onRadioChange);
 
+    this.selectStartBeatEl.addEventListener('change', () => {
+      this.currentStartBeat = parseInt(this.selectStartBeatEl.value, 10) || 1;
+      this.updateRangeBadge();
+      this.updateNormalizeModeBySection(false);
+    });
+
     this.btnConfirm.addEventListener('click', () => {
       if (!this.currentPlan) return;
       const totalBars = Math.max(1, (this.currentEndBar - this.currentStartBar) + 1);
@@ -200,6 +224,8 @@ export class MidiSliceAssignModal {
       const config: MidiSliceAssignConfig = {
         startBar: this.currentStartBar,
         endBar: this.currentEndBar,
+        startBeat: this.currentStartBeat,
+        endBeat: this.currentStartBeat,
         totalBars,
         targetSection: this.selectSectionEl.value || 'Main A',
         mappingPlan: this.currentPlan,
@@ -229,19 +255,33 @@ export class MidiSliceAssignModal {
       const ticksPerBar = Math.round(srcPpq * beats);
       const bassAssign = this.currentPlan?.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
 
-      repChord = MidiSliceAssembler.detectRepresentativeChord(
-        this.currentSourceParsed,
-        this.currentStartBar,
-        this.currentEndBar,
-        ticksPerBar,
-        bassAssign?.sourceChannel
-      );
-      startChord = MidiSliceAssembler.detectBarChord(
-        this.currentSourceParsed,
-        this.currentStartBar,
-        ticksPerBar,
-        bassAssign?.sourceChannel
-      );
+      if (this.currentStartBeat === 1) {
+        repChord = MidiSliceAssembler.detectRepresentativeChord(
+          this.currentSourceParsed,
+          this.currentStartBar,
+          this.currentEndBar,
+          ticksPerBar,
+          bassAssign?.sourceChannel
+        );
+        startChord = MidiSliceAssembler.detectBarChord(
+          this.currentSourceParsed,
+          this.currentStartBar,
+          ticksPerBar,
+          bassAssign?.sourceChannel
+        );
+      } else {
+        const ticksPerBeat = Math.round(srcPpq * (4 / timeSig.denominator));
+        const startTick = (this.currentStartBar - 1) * ticksPerBar + (this.currentStartBeat - 1) * ticksPerBeat;
+        const c1 = MidiSliceAssembler.detectTickRangeChord(
+          this.currentSourceParsed,
+          startTick,
+          startTick + (timeSig.numerator === 4 ? Math.round(ticksPerBar / 2) : ticksPerBar),
+          bassAssign?.sourceChannel,
+          this.currentStartBar
+        );
+        repChord = { ...c1, effectiveBar: this.currentStartBar };
+        startChord = c1;
+      }
     }
 
     // 切片起點和弦與調性屬性 (以代表性和弦為首要依據)
@@ -268,6 +308,7 @@ export class MidiSliceAssignModal {
     if (this.chordHintBadgeEl) {
       let detailHint = '';
       let recMode = '';
+      const beatStr = this.currentStartBeat > 1 ? `第 ${this.currentStartBeat} 拍 ` : '';
 
       if (isIntroOrEnding) {
         recMode = '原曲和弦直通 (NTT = Bypass)';
@@ -275,10 +316,10 @@ export class MidiSliceAssignModal {
       } else {
         if (isSliceMinor) {
           recMode = 'Cm 小調基準 (Yamaha SFF2 標準)';
-          detailHint = `切片起點：第 ${effectiveBarNumber} 節 <strong>[${chordName}] (小調)</strong>`;
+          detailHint = `切片起點：第 ${effectiveBarNumber} 節 ${beatStr}<strong>[${chordName}] (小調)</strong>`;
         } else {
           recMode = 'CM7 大調基準 (Yamaha 原廠標準)';
-          detailHint = `切片起點：第 ${effectiveBarNumber} 節 <strong>[${chordName}] (大調)</strong>`;
+          detailHint = `切片起點：第 ${effectiveBarNumber} 節 ${beatStr}<strong>[${chordName}] (大調)</strong>`;
         }
       }
 
@@ -286,6 +327,12 @@ export class MidiSliceAssignModal {
     }
 
     this.updateNormDescription();
+  }
+
+  private updateRangeBadge() {
+    const span = Math.max(1, (this.currentEndBar - this.currentStartBar) + 1);
+    const beatText = this.currentStartBeat > 1 ? ` (第 ${this.currentStartBeat} 拍起)` : '';
+    this.rangeBadgeEl.textContent = `第 ${this.currentStartBar} ~ ${this.currentEndBar} 小節${beatText} (共 ${span} 小節)`;
   }
 
   private updateNormDescription() {
@@ -323,8 +370,23 @@ export class MidiSliceAssignModal {
     this.isAuditioningAccomp = false;
     this.updateAuditionButtonUI();
 
-    const span = Math.max(1, (endBar - startBar) + 1);
-    this.rangeBadgeEl.textContent = `第 ${startBar} ~ ${endBar} 小節 (共 ${span} 小節)`;
+    // 智慧起音自動吸附 (First Note Offset Snapping)
+    const beatsPerBar = analysis.timeSignature?.numerator || 4;
+    const offsetBeats = analysis.leadInOffsetBeats || 0;
+    const defaultBeat = (offsetBeats % beatsPerBar) + 1;
+
+    if (offsetBeats > 0) {
+      this.currentStartBeat = defaultBeat;
+      this.selectStartBeatEl.value = String(defaultBeat);
+      this.beatOffsetHintEl.style.display = 'inline-block';
+      this.beatOffsetHintEl.textContent = `💡 首音自第 ${analysis.firstNoteBeat || defaultBeat} 拍進場，自動吸附對齊！`;
+    } else {
+      this.currentStartBeat = 1;
+      this.selectStartBeatEl.value = '1';
+      this.beatOffsetHintEl.style.display = 'none';
+    }
+
+    this.updateRangeBadge();
 
     this.populateSectionOptions();
     this.updateNormalizeModeBySection();
