@@ -64,7 +64,14 @@
      - `MidiSliceAssignModal` UI 增加「起始拍（Beat）」選單與智慧弱起吸附提示徽章，自動偵測到 2 拍空拍時自動吸附至第 3 拍，亦允許手動自訂。
      - 單元與 E2E 測試 `tests/test-beat-slice-e2e.test.ts` (3/3) 全數通過驗證。
 
-3. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
+3. **[✅ 已完成] 全域主旋律優先錨定與弱起進歌音防護（Global Melody Anchor）**
+   - **完成成果**：
+     - 排查解決使用者於 PSR-SX920 實測《容易受傷的女人》Intro A 時，第 5 小節末端出現 2 顆主唱進歌音（G2, A2 簡譜 `˙5 ˙6`，誤入 Phrase 1）問題。
+     - 根因：主唱軌（Ch 0 Soprano Sax）在 Intro 前 4 小節為 0 音符，切片區域分析誤將其降級為伴奏並分配給 Phrase 1。
+     - 升級 `MidiPartAssignMatrix.createAutoMappingPlan`：實裝「全曲全域特徵」＋「切片區間特徵」雙重聯集判定。全曲識別為主唱之軌道永久保留 `isMelody = true` 且預設排除（`isExcluded = true, targetPart = null`）。
+     - E2E 測試驗證 Intro A 裝配後 Phrase 1 音符為原曲伴奏（Vibraphone），主唱弱起進歌音 0 音符殘留。
+
+4. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
    - **背景**：如《容易受傷的女人》第 26~33 小節切為 `Intro B` 時，需要連同前奏/間奏 Solo 電吉他與弦樂鋪底共 7 軌齊開；而切為 `Main A`（第 6~13 小節）時則應維持純伴奏律動，排除斷續 Solo。
    - **目標**：
      - 當目標段落選為 `Intro A~D` 或 `Ending` 時，自動切換為「全軌道大樂隊直通模式」（納入副奏/前奏 Solo 樂器，預設原曲和弦直通）。

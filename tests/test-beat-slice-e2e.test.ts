@@ -38,6 +38,13 @@ describe('任務 2-4C: 智慧起音自動偵測與拍級切片 E2E 實戰驗證'
     expect(result.startBeat).toBe(3);
     expect(result.totalBars).toBe(5);
 
+    // 驗證全域主旋律防護：Channel 0 (主唱薩克斯風) 必須被判定為 isMelody 且 isExcluded = true，不可被指派至 Phrase 1
+    const ch0Plan = plan.assignments.find(a => a.sourceChannel === 0);
+    expect(ch0Plan).toBeDefined();
+    expect(ch0Plan?.melodyInfo.isMelody).toBe(true);
+    expect(ch0Plan?.isExcluded).toBe(true);
+    expect(ch0Plan?.targetPart).toBeNull();
+
     // 檢查目標段落音符
     const introA = result.styleParsed.sections.find(s => s.name === 'Intro A')!;
     expect(introA).toBeDefined();
@@ -58,6 +65,10 @@ describe('任務 2-4C: 智慧起音自動偵測與拍級切片 E2E 實戰驗證'
 
     console.log(`Intro A (startBeat=3) extracted ${notes.length} notes`);
     expect(notes.length).toBeGreaterThan(0);
+
+    // 驗證主唱弱起進歌音 (Note 55 G2 與 Note 57 A2，位於第 5 小節第 4 拍 Tick 36480 / 37440) 徹底被排除，絕不混入伴奏
+    const vocalLeadInNotes = notes.filter(n => (n.note === 55 || n.note === 57) && n.tickRel >= 36000 && n.tickRel < 38400);
+    expect(vocalLeadInNotes.length).toBe(0);
 
     // 第一顆音符必須在 tickRel = 0 (伴奏第 1 拍第 1 個 Tick 就直接發聲，零等待！)
     const firstRelTick = Math.min(...notes.map(n => n.tickRel));

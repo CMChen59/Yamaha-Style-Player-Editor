@@ -223,9 +223,19 @@ export class MidiPartAssignMatrix {
         noteCount = sliceNoteCountMap.get(ch.channel) || 0;
       }
 
-      const melodyInfo = sliceContext
+      // 全域主旋律判定：依據全曲特徵 (音域、音色、總音符數、常用主奏通道等)
+      const globalMelodyInfo = this.detectMelody(ch);
+      // 局部切片主旋律判定
+      const localMelodyInfo = sliceContext
         ? this.detectMelody({ ...ch, category: cat, voiceName: vName, noteCount })
-        : this.detectMelody(ch);
+        : globalMelodyInfo;
+
+      // 核心鐵律：若該軌在全曲分析中已被識別為全曲主旋律 (globalMelodyInfo.isMelody === true)，
+      // 絕對不可因局部切片區間 (例如前奏 1~5 節主唱尚未進場) 暫無音符就誤判為伴奏樂器而混入伴奏聲部！
+      const isMelody = globalMelodyInfo.isMelody || localMelodyInfo.isMelody;
+      const confidence = Math.max(globalMelodyInfo.confidence, localMelodyInfo.confidence);
+      const reasons = globalMelodyInfo.isMelody ? globalMelodyInfo.reasons : localMelodyInfo.reasons;
+      const melodyInfo: MelodyDetectionResult = { isMelody, confidence, reasons };
 
       assignments.push({
         sourceChannel: ch.channel,
