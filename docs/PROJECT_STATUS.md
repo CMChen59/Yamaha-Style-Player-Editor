@@ -71,7 +71,15 @@
      - 升級 `MidiPartAssignMatrix.createAutoMappingPlan`：實裝「全曲全域特徵」＋「切片區間特徵」雙重聯集判定。全曲識別為主唱之軌道永久保留 `isMelody = true` 且預設排除（`isExcluded = true, targetPart = null`）。
      - E2E 測試驗證 Intro A 裝配後 Phrase 1 音符為原曲伴奏（Vibraphone），主唱弱起進歌音 0 音符殘留。
 
-4. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
+4. **[✅ 已完成] CASM 段落獨立隔離機制（CSEG Section Isolation，徹底杜絕跨段落和弦污染走音）**
+   - **完成成果**：
+     - 排查解決使用者實測 `1122-02.sty` 時，琴端全曲調性走音錯亂問題。
+     - 根因：SFF2 範本中 `Main A~D` 與 `Intro A`, `Ending A` 預設共享同一個 `CSEG 0`。當使用者切片帶有非 C 和弦之段落（例如 Ending A 起始於第 66 節 Dm，配置原曲直通 `Root = 2, Type = 8`）時，舊版 `CasmModifier` 原地覆寫 CSEG 0，將 `Main A~D` 全部的基準和弦與 NTT 竄改為 D minor Bypass，引發左手彈奏時全曲雙重移調大走音。
+     - 升級 `CasmModifier.injectOrUpdateSectionCasmRule`：實裝「段落獨立剝離（CSEG Isolation）」。當更新處於多段落共享之 CSEG 時，自動將目標段落自原共享 CSEG 的 Sdec 移除，並於 CASM 末端建立該段落專屬的全新獨立 CSEG。
+     - 徹底杜絕跨段落規則污染，確保 `Main A~D` 100% 保持純淨 CM7 大調，而 `Intro / Ending` 亦能獨立擁有自身直通調性。
+     - 單元測試 `tests/test-casm-isolation.test.ts` (1/1) 全數通過。
+
+5. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
    - **背景**：如《容易受傷的女人》第 26~33 小節切為 `Intro B` 時，需要連同前奏/間奏 Solo 電吉他與弦樂鋪底共 7 軌齊開；而切為 `Main A`（第 6~13 小節）時則應維持純伴奏律動，排除斷續 Solo。
    - **目標**：
      - 當目標段落選為 `Intro A~D` 或 `Ending` 時，自動切換為「全軌道大樂隊直通模式」（納入副奏/前奏 Solo 樂器，預設原曲和弦直通）。

@@ -64,6 +64,9 @@
 - **全域主旋律優先錨定與弱起進歌音防護鐵律（2026-11-22 實機驗收鎖定）**：
   - **病因診斷**：流行歌曲中，主唱軌（如 Channel 0 Soprano Sax，全曲 396 顆音）在前奏（第 1 ~ 4 小節）通常完全未開口（0 音符），直到前奏最後一拍（第 5 小節第 4 拍）才以弱起前導音（Pickup / Anacrusis，如「有心」G2-A2 簡譜 `˙5 ˙6`）銜接主歌。舊版若僅針對切片選取區間（1~5 節）判斷主旋律，會因該區間前段為 0 音符而誤將主唱軌判定為 `isMelody = false`，導致自動分配引擎將其誤當閒置伴奏抓去填補 `Phrase 1`，在琴端 Style Creator 第 5 小節出現兩顆主唱進歌音。
   - **核心鐵律**：聲部映射矩陣（`MidiPartAssignMatrix`）必須採取**「全曲全域特徵（Global）」＋「局部切片特徵（Local）」雙重聯集校驗（Global Melody Anchor）**。凡在全曲分析中被識別為全曲主唱/主旋律之軌道，**絕對不准因局部切片區間暫無音符就降級為伴奏樂器**！強制鎖定 `isMelody = true` 且 `isExcluded = true`（伴奏預設排除），徹底杜絕主唱弱起進歌音漏進伴奏檔（STY）之任何聲部。
+- **CASM 段落獨立隔離鐵律（CSEG Section Isolation Rule — 2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：Yamaha SFF2 標準範本中，預設將 `Main A~D, Fill In AA~DD, Intro A, Ending A` 多段落歸在同一個 `CSEG 0` 共享區塊中（`Sdec` 包含多個段落名稱）。當切片非 C 大調段落（例如切片 `Ending A` 第 66 節起始和弦為 Dm，配置 `ORIGINAL_PASS_THROUGH` 寫入 `Root = 2, Type = 8, NTT = Bypass`）時，舊版 `injectOrUpdateSectionCasmRule` 因在 CSEG 0 命中 `Ending A` 而直接原地覆寫 CSEG 0，導致 `Main A~D` 與所有循環伴奏之基準和弦全部被竄改為 D minor Bypass！琴端手彈時全曲調性錯亂走調。
+  - **核心鐵律**：更新 CASM 轉調規則時，若目標段落處於多段落共享之 CSEG（`names.length > 1`），**鐵律嚴禁直接原地覆寫共享 CSEG**！必須執行**「段落獨立剝離（CSEG Isolation）」**：自動自原共享 CSEG 的 `Sdec` 移除該段落，並在 CASM 末端建立該段落專屬的全新獨立 CSEG，確保 `Main A~D` CM7 與 `Intro/Ending` 直通調性互不干擾、零污染！
 
 ### 3. MIDI 全景透視與切片 UI 已定案設計
 - **Yamaha Style `fn:` 全名標籤防呆隔離鐵律**：

@@ -405,10 +405,18 @@ export class CasmModifier {
     // 建立 55-byte 獨立 Ctb2 子區塊
     const ctbSub = this.buildCtb2Subchunk(rule, channel);
 
+    // 掃描所有 CSEG，優先尋找「專屬此段落」的 CSEG (names.length === 1)
     let offset = 0;
-    let matchedCsegOffset = -1;
-    let matchedCsegLen = 0;
-    let foundExistingCtb2Offset = -1;
+    let exactDedicatedCsegOffset = -1;
+    let exactDedicatedCsegLen = 0;
+    let exactDedicatedExistingCtb2Offset = -1;
+
+    // 備用：若尚未有專屬 CSEG，記錄包含此段落的多段落共享 CSEG (names.length > 1)
+    let sharedCsegOffset = -1;
+    let sharedCsegLen = 0;
+    let sharedSdecOffset = -1;
+    let sharedSdecLen = 0;
+    let sharedNames: string[] = [];
 
     while (offset <= casmData.length - 8) {
       const tagStr = String.fromCharCode(...casmData.slice(offset, offset + 4));
@@ -418,6 +426,9 @@ export class CasmModifier {
         const end = offset + 8 + len;
         let sub = offset + 8;
         let csegMatched = false;
+        let curSdecOffset = -1;
+        let curSdecLen = 0;
+        let curNames: string[] = [];
         const ctbOffsets: { offset: number; srcCh: number; destCh: number }[] = [];
 
         while (sub <= end - 8) {
@@ -425,9 +436,11 @@ export class CasmModifier {
           const sLen = view.getUint32(sub + 4);
 
           if (sTag === 'Sdec') {
+            curSdecOffset = sub;
+            curSdecLen = sLen;
             const sStr = new TextDecoder().decode(casmData.slice(sub + 8, sub + 8 + sLen));
-            const names = sStr.split(/[\x00,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
-            if (names.some((n) => n === targetSecLower || n.replace(/\s+/g, '') === targetSecNoSpace)) {
+            curNames = sStr.split(/[\x00,]+/).map((s) => s.trim()).filter(Boolean);
+            if (curNames.some((n) => n.toLowerCase() === targetSecLower || n.toLowerCase().replace(/\s+/g, '') === targetSecNoSpace)) {
               csegMatched = true;
             }
           } else if (sTag === 'Ctb2' || sTag === 'CTAB') {
@@ -439,14 +452,24 @@ export class CasmModifier {
         }
 
         if (csegMatched) {
-          matchedCsegOffset = offset;
-          matchedCsegLen = len;
-          const exactExisting = ctbOffsets.find((c) => c.srcCh === channel && c.destCh === channel);
-          const existing = exactExisting || ctbOffsets.find((c) => c.destCh === channel);
-          if (existing) {
-            foundExistingCtb2Offset = existing.offset;
+          if (curNames.length === 1) {
+            // 找到專屬此段落的 CSEG！
+            exactDedicatedCsegOffset = offset;
+            exactDedicatedCsegLen = len;
+            const exactExisting = ctbOffsets.find((c) => c.srcCh === channel && c.destCh === channel);
+            const existing = exactExisting || ctbOffsets.find((c) => c.destCh === channel);
+            if (existing) {
+              exactDedicatedExistingCtb2Offset = existing.offset;
+            }
+            break; // 專屬 CSEG 是最佳匹配，直接採用
+          } else if (sharedCsegOffset < 0) {
+            // 找到包含此段落的共享 CSEG
+            sharedCsegOffset = offset;
+            sharedCsegLen = len;
+            sharedSdecOffset = curSdecOffset;
+            sharedSdecLen = curSdecLen;
+            sharedNames = curNames;
           }
-          break;
         }
         offset = end;
       } else {
@@ -454,22 +477,22 @@ export class CasmModifier {
       }
     }
 
-    if (matchedCsegOffset >= 0) {
-      if (foundExistingCtb2Offset >= 0) {
-        // 該段落內已存在此聲部之 Ctb2 規則：直接原地覆寫 47-byte 內容
+    if (exactDedicatedCsegOffset >= 0) {
+      if (exactDedicatedExistingCtb2Offset >= 0) {
+        // 該段落專屬 CSEG 內已存在此聲部之 Ctb2 規則：直接原地覆寫 47-byte 內容
         const ctbData = this.buildCtb2Data(rule, channel);
-        if (rule.sourceChordRoot === undefined && casmData.length > foundExistingCtb2Offset + 8 + 18) {
-          ctbData[18] = casmData[foundExistingCtb2Offset + 8 + 18];
+        if (rule.sourceChordRoot === undefined && casmData.length > exactDedicatedExistingCtb2Offset + 8 + 18) {
+          ctbData[18] = casmData[exactDedicatedExistingCtb2Offset + 8 + 18];
         }
-        if (rule.sourceChordType === undefined && casmData.length > foundExistingCtb2Offset + 8 + 19) {
-          ctbData[19] = casmData[foundExistingCtb2Offset + 8 + 19];
+        if (rule.sourceChordType === undefined && casmData.length > exactDedicatedExistingCtb2Offset + 8 + 19) {
+          ctbData[19] = casmData[exactDedicatedExistingCtb2Offset + 8 + 19];
         }
         const updatedData = new Uint8Array(casmData);
-        updatedData.set(ctbData, foundExistingCtb2Offset + 8);
+        updatedData.set(ctbData, exactDedicatedExistingCtb2Offset + 8);
         casmChunk.data = updatedData;
       } else {
-        // 該段落尚未登記此聲部：在目標 CSEG 的末端增量插入 55-byte 之全新 Ctb2 子區塊
-        const insertPos = matchedCsegOffset + 8 + matchedCsegLen;
+        // 該段落專屬 CSEG 尚未登記此聲部：在目標 CSEG 的末端增量插入 55-byte 之全新 Ctb2 子區塊
+        const insertPos = exactDedicatedCsegOffset + 8 + exactDedicatedCsegLen;
         const updatedData = new Uint8Array(casmData.length + ctbSub.length);
         updatedData.set(casmData.slice(0, insertPos), 0);
         updatedData.set(ctbSub, insertPos);
@@ -477,9 +500,117 @@ export class CasmModifier {
 
         // 同步更新該 CSEG 的 32-bit 長度標頭 (+55 bytes)
         const updatedView = new DataView(updatedData.buffer, updatedData.byteOffset, updatedData.byteLength);
-        updatedView.setUint32(matchedCsegOffset + 4, matchedCsegLen + ctbSub.length, false);
+        updatedView.setUint32(exactDedicatedCsegOffset + 4, exactDedicatedCsegLen + ctbSub.length, false);
         casmChunk.data = updatedData;
       }
+    } else if (sharedCsegOffset >= 0) {
+      // 關鍵修復：該段落目前與其他段落共享同一個 CSEG (如 Main A~D, Intro A, Ending A 共享 CSEG 0)。
+      // 絕不可直接原地覆寫共享 CSEG，否則會同時竄改其他伴奏段落（如 Main A~D）的和弦與轉調模式！
+      // 正確做法：將目標段落自共享 CSEG 中剝離 (自 Sdec 中移除)，並為其獨立建立專屬的全新 CSEG！
+
+      // 1. 自原共享 CSEG 的 Sdec 移除目標段落
+      const remainingNames = sharedNames.filter(
+        (n) => n.toLowerCase() !== targetSecLower && n.toLowerCase().replace(/\s+/g, '') !== targetSecNoSpace
+      );
+      const newSdecBytes = new TextEncoder().encode(remainingNames.join(','));
+      const oldSdecTotalLen = 8 + sharedSdecLen;
+      const newSdecTotalLen = 8 + newSdecBytes.length;
+
+      // 提取原共享 CSEG 中的所有 Ctb2 / 子區塊 (Sdec 之後的全部數據)
+      const ctb2DataAfterSdec = casmData.slice(
+        sharedSdecOffset + oldSdecTotalLen,
+        sharedCsegOffset + 8 + sharedCsegLen
+      );
+
+      // 重構修改後的原共享 CSEG (長度調整)
+      const newSharedCsegDataLen = newSdecTotalLen + ctb2DataAfterSdec.length;
+      const newSharedCsegChunk = new Uint8Array(8 + newSharedCsegDataLen);
+      newSharedCsegChunk[0] = 'C'.charCodeAt(0);
+      newSharedCsegChunk[1] = 'S'.charCodeAt(0);
+      newSharedCsegChunk[2] = 'E'.charCodeAt(0);
+      newSharedCsegChunk[3] = 'G'.charCodeAt(0);
+      const sharedView = new DataView(newSharedCsegChunk.buffer);
+      sharedView.setUint32(4, newSharedCsegDataLen, false);
+
+      // 寫入縮減後的 Sdec
+      newSharedCsegChunk[8] = 'S'.charCodeAt(0);
+      newSharedCsegChunk[9] = 'd'.charCodeAt(0);
+      newSharedCsegChunk[10] = 'e'.charCodeAt(0);
+      newSharedCsegChunk[11] = 'c'.charCodeAt(0);
+      sharedView.setUint32(12, newSdecBytes.length, false);
+      newSharedCsegChunk.set(newSdecBytes, 16);
+
+      // 寫入原有的 Ctb2 數據
+      newSharedCsegChunk.set(ctb2DataAfterSdec, 8 + newSdecTotalLen);
+
+      // 2. 為目標段落建立全新的專屬 CSEG
+      const dedicatedSecBytes = new TextEncoder().encode(sectionName);
+      const dedicatedSdecTotalLen = 8 + dedicatedSecBytes.length;
+
+      // 複製一份原 Ctb2 數據，並在其中將目標 channel 替換為新規則 (若無則追加)
+      let dedicatedCtbData = new Uint8Array(ctb2DataAfterSdec);
+      let channelFoundInCopy = false;
+      let ctbPos = 0;
+      while (ctbPos + 8 <= dedicatedCtbData.length) {
+        const subId = String.fromCharCode(...dedicatedCtbData.slice(ctbPos, ctbPos + 4));
+        const subLen = (dedicatedCtbData[ctbPos + 4] << 24) | (dedicatedCtbData[ctbPos + 5] << 16) | (dedicatedCtbData[ctbPos + 6] << 8) | dedicatedCtbData[ctbPos + 7];
+        if (subId === 'Ctb2' && subLen >= 47) {
+          const srcCh = dedicatedCtbData[ctbPos + 8];
+          const destCh = dedicatedCtbData[ctbPos + 8 + 9];
+          if (destCh === channel || (destCh === undefined && (srcCh & 0x0f) === channel)) {
+            const newCtbBody = this.buildCtb2Data(rule, channel);
+            dedicatedCtbData.set(newCtbBody, ctbPos + 8);
+            channelFoundInCopy = true;
+            break;
+          }
+        }
+        ctbPos += 8 + subLen;
+      }
+
+      if (!channelFoundInCopy) {
+        // 若原本沒有此 channel 的 Ctb2，追加一個 Ctb2 子區塊
+        const combined = new Uint8Array(dedicatedCtbData.length + ctbSub.length);
+        combined.set(dedicatedCtbData, 0);
+        combined.set(ctbSub, dedicatedCtbData.length);
+        dedicatedCtbData = combined;
+      }
+
+      const dedicatedCsegDataLen = dedicatedSdecTotalLen + dedicatedCtbData.length;
+      const dedicatedCsegChunk = new Uint8Array(8 + dedicatedCsegDataLen);
+      dedicatedCsegChunk[0] = 'C'.charCodeAt(0);
+      dedicatedCsegChunk[1] = 'S'.charCodeAt(0);
+      dedicatedCsegChunk[2] = 'E'.charCodeAt(0);
+      dedicatedCsegChunk[3] = 'G'.charCodeAt(0);
+      const dedicatedView = new DataView(dedicatedCsegChunk.buffer);
+      dedicatedView.setUint32(4, dedicatedCsegDataLen, false);
+
+      // 寫入專屬 Sdec
+      dedicatedCsegChunk[8] = 'S'.charCodeAt(0);
+      dedicatedCsegChunk[9] = 'd'.charCodeAt(0);
+      dedicatedCsegChunk[10] = 'e'.charCodeAt(0);
+      dedicatedCsegChunk[11] = 'c'.charCodeAt(0);
+      dedicatedView.setUint32(12, dedicatedSecBytes.length, false);
+      dedicatedCsegChunk.set(dedicatedSecBytes, 16);
+
+      // 寫入更新後的專屬 Ctb2
+      dedicatedCsegChunk.set(dedicatedCtbData, 8 + dedicatedSdecTotalLen);
+
+      // 3. 拼裝新的 CASM 二進位數據
+      const partBefore = casmData.slice(0, sharedCsegOffset);
+      const partAfter = casmData.slice(sharedCsegOffset + 8 + sharedCsegLen);
+      const totalNewLength = partBefore.length + newSharedCsegChunk.length + partAfter.length + dedicatedCsegChunk.length;
+
+      const finalCasmData = new Uint8Array(totalNewLength);
+      let p = 0;
+      finalCasmData.set(partBefore, p);
+      p += partBefore.length;
+      finalCasmData.set(newSharedCsegChunk, p);
+      p += newSharedCsegChunk.length;
+      finalCasmData.set(partAfter, p);
+      p += partAfter.length;
+      finalCasmData.set(dedicatedCsegChunk, p);
+
+      casmChunk.data = finalCasmData;
     } else {
       // 該段落尚未有獨立 CSEG：在 CASM 結尾追加全新的 CSEG (含 Sdec 與 Ctb2)
       const secBytes = new TextEncoder().encode(sectionName);
