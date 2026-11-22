@@ -79,7 +79,13 @@
      - 徹底杜絕跨段落規則污染，確保 `Main A~D` 100% 保持純淨 CM7 大調，而 `Intro / Ending` 亦能獨立擁有自身直通調性。
      - 單元測試 `tests/test-casm-isolation.test.ts` (1/1) 全數通過。
 
-5. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
+5. **[✅ 已完成] CASM 原曲直通段落基準根音全域鎖定 C (PitchClass 0) 機制**
+   - **完成成果**：
+     - 排查解決使用者實測 `1122-03.sty` 時，`Intro B`（間奏電吉他）與 `Ending A`（尾奏）調性跑掉走音問題。
+     - 根因：原曲直通模式（`ORIGINAL_PASS_THROUGH` / NTT = Bypass）下，音符在 MIDI 中本就是原汁原味零移調。舊版誤將 CASM `sourceChordRoot` 設為切片起點和弦（如 Intro B 與 Ending A 起點皆為 Dm，設為 `Root = 2`）。當演奏者左手以 `Sync Start = C (Root = 0)` 觸發時，琴端計算 `0 - 2 = -2` 半音，硬生生將全段音高降低 2 半音導致嚴重偏音。
+     - 升級 `MidiSliceAssembler`：所有直通段落 CASM 基準根音鐵律一律寫入 `sourceChordRoot = 0 (C), sourceChordType = 0 (Major)`。琴端以 C 觸發時移調量 `0 - 0 = 0`，100% 還原原曲真實音高！已手動修正產出 `1122-03-fixed.sty` 提供使用者立即實測。
+
+6. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
    - **背景**：如《容易受傷的女人》第 26~33 小節切為 `Intro B` 時，需要連同前奏/間奏 Solo 電吉他與弦樂鋪底共 7 軌齊開；而切為 `Main A`（第 6~13 小節）時則應維持純伴奏律動，排除斷續 Solo。
    - **目標**：
      - 當目標段落選為 `Intro A~D` 或 `Ending` 時，自動切換為「全軌道大樂隊直通模式」（納入副奏/前奏 Solo 樂器，預設原曲和弦直通）。

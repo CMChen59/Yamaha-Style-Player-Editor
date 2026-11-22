@@ -158,17 +158,10 @@ export class MidiSliceAssembler {
     const bassAssign = mappingPlan.assignments.find(a => a.targetPart === 'Bass' && !a.isExcluded);
     const bassCh = bassAssign ? bassAssign.sourceChannel : undefined;
 
-    // 分析切片代表性和弦與起始小節和弦 (若有 startBeat 偏移，以 startTickSrc 所在位置之真實和弦為起始基準)
+    // 分析切片代表性和弦 (若有 startBeat 偏移，以 startTickSrc 所在位置之真實和弦為起始基準)
     const repChord = startBeat === 1
       ? MidiSliceAssembler.detectRepresentativeChord(sourceParsed, startBar, endBar, ticksPerBarSrc, bassCh)
       : MidiSliceAssembler.detectTickRangeChord(sourceParsed, startTickSrc, Math.min(endTickSrc, startTickSrc + srcTicksPerBar), bassCh, startBar);
-    const startChord = MidiSliceAssembler.detectTickRangeChord(
-      sourceParsed,
-      startTickSrc,
-      startTickSrc + (beatsPerBar === 4 ? Math.round(srcTicksPerBar / 2) : srcTicksPerBar),
-      bassCh,
-      startBar
-    );
 
     // 全曲調性小調判定：優先讀取 analysis.isMinorKey，或分析調性名稱是否包含 'minor' (修復以前 includes('m') 誤判 'major' 的 bug)
     const isSongMinor = analysis.isMinorKey !== undefined
@@ -437,9 +430,13 @@ export class MidiSliceAssembler {
           r.noteHighLimit = 127;
         }
       } else if (effectiveChordMode === 'ORIGINAL_PASS_THROUGH') {
-        // 原曲直通模式：NTT = Bypass (0x00)，源根音為原曲起始根音
-        r.sourceChordRoot = startChord.rootPitchClass;
-        r.sourceChordType = startChord.isMinor ? 8 : 0;
+        // 原曲直通模式：NTT = Bypass (0x00)
+        // 核心鐵律：Yamaha SFF2 伴奏基準根音一律以 C (PitchClass 0) 為全域標準錨定點！
+        // 原曲直通的音符在 MIDI 中保持 0 移調 (原音高)。琴端以 Sync Start = C 觸發時，
+        // 琴端移調量 = PressedRoot(C=0) - SourceRoot(C=0) = 0 半音，100% 依譜發聲、原汁原味零偏差！
+        // 若誤將 sourceChordRoot 設為切片起點和弦 (如 Dm=2)，琴端按 C 觸發時會被強制降 2 半音 (-2) 導致全段嚴重走音！
+        r.sourceChordRoot = 0; // C
+        r.sourceChordType = 0; // Major (0x00)
         r.ntr = 'Root Transpose';
         r.ntt = 'Bypass'; // 0x00 (琴端不做和弦音階吸附，原汁原味直通播放)
         r.retriggerRule = 'Pitch Shift';

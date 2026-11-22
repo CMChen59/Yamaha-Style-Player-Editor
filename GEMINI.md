@@ -67,6 +67,9 @@
 - **CASM 段落獨立隔離鐵律（CSEG Section Isolation Rule — 2026-11-22 實機驗收鎖定）**：
   - **病因診斷**：Yamaha SFF2 標準範本中，預設將 `Main A~D, Fill In AA~DD, Intro A, Ending A` 多段落歸在同一個 `CSEG 0` 共享區塊中（`Sdec` 包含多個段落名稱）。當切片非 C 大調段落（例如切片 `Ending A` 第 66 節起始和弦為 Dm，配置 `ORIGINAL_PASS_THROUGH` 寫入 `Root = 2, Type = 8, NTT = Bypass`）時，舊版 `injectOrUpdateSectionCasmRule` 因在 CSEG 0 命中 `Ending A` 而直接原地覆寫 CSEG 0，導致 `Main A~D` 與所有循環伴奏之基準和弦全部被竄改為 D minor Bypass！琴端手彈時全曲調性錯亂走調。
   - **核心鐵律**：更新 CASM 轉調規則時，若目標段落處於多段落共享之 CSEG（`names.length > 1`），**鐵律嚴禁直接原地覆寫共享 CSEG**！必須執行**「段落獨立剝離（CSEG Isolation）」**：自動自原共享 CSEG 的 `Sdec` 移除該段落，並在 CASM 末端建立該段落專屬的全新獨立 CSEG，確保 `Main A~D` CM7 與 `Intro/Ending` 直通調性互不干擾、零污染！
+- **CASM 原曲直通基準根音全域鎖定 C (PitchClass 0) 鐵律（2026-11-22 實機驗收鎖定）**：
+  - **病因診斷**：在 `ORIGINAL_PASS_THROUGH`（NTT = Bypass）模式下，音符在 MIDI 中本即為 0 移調（原音高直通）。舊版誤將 CASM `sourceChordRoot` 設為切片起點和弦（如《容易受傷的女人》間奏 Intro B 與尾奏 Ending A 皆起於第 26/66 節 Dm，誤設為 `Root = 2`）。Yamaha 琴端移調公式為 `Transposition = PressedRoot - SourceRoot`；當演奏者以標準 `Sync Start = C (Root = 0)` 觸發時，琴端計算 `0 - 2 = -2` 半音，導致整段 Intro B 與 Ending A 被硬生生降 2 個半音嚴重走調。
+  - **核心鐵律**：直通段落（NTT = Bypass）之 CASM 基準根音**鐵律一律寫入 `sourceChordRoot = 0 (C), sourceChordType = 0 (Major)`**！當使用者按 C 鍵觸發時，移調量 `0 - 0 = 0`，100% 還原原曲真實音高；換調彈奏（如彈 D）時亦能以 C 為 0 基準精準平移 `+2` 半音。
 
 ### 3. MIDI 全景透視與切片 UI 已定案設計
 - **Yamaha Style `fn:` 全名標籤防呆隔離鐵律**：
