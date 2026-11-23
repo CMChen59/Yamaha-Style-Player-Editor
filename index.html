@@ -5431,6 +5431,9 @@
           <button id="btn-open-new-style" class="btn-create-style" title="從無到有建立全新的 Yamaha SFF2 伴奏檔案">
             ✨ 建立全新伴奏 (New Style)
           </button>
+          <button id="btn-create-new-pad" class="btn-create-style" style="background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b;" title="從無到有建立全新的 4 軌 Yamaha Multi Pad (.PAD) 插音檔案">
+            ✨ 建立全新 Multi Pad
+          </button>
           <span style="font-size: 0.75rem; color: #94a3b8; margin-left: 6px;">或選擇示範檔：</span>
           <button class="sample-btn" data-file="LoveSong.T547.sty">🎵 LoveSong.T547.sty (70 BPM)</button>
           <button class="sample-btn" data-file="4006_SX900.T547.sty">🎵 4006_SX900.T547.sty (92 BPM)</button>
@@ -5665,10 +5668,15 @@
           <span style="color: #fbbf24; font-size: 1rem;">🎹 Multi Pad (.PAD) 調性平移與 4 軌修改工作台 (Pad Key Transposer &amp; Studio)</span>
           <span id="pad-studio-cm-badge" style="font-size: 0.75rem; padding: 2px 10px; border-radius: 999px; background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.45); color: #fcd34d; font-weight: 700;">Track 0: CM0000 · RP0000</span>
         </div>
-        <button id="btn-export-pad-file" class="btn-export" style="background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b;" title="匯出當前修改或調性平移後的標準 Yamaha Multi Pad (.PAD) 檔案">
-          <span>💾</span>
-          <span>匯出轉換後 .PAD 檔案</span>
-        </button>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <button type="button" id="btn-pad-studio-new" class="midi-locator-btn" style="background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.45); color: #7dd3fc; font-weight: 700;" title="建立一份全新的 4 軌空白 Multi Pad (.PAD) 專案">
+            ✨ 新建空白 .PAD
+          </button>
+          <button id="btn-export-pad-file" class="btn-export" style="background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b;" title="匯出當前修改或調性平移後的標準 Yamaha Multi Pad (.PAD) 檔案">
+            <span>💾</span>
+            <span>匯出轉換後 .PAD 檔案</span>
+          </button>
+        </div>
       </div>
 
       <!-- 區塊 1：智慧調性診斷與固定調性剛體半音平移控制中心 -->

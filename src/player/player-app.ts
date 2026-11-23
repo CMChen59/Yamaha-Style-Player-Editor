@@ -7,7 +7,8 @@ import { getSharedAudioContext } from '../creator/shared-audio-context';
 import { SingleTrackEditor } from './single-track-editor';
 import { YamahaWriter } from '../core/writer/yamaha-writer';
 import { YamahaStyleModifier } from '../core/writer/style-modifier';
-import { YamahaPadModifier, PAD_KEY_LIST, type PadProjectDiagnosis } from '../core/writer/pad-modifier';
+import { YamahaPadModifier, PAD_KEY_LIST, PAD_ICON_LIST, type PadProjectDiagnosis } from '../core/writer/pad-modifier';
+import { YamahaPadSynthesizer } from '../core/writer/pad-synthesizer';
 import type { PlaybackNoteEvent, PlaybackCCEvent, PlaybackOutputMode } from './sty-playback-engine';
 import { VoicePickerModal } from './voice-picker-modal';
 import { SectionCloneModal } from './section-clone-modal';
@@ -173,6 +174,7 @@ export class PlayerApp {
   private currentPadDiagnosis: PadProjectDiagnosis | null = null;
   private initialPadDiagnosis: PadProjectDiagnosis | null = null;
   private originalPadTrackNotes: Map<number, Array<{ note: number; startTick: number; durationTick: number; velocity: number }>> = new Map();
+  private selectedPadNumsForTranspose: Set<number> = new Set([1, 2, 3, 4]);
   private currentPadTotalSemitoneShift: number = 0;
   private lastTransposedKeySuffix: string = '';
 
@@ -866,9 +868,18 @@ export class PlayerApp {
 
         // 保存載入時的原始 4 軌音符基準快照，確保每次切換原調/目標調皆從原始音高精準計算，絕不重複疊加或竄改原調下拉選單
         this.originalPadTrackNotes.clear();
+        this.selectedPadNumsForTranspose.clear();
         for (let padNum = 1; padNum <= 4; padNum++) {
           const notes = YamahaPadModifier.extractTrackNotes(parsed.tracks[padNum]);
           this.originalPadTrackNotes.set(padNum, notes.map(n => ({ ...n })));
+          const trkDiag = diag.tracks[padNum - 1];
+          // 預設勾選所有非鼓組且有音符之軌道參與移調
+          if (trkDiag && trkDiag.noteCount > 0 && trkDiag.musicalType !== 'DRUM_SFX') {
+            this.selectedPadNumsForTranspose.add(padNum);
+          }
+        }
+        if (this.selectedPadNumsForTranspose.size === 0) {
+          [1, 2, 3, 4].forEach(n => this.selectedPadNumsForTranspose.add(n));
         }
 
         this.labelStyleTitle.textContent = `🎹 ${name} (Yamaha Multi Pad 插音檔)`;
@@ -3358,6 +3369,13 @@ export class PlayerApp {
       this.exportCurrentPadFile();
     });
 
+    const onCreateNewPad = (e: Event) => {
+      e.stopPropagation();
+      this.createNewBlankMultiPad();
+    };
+    document.getElementById('btn-create-new-pad')?.addEventListener('click', onCreateNewPad);
+    document.getElementById('btn-pad-studio-new')?.addEventListener('click', onCreateNewPad);
+
     // 常用目標調性一鍵快捷按鈕 (點擊後自動選取目標調並立即套用平移)
     document.querySelectorAll('.pad-quick-key-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -3382,6 +3400,24 @@ export class PlayerApp {
     document.getElementById('btn-pad-oct-plus')?.addEventListener('click', () => {
       this.applyPadTransposition(this.currentPadTotalSemitoneShift + 12);
     });
+  }
+
+  /**
+   * 建立全新空白 4 軌 Multi Pad (.PAD) 專案並立即切入工作台
+   */
+  private createNewBlankMultiPad() {
+    const blank = YamahaPadSynthesizer.createBlankProject({
+      projectName: 'NewMultiPad',
+      bpm: 120,
+      bars: 4,
+      division: 480,
+    });
+    YamahaPadModifier.syncControlTagsToTrack0(blank);
+    const bytes = YamahaWriter.write(blank);
+    this.parseAndLoadBytes(bytes, 'NewMultiPad.PAD');
+    if (this.padStudioStatusMsg) {
+      this.padStudioStatusMsg.textContent = '✨ 已建立全新 4 軌空白 Multi Pad 專案 (預設 4 小節 · 120 BPM · CM0000)，可直接在下方鋼琴捲軸點選創作音符！';
+    }
   }
 
   /**
@@ -3474,12 +3510,19 @@ export class PlayerApp {
       }
     }
 
-    // 2. 從原始音高執行單次精準剛體平移 (注意：絕不竄改使用者的 selectPadSourceKey 原曲基準調下拉選單！)
+    const selectedPads = Array.from(this.selectedPadNumsForTranspose).sort((a, b) => a - b);
+    if (selectedPads.length === 0) {
+      alert('請至少勾選 1 個要參與調性平移的 Pad 軌道！');
+      return;
+    }
+
+    // 2. 從原始音高針對勾選之 Pad 執行單次精準剛體平移 (未勾選之 Pad 保持原始音高不動)
     const res = YamahaPadModifier.transposePadKey(this.currentParsed, {
       sourceKey: srcKey,
       targetKey: dstKey,
       customSemitones: customTotalSemitones,
       direction: dir,
+      padNumbers: selectedPads,
       enforceFixedKeyCM0000: true,
       appendKeySuffixToNames: customTotalSemitones === undefined,
       keySuffixLabel: suffix,
@@ -3500,10 +3543,11 @@ export class PlayerApp {
     this.setFocusedChannel(this.focusedChannel);
 
     const sign = res.baseSemitoneShift > 0 ? `+${res.baseSemitoneShift}` : `${res.baseSemitoneShift}`;
+    const padsLabel = selectedPads.map(n => `Pad ${n}`).join('、');
     if (this.padStudioStatusMsg) {
       this.padStudioStatusMsg.textContent = customTotalSemitones !== undefined
-        ? `✅ 已套用累計微調 ${sign} 半音 (相對於原曲基準音高)，Track 0 已鎖定 ${res.cmTag}`
-        : `✅ 已從原曲基準調【${res.sourceKey}】剛體平移至目標調【${res.targetKey}】(${sign} 半音)，Track 0 已鎖定 ${res.cmTag} 並更新名稱後綴 (${suffix})！`;
+        ? `✅ 已對【${padsLabel}】套用累計微調 ${sign} 半音，Track 0 已鎖定 ${res.cmTag}`
+        : `✅ 已將【${padsLabel}】從原曲基準調【${res.sourceKey}】剛體平移至目標調【${res.targetKey}】(${sign} 半音)，鎖定 ${res.cmTag}！`;
     }
 
     if (wasPlaying) {
@@ -3545,12 +3589,22 @@ export class PlayerApp {
       const isFocused = this.focusedChannel === t.channel;
       const isMuted = styPlaybackEngine.isChannelMuted(t.channel);
       const isSolo = styPlaybackEngine.getChannelSolo() === t.channel;
+      const isCheckedForTranspose = this.selectedPadNumsForTranspose.has(t.padNum);
 
       const typeBadgeColor = t.musicalType === 'MELODY_INTRO'
         ? 'background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.45); color: #fcd34d;'
         : (t.musicalType === 'EMPTY'
           ? 'background: rgba(148, 163, 184, 0.12); border: 1px solid rgba(148, 163, 184, 0.25); color: #94a3b8;'
           : 'background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #7dd3fc;');
+
+      const iconOptionsHtml = PAD_ICON_LIST.map(
+        (ic) => `<option value="${ic.code}" ${t.icon === ic.code ? 'selected' : ''}>${ic.labelZh}</option>`
+      ).join('') + (!PAD_ICON_LIST.some(ic => ic.code === t.icon) ? `<option value="${t.icon}" selected>${t.icon}</option>` : '');
+
+      const cloneTargetOptionsHtml = [1, 2, 3, 4]
+        .filter(num => num !== t.padNum)
+        .map(num => `<option value="${num}">複製至 Pad ${num}</option>`)
+        .join('');
 
       const conflictWarningHtml = t.hasChordMatchConflict
         ? `<div style="font-size: 0.72rem; color: #fca5a5; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 5px; padding: 4px 8px; margin-top: 4px;">
@@ -3560,35 +3614,45 @@ export class PlayerApp {
 
       return `
         <div class="pad-studio-card" data-pad-num="${t.padNum}" data-channel="${t.channel}"
-             style="background: rgba(19, 27, 46, 0.92); border: 2px solid ${isFocused ? color : 'rgba(255,255,255,0.1)'}; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 9px; cursor: pointer; transition: all 0.15s; box-shadow: ${isFocused ? `0 0 14px ${color}33` : 'none'};">
-          <!-- 頂部：Pad 編號 + 名稱輸入框 + 音符數 -->
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+             style="background: rgba(19, 27, 46, 0.92); border: 2px solid ${isFocused ? color : 'rgba(255,255,255,0.1)'}; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.15s; box-shadow: ${isFocused ? `0 0 14px ${color}33` : 'none'}; min-width: 0; overflow: hidden;">
+          <!-- 頂部：Pad 編號 + 名稱輸入框 + 參與移調勾選 -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
             <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;">
               <span style="background: ${color}; color: #090d16; font-weight: 800; font-size: 0.76rem; padding: 2px 7px; border-radius: 5px; flex-shrink: 0;">PAD ${t.padNum}</span>
               <input type="text" class="input-pad-card-name" data-pad-num="${t.padNum}" value="${t.name}"
                      style="background: rgba(9, 13, 22, 0.8); border: 1px solid rgba(255,255,255,0.16); color: #f8fafc; font-weight: 700; font-size: 0.82rem; padding: 3px 8px; border-radius: 5px; width: 100%; min-width: 0;"
                      title="直接修改 Track 0 的 N${t.padNum} 名稱標籤" />
             </div>
-            <span style="font-size: 0.74rem; color: #cbd5e1; background: rgba(255,255,255,0.07); padding: 2px 7px; border-radius: 4px; white-space: nowrap;">
-              ${t.noteCount} 音符 · ${t.barLength} 節
-            </span>
+            <label style="display: flex; align-items: center; gap: 3px; font-size: 0.73rem; color: #fcd34d; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); padding: 2px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap;" title="勾選後，執行上方【調性平移】時將平移此 Pad；取消勾選則保持原音高不動">
+              <input type="checkbox" class="chk-pad-card-transpose" data-pad-num="${t.padNum}" ${isCheckedForTranspose ? 'checked' : ''} style="accent-color: #f59e0b;" />
+              <span>🔀參與移調</span>
+            </label>
           </div>
 
-          <!-- 音樂型態診斷與音域範圍 -->
+          <!-- 音樂型態診斷、音符統計與音域範圍 -->
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
             <span style="font-size: 0.71rem; padding: 2px 7px; border-radius: 4px; font-weight: 600; ${typeBadgeColor}">
               ${t.musicalTypeLabelZh}
             </span>
-            <span style="font-size: 0.72rem; color: #94a3b8;">音域: <strong style="color: #e2e8f0;">${t.pitchRangeLabel}</strong></span>
+            <span style="font-size: 0.72rem; color: #94a3b8;">
+              <strong style="color: #cbd5e1;">${t.noteCount}</strong> 音符 · 音域: <strong style="color: #e2e8f0;">${t.pitchRangeLabel}</strong>
+            </span>
           </div>
 
-          <!-- 音色選擇按鈕 (點擊開啟 SX920 2,395 音色庫) -->
-          <button type="button" class="btn-pad-card-voice" data-channel="${t.channel}"
-                  style="background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 6px 10px; color: #f8fafc; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; text-align: left;"
-                  title="點擊更換此 Pad 的 Yamaha PSR-SX920 樂器音色 (MSB/LSB/PC)">
-            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🎹 ${t.voiceInfo.voiceName}</span>
-            <span style="font-size: 0.72rem; color: #38bdf8; flex-shrink: 0; margin-left: 6px;">[${t.voiceInfo.panelCode}] ✏️</span>
-          </button>
+          <!-- 音色選擇按鈕 (點擊開啟 SX920 2,395 音色庫) + 圖示 I1~I4 選擇 -->
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="btn-pad-card-voice" data-channel="${t.channel}"
+                    style="flex: 1; min-width: 0; background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 6px 9px; color: #f8fafc; font-size: 0.79rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; text-align: left;"
+                    title="點擊更換此 Pad 的 Yamaha PSR-SX920 樂器音色 (MSB/LSB/PC)">
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🎹 ${t.voiceInfo.voiceName}</span>
+              <span style="font-size: 0.71rem; color: #38bdf8; flex-shrink: 0; margin-left: 4px;">[${t.voiceInfo.panelCode}] ✏️</span>
+            </button>
+            <select class="select-pad-card-icon" data-pad-num="${t.padNum}"
+                    style="width: 92px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); color: #cbd5e1; font-size: 0.72rem; padding: 5px 4px; border-radius: 5px; cursor: pointer;"
+                    title="設定 Track 0 的 I${t.padNum} 琴端圖示代碼">
+              ${iconOptionsHtml}
+            </select>
+          </div>
 
           <!-- Repeat (RP) 與 Chord Match (CM) 硬體旗標開關 + 獨奏/靜音 -->
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; background: rgba(9, 13, 22, 0.55); padding: 6px 8px; border-radius: 6px;">
@@ -3614,17 +3678,46 @@ export class PlayerApp {
             </div>
           </div>
 
-          <!-- 音量 (CC7) 與 聲像 (Pan CC10) 滑桿 -->
-          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; color: #94a3b8;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="width: 58px;">音量 CC7:</span>
-              <input type="range" class="slider-pad-card-vol" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.volume}" style="flex: 1; accent-color: ${color};" />
-              <span class="label-pad-card-vol" style="width: 28px; text-align: right; color: #e2e8f0; font-weight: 600;">${t.mixing.volume}</span>
+          <!-- 混音與空間效果滑桿：音量 (CC7)、相位 (Pan CC10)、殘響 (Rev CC91)、合唱 (Cho CC93) -->
+          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; color: #94a3b8; background: rgba(15, 23, 42, 0.55); padding: 6px 8px; border-radius: 6px; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="width: 56px; flex-shrink: 0;">音量 CC7:</span>
+              <input type="range" class="slider-pad-card-vol" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.volume}" style="flex: 1; width: 100%; min-width: 0; accent-color: ${color};" />
+              <span class="label-pad-card-vol" style="width: 26px; flex-shrink: 0; text-align: right; color: #e2e8f0; font-weight: 600;">${t.mixing.volume}</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="width: 58px;">相位 Pan:</span>
-              <input type="range" class="slider-pad-card-pan" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.pan}" style="flex: 1; accent-color: ${color};" />
-              <span class="label-pad-card-pan" style="width: 28px; text-align: right; color: #e2e8f0; font-weight: 600;">${formatYamahaPan(t.mixing.pan)}</span>
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="width: 56px; flex-shrink: 0;">相位 Pan:</span>
+              <input type="range" class="slider-pad-card-pan" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.pan}" style="flex: 1; width: 100%; min-width: 0; accent-color: ${color};" />
+              <span class="label-pad-card-pan" style="width: 26px; flex-shrink: 0; text-align: right; color: #e2e8f0; font-weight: 600;">${formatYamahaPan(t.mixing.pan)}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="width: 56px; flex-shrink: 0;">殘響 Rev:</span>
+              <input type="range" class="slider-pad-card-rev" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.reverb}" style="flex: 1; width: 100%; min-width: 0; accent-color: #38bdf8;" />
+              <span class="label-pad-card-rev" style="width: 26px; flex-shrink: 0; text-align: right; color: #e2e8f0; font-weight: 600;">${t.mixing.reverb}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+              <span style="width: 56px; flex-shrink: 0;">合唱 Cho:</span>
+              <input type="range" class="slider-pad-card-cho" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.chorus}" style="flex: 1; width: 100%; min-width: 0; accent-color: #a855f7;" />
+              <span class="label-pad-card-cho" style="width: 26px; flex-shrink: 0; text-align: right; color: #e2e8f0; font-weight: 600;">${t.mixing.chorus}</span>
+            </div>
+          </div>
+
+          <!-- 軌道管理工具列：小節長度設定 + 複製至其他 Pad + 清空此 Pad -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 6px;">
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span style="font-size: 0.72rem; color: #94a3b8;">📏小節:</span>
+              <input type="number" class="input-pad-card-bars" data-pad-num="${t.padNum}" min="1" max="64" value="${t.barLength}"
+                     style="width: 44px; background: rgba(9, 13, 22, 0.9); border: 1px solid rgba(255,255,255,0.18); color: #f8fafc; font-size: 0.75rem; padding: 2px 4px; border-radius: 4px; text-align: center;"
+                     title="調整此 Pad 的總小節數 (1~64 小節)" />
+              <button type="button" class="midi-locator-btn btn-pad-card-apply-bars" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem;">套用</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select class="select-pad-card-clone-target" data-pad-num="${t.padNum}"
+                      style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); color: #cbd5e1; font-size: 0.71rem; padding: 2px 4px; border-radius: 4px;">
+                ${cloneTargetOptionsHtml}
+              </select>
+              <button type="button" class="midi-locator-btn btn-pad-card-clone" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem; color: #7dd3fc;" title="將此 Pad 的音符、音色與混音複製到選定的目標 Pad">📋複製</button>
+              <button type="button" class="midi-locator-btn btn-pad-card-clear" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem; color: #fda4af; border-color: rgba(244,63,94,0.35);" title="一鍵清空此 Pad 的所有音符">🗑️清空</button>
             </div>
           </div>
 
@@ -3637,12 +3730,32 @@ export class PlayerApp {
     this.padCardsGrid.querySelectorAll('.pad-studio-card').forEach((cardEl) => {
       cardEl.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button') || target.closest('label')) {
+        if (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'BUTTON' ||
+          target.tagName === 'SELECT' ||
+          target.closest('button') ||
+          target.closest('label') ||
+          target.closest('select')
+        ) {
           return;
         }
         const ch = parseInt((cardEl as HTMLElement).getAttribute('data-channel') || '0', 10);
         this.setFocusedChannel(ch);
         this.renderPadStudioDashboard();
+      });
+    });
+
+    // 參與移調勾選框
+    this.padCardsGrid.querySelectorAll('.chk-pad-card-transpose').forEach((chk) => {
+      chk.addEventListener('change', (e) => {
+        const el = e.target as HTMLInputElement;
+        const padNum = parseInt(el.getAttribute('data-pad-num') || '1', 10);
+        if (el.checked) {
+          this.selectedPadNumsForTranspose.add(padNum);
+        } else {
+          this.selectedPadNumsForTranspose.delete(padNum);
+        }
       });
     });
 
@@ -3655,6 +3768,19 @@ export class PlayerApp {
         YamahaPadModifier.setPadName(this.currentParsed, padNum, el.value);
         if (this.padStudioStatusMsg) {
           this.padStudioStatusMsg.textContent = `✅ 已更新 Pad ${padNum} 名稱為「${el.value.trim()}」`;
+        }
+      });
+    });
+
+    // 圖示代碼 (I1~I4) 修改
+    this.padCardsGrid.querySelectorAll('.select-pad-card-icon').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        if (!this.currentParsed) return;
+        const el = e.target as HTMLSelectElement;
+        const padNum = parseInt(el.getAttribute('data-pad-num') || '1', 10);
+        YamahaPadModifier.setPadIcon(this.currentParsed, padNum, el.value);
+        if (this.padStudioStatusMsg) {
+          this.padStudioStatusMsg.textContent = `✅ 已更新 Pad ${padNum} 圖示為 ${el.value}`;
         }
       });
     });
@@ -3714,7 +3840,7 @@ export class PlayerApp {
       });
     });
 
-    // 音量與聲像滑桿
+    // 音量 (CC7)、聲像 (CC10)、殘響 (CC91)、合唱 (CC93) 滑桿
     this.padCardsGrid.querySelectorAll('.slider-pad-card-vol').forEach((slider) => {
       slider.addEventListener('input', (e) => {
         if (!this.currentParsed) return;
@@ -3742,6 +3868,108 @@ export class PlayerApp {
         if (lbl) lbl.textContent = formatYamahaPan(val);
       });
     });
+
+    this.padCardsGrid.querySelectorAll('.slider-pad-card-rev').forEach((slider) => {
+      slider.addEventListener('input', (e) => {
+        if (!this.currentParsed) return;
+        const el = e.target as HTMLInputElement;
+        const padNum = parseInt(el.getAttribute('data-pad-num') || '1', 10);
+        const ch = parseInt(el.getAttribute('data-channel') || '0', 10);
+        const val = parseInt(el.value, 10);
+        styPlaybackEngine.setChannelReverb(ch, val);
+        YamahaPadModifier.setPadMixing(this.currentParsed, padNum, { reverb: val });
+        const lbl = el.parentElement?.querySelector('.label-pad-card-rev');
+        if (lbl) lbl.textContent = String(val);
+      });
+    });
+
+    this.padCardsGrid.querySelectorAll('.slider-pad-card-cho').forEach((slider) => {
+      slider.addEventListener('input', (e) => {
+        if (!this.currentParsed) return;
+        const el = e.target as HTMLInputElement;
+        const padNum = parseInt(el.getAttribute('data-pad-num') || '1', 10);
+        const ch = parseInt(el.getAttribute('data-channel') || '0', 10);
+        const val = parseInt(el.value, 10);
+        styPlaybackEngine.setChannelChorus(ch, val);
+        YamahaPadModifier.setPadMixing(this.currentParsed, padNum, { chorus: val });
+        const lbl = el.parentElement?.querySelector('.label-pad-card-cho');
+        if (lbl) lbl.textContent = String(val);
+      });
+    });
+
+    // 小節長度修改
+    this.padCardsGrid.querySelectorAll('.btn-pad-card-apply-bars').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!this.currentParsed) return;
+        const padNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        const card = (btn as HTMLElement).closest('.pad-studio-card');
+        const inp = card?.querySelector('.input-pad-card-bars') as HTMLInputElement | null;
+        const newBars = Math.max(1, Math.min(64, parseInt(inp?.value || '4', 10) || 4));
+        YamahaPadModifier.setPadBarLength(this.currentParsed, padNum, newBars);
+        this.refreshPadStudioEngineAndSnapshots(`📏 已將 Pad ${padNum} 小節長度設為 ${newBars} 小節`);
+      });
+    });
+
+    // 複製此 Pad 至其他 Pad
+    this.padCardsGrid.querySelectorAll('.btn-pad-card-clone').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!this.currentParsed) return;
+        const srcPadNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        const card = (btn as HTMLElement).closest('.pad-studio-card');
+        const sel = card?.querySelector('.select-pad-card-clone-target') as HTMLSelectElement | null;
+        const dstPadNum = parseInt(sel?.value || '2', 10);
+        const res = YamahaPadModifier.clonePadTrack(this.currentParsed, srcPadNum, dstPadNum);
+        if (res.success) {
+          const clonedNotes = YamahaPadModifier.extractTrackNotes(this.currentParsed.tracks[dstPadNum]);
+          this.originalPadTrackNotes.set(
+            dstPadNum,
+            clonedNotes.map(n => ({
+              ...n,
+              note: Math.max(0, Math.min(127, n.note - this.currentPadTotalSemitoneShift)),
+            }))
+          );
+          if (res.copiedNoteCount > 0) {
+            this.selectedPadNumsForTranspose.add(dstPadNum);
+          }
+          this.refreshPadStudioEngineAndSnapshots(`📋 已將 Pad ${srcPadNum} (${res.copiedNoteCount} 顆音符與音色混音) 完整複製至 Pad ${dstPadNum}！`);
+        }
+      });
+    });
+
+    // 清空此 Pad 音符
+    this.padCardsGrid.querySelectorAll('.btn-pad-card-clear').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!this.currentParsed) return;
+        const padNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        YamahaPadModifier.clearPadTrackNotes(this.currentParsed, padNum);
+        this.originalPadTrackNotes.set(padNum, []);
+        this.selectedPadNumsForTranspose.delete(padNum);
+        this.refreshPadStudioEngineAndSnapshots(`🗑️ 已清空 Pad ${padNum} 的所有音符 (成為 0 音符空軌)`);
+      });
+    });
+  }
+
+  /**
+   * 內部輔助：當 Pad 小節數、複製或清空軌道變更後，重新同步播放引擎與下方鋼琴捲軸
+   */
+  private refreshPadStudioEngineAndSnapshots(statusMessage: string) {
+    if (!this.currentParsed || this.currentParsed.format !== 'PAD') return;
+    const analysis = MidiSongAnalyzer.analyze(this.currentParsed, this.currentFileName);
+    this.currentSongAnalysis = analysis;
+    this.currentPadDiagnosis = YamahaPadModifier.analyzePadProject(this.currentParsed);
+
+    styPlaybackEngine.loadParsed(this.currentParsed);
+    styPlaybackEngine.loadSongMode(1, Math.max(1, analysis.totalBars));
+
+    this.renderPadStudioDashboard();
+    this.setFocusedChannel(this.focusedChannel);
+
+    if (this.padStudioStatusMsg) {
+      this.padStudioStatusMsg.textContent = statusMessage;
+    }
   }
 
   /**

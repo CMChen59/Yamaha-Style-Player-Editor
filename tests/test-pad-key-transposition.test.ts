@@ -133,4 +133,42 @@ describe('【第一階段驗收】Multi Pad 調性診斷與固定調性剛體半
     // 驗證名稱後綴乾淨更新為 (Dm)，不會疊加成 Pad 1 (Cm) (Dm)
     expect(resDm.padNames[0]).toBe('Pad 1 (Dm)');
   });
+
+  it('4. 【第二階段驗收】單軌獨立勾選移調、複製軌道 (clonePadTrack)、清空軌道 (clearPadTrackNotes)、小節數與混音圖示修改', () => {
+    const raw2011 = new Uint8Array(fs.readFileSync(sample2011Path));
+    const parsed = YamahaParser.parse(raw2011, 'PAD');
+
+    // 1. 將 Pad 1 (6 音符) 複製到原本是空軌的 Pad 2
+    const cloneRes = YamahaPadModifier.clonePadTrack(parsed, 1, 2);
+    expect(cloneRes.success).toBe(true);
+    expect(cloneRes.copiedNoteCount).toBe(6);
+    expect(YamahaPadModifier.extractTrackNotes(parsed.tracks[2]).length).toBe(6);
+
+    // 2. 僅勾選 Pad 2 參與移調 (padNumbers: [2])，從 Am 轉至 Cm (+3 半音)，驗證 Pad 1 維持原音高不動！
+    const origPad1 = YamahaPadModifier.extractTrackNotes(parsed.tracks[1]).map(n => n.note);
+    YamahaPadModifier.transposePadKey(parsed, {
+      sourceKey: 'Am',
+      targetKey: 'Cm',
+      padNumbers: [2],
+    });
+    const afterPad1 = YamahaPadModifier.extractTrackNotes(parsed.tracks[1]).map(n => n.note);
+    const afterPad2 = YamahaPadModifier.extractTrackNotes(parsed.tracks[2]).map(n => n.note);
+    expect(afterPad1).toEqual(origPad1); // Pad 1 完全未動
+    expect(afterPad2).toEqual(origPad1.map(n => n + 3)); // Pad 2 精準 +3 半音
+
+    // 3. 修改 Pad 2 圖示、殘響 (CC91)、合唱 (CC93) 與小節長度
+    YamahaPadModifier.setPadIcon(parsed, 2, 'S810');
+    YamahaPadModifier.setPadMixing(parsed, 2, { reverb: 85, chorus: 42 });
+    YamahaPadModifier.setPadBarLength(parsed, 2, 8);
+
+    const diagAfterMix = YamahaPadModifier.analyzePadProject(parsed);
+    expect(diagAfterMix.tracks[1].icon).toBe('S810');
+    expect(diagAfterMix.tracks[1].mixing.reverb).toBe(85);
+    expect(diagAfterMix.tracks[1].mixing.chorus).toBe(42);
+    expect(diagAfterMix.tracks[1].barLength).toBe(8);
+
+    // 4. 清空 Pad 2 音符
+    YamahaPadModifier.clearPadTrackNotes(parsed, 2);
+    expect(YamahaPadModifier.extractTrackNotes(parsed.tracks[2]).length).toBe(0);
+  });
 });

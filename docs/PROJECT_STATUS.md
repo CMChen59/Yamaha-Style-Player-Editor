@@ -20,7 +20,7 @@
 | **【任務 2-4C 終極】** | **全自動切片深層淨化管線、標準事件優先級與過門聲部鏡像 (實機驗收通過)** | [`style-modifier.ts`](../src/core/writer/style-modifier.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`GEMINI.md`](../GEMINI.md) | ✅ 已完成並實機驗收（邊界音過濾、副歌鈸音/Pad NTT 修正、消除 819 幽靈 CC11、事件標準優先級重整、Fill In 鏡像與 Auto Fill In 無縫切換，琴端表現與原廠一致） |
 | **【任務 4-1 基礎】** | **Multi Pad (.PAD) 二進位結構解析與全軌屬性寫入** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`yamaha-writer.ts`](../src/core/writer/yamaha-writer.ts) | ✅ 已完成（完整支援 5 軌 SMF1 結構、`CMxxxx` / `RPxxxx` / `N1~N4` 控制標記） |
 | **【任務 4-1 終極】** | **Multi Pad 和弦跟隨適用邊界、固定調性鐵律與 STY 插音分工架構實機結案** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`GEMINI.md`](../GEMINI.md), `2010_空港_Intro_Am調.PAD` | ✅ 已完成並實機結案（PSR-SX920 雙向驗收：證實長旋律開 CM 必走音，CM0000 指定調性為 100% 依譜還原唯一解；插音歸 STY Phrase 聲部） |
-| **【任務 4-1A】** | **Multi Pad 調性平移引擎與 4 軌視覺化修改工作台 UI (Pad Key Transposer & Studio)** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`index.html`](../index.html), [`test-pad-key-transposition.test.ts`](../tests/test-pad-key-transposition.test.ts) | ✅ 已完成程式與單元測試（支援 4 大型態診斷、原曲基準調自動估算+手動更改、原始音高基準快照無損重算、Track 0 鎖定 `CM0000`、4 軌名稱/音色/混音/鋼琴捲軸修改與 `.PAD` 匯出；已產出 PAD 待家中實琴驗收） |
+| **【任務 4-1A】** | **Multi Pad 調性平移引擎與 4 軌視覺化修改工作台 UI (第一、二階段完成)** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`index.html`](../index.html), [`test-pad-key-transposition.test.ts`](../tests/test-pad-key-transposition.test.ts) | ✅ 第一、二階段完成（支援 4 大型態診斷、原曲基準調自動估算+手動更改、原始音高基準快照、單軌獨立勾選移調、複製/清空軌道、小節長度調整、Vol/Pan/Rev/Cho/Icon 修改、新建空白 `.PAD` 與匯出；待家中實琴驗收與第三階段 CC 曲線回寫收尾） |
 
 ---
 

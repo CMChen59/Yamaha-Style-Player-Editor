@@ -43,6 +43,18 @@ export const PAD_KEY_LIST: PadKeyDefinition[] = [
 ];
 
 /**
+ * Yamaha Multi Pad 原廠常用圖示代碼 (I1~I4)
+ */
+export const PAD_ICON_LIST: Array<{ code: string; labelZh: string }> = [
+  { code: 'S809', labelZh: 'S809 (標準樂句 Phrase)' },
+  { code: 'S810', labelZh: 'S810 (吉他琶音 Guitar Arp)' },
+  { code: 'S811', labelZh: 'S811 (管樂插音 Brass/Sax)' },
+  { code: 'S812', labelZh: 'S812 (弦樂鋪底 Strings Pad)' },
+  { code: 'S813', labelZh: 'S813 (打擊節奏 Drum/Perc)' },
+  { code: 'S814', labelZh: 'S814 (合成特效 Synth/SFX)' },
+];
+
+/**
  * Multi Pad 4 大經典音樂型態分類 (遵循 GEMINI.md 鐵律)
  */
 export type PadMusicalType =
@@ -952,7 +964,9 @@ export class YamahaPadModifier {
       const suffix = (options.keySuffixLabel || effectiveTargetKey).trim();
       if (suffix) {
         parsed.padConfig.names = parsed.padConfig.names.map((rawName, idx) => {
-          const baseName = (rawName || `Pad ${idx + 1}`)
+          const padNum = idx + 1;
+          if (!targetPads.includes(padNum)) return rawName || `Pad ${padNum}`;
+          const baseName = (rawName || `Pad ${padNum}`)
             .replace(/\s*\([^)]*\)\s*$/, '') // 移除舊有的 (Am)、(Em原調) 等後綴，避免多次轉調重複疊加
             .trim();
           return `${baseName} (${suffix})`;
@@ -977,6 +991,71 @@ export class YamahaPadModifier {
       padNames: [...cfg.names],
       trackResults,
     };
+  }
+
+  /**
+   * 一鍵清空指定 Pad (1~4) 的所有音符事件，保留該軌的音色與混音設定 (成為 0 音符空軌)
+   */
+  public static clearPadTrackNotes(parsed: YamahaFileParsed, padNum: number): boolean {
+    if (padNum < 1 || padNum > 4) return false;
+    return this.replacePadNotes(parsed, padNum, [], 1);
+  }
+
+  /**
+   * 將來源 Pad (sourcePadNum 1~4) 的所有音符、音色 (MSB/LSB/PC)、混音 (Vol/Pan/Rev/Cho) 與小節數
+   * 完整複製到目標 Pad (targetPadNum 1~4)，可選同時執行八度移位 (octaveShift: -1 | 0 | 1) 以製作雙軌疊音
+   */
+  public static clonePadTrack(
+    parsed: YamahaFileParsed,
+    sourcePadNum: number,
+    targetPadNum: number,
+    options?: { octaveShift?: number }
+  ): { success: boolean; copiedNoteCount: number } {
+    if (
+      sourcePadNum < 1 ||
+      sourcePadNum > 4 ||
+      targetPadNum < 1 ||
+      targetPadNum > 4 ||
+      sourcePadNum === targetPadNum
+    ) {
+      return { success: false, copiedNoteCount: 0 };
+    }
+
+    const diag = this.analyzePadProject(parsed);
+    const srcDiag = diag.tracks[sourcePadNum - 1];
+    if (!srcDiag) return { success: false, copiedNoteCount: 0 };
+
+    const srcNotes = this.extractTrackNotes(parsed.tracks[sourcePadNum]);
+    const semitoneOffset = (options?.octaveShift ?? 0) * 12;
+    const clonedNotes = srcNotes.map(n => ({
+      note: Math.max(0, Math.min(127, n.note + semitoneOffset)),
+      startTick: n.startTick,
+      durationTick: n.durationTick,
+      velocity: n.velocity,
+    }));
+
+    // 1. 複製音色與混音設定至目標 Pad
+    this.setPadMixing(parsed, targetPadNum, {
+      bankMsb: srcDiag.voiceInfo.msb,
+      bankLsb: srcDiag.voiceInfo.lsb,
+      programChange: srcDiag.voiceInfo.pc,
+      volume: srcDiag.mixing.volume,
+      pan: srcDiag.mixing.pan,
+      reverb: srcDiag.mixing.reverb,
+      chorus: srcDiag.mixing.chorus,
+    });
+
+    // 2. 複製音符與小節長度
+    this.replacePadNotes(parsed, targetPadNum, clonedNotes, srcDiag.barLength);
+
+    // 3. 複製 Repeat 與 ChordMatch 屬性並更新名稱標記
+    this.setPadRepeat(parsed, targetPadNum, srcDiag.repeat);
+    this.setPadChordMatch(parsed, targetPadNum, srcDiag.chordMatch);
+    this.setPadIcon(parsed, targetPadNum, srcDiag.icon);
+    const baseSrcName = srcDiag.name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    this.setPadName(parsed, targetPadNum, `${baseSrcName} Copy`);
+
+    return { success: true, copiedNoteCount: clonedNotes.length };
   }
 
   private static createMarkerEvent(text: string): MidiEvent {
