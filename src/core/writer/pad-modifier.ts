@@ -1,6 +1,162 @@
 import { BinaryWriter } from './binary-writer';
 import type { YamahaFileParsed, MidiEvent, MidiTrack } from '../models/types';
 import { PadRecorder, type QuantizeGrid } from './pad-recorder';
+import { resolveYamahaVoiceWithAlias } from '../data/yamaha-voices';
+
+/**
+ * Multi Pad 24 大小調標準定義 (12 小調 + 12 大調)
+ */
+export interface PadKeyDefinition {
+  key: string;         // 標準代碼 (如 'Am', 'Em', 'Cm', 'C', 'G')
+  labelZh: string;     // 繁中顯示名稱 (如 'Am (A 小調)', 'Em (E 小調)')
+  rootPc: number;      // 0 ~ 11 (C=0, C#=1, D=2, Eb=3, E=4, F=5, F#=6, G=7, Ab=8, A=9, Bb=10, B=11)
+  isMinor: boolean;
+}
+
+export const PAD_KEY_LIST: PadKeyDefinition[] = [
+  // 12 小調 (常用於演歌、抒情前奏 Pad)
+  { key: 'Am',  labelZh: 'Am (A 小調)',       rootPc: 9,  isMinor: true },
+  { key: 'Bbm', labelZh: 'Bbm / A#m (降B小調)', rootPc: 10, isMinor: true },
+  { key: 'Bm',  labelZh: 'Bm (B 小調)',       rootPc: 11, isMinor: true },
+  { key: 'Cm',  labelZh: 'Cm (C 小調)',       rootPc: 0,  isMinor: true },
+  { key: 'C#m', labelZh: 'C#m / Dbm (升C小調)', rootPc: 1,  isMinor: true },
+  { key: 'Dm',  labelZh: 'Dm (D 小調)',       rootPc: 2,  isMinor: true },
+  { key: 'Ebm', labelZh: 'Ebm / D#m (降E小調)', rootPc: 3,  isMinor: true },
+  { key: 'Em',  labelZh: 'Em (E 小調)',       rootPc: 4,  isMinor: true },
+  { key: 'Fm',  labelZh: 'Fm (F 小調)',       rootPc: 5,  isMinor: true },
+  { key: 'F#m', labelZh: 'F#m / Gbm (升F小調)', rootPc: 6,  isMinor: true },
+  { key: 'Gm',  labelZh: 'Gm (G 小調)',       rootPc: 7,  isMinor: true },
+  { key: 'G#m', labelZh: 'G#m / Abm (升G小調)', rootPc: 8,  isMinor: true },
+  // 12 大調
+  { key: 'C',   labelZh: 'C (C 大調)',        rootPc: 0,  isMinor: false },
+  { key: 'Db',  labelZh: 'Db / C# (降D大調)',   rootPc: 1,  isMinor: false },
+  { key: 'D',   labelZh: 'D (D 大調)',        rootPc: 2,  isMinor: false },
+  { key: 'Eb',  labelZh: 'Eb / D# (降E大調)',   rootPc: 3,  isMinor: false },
+  { key: 'E',   labelZh: 'E (E 大調)',        rootPc: 4,  isMinor: false },
+  { key: 'F',   labelZh: 'F (F 大調)',        rootPc: 5,  isMinor: false },
+  { key: 'F#',  labelZh: 'F# / Gb (升F大調)',   rootPc: 6,  isMinor: false },
+  { key: 'G',   labelZh: 'G (G 大調)',        rootPc: 7,  isMinor: false },
+  { key: 'Ab',  labelZh: 'Ab / G# (降A大調)',   rootPc: 8,  isMinor: false },
+  { key: 'A',   labelZh: 'A (A 大調)',        rootPc: 9,  isMinor: false },
+  { key: 'Bb',  labelZh: 'Bb / A# (降B大調)',   rootPc: 10, isMinor: false },
+  { key: 'B',   labelZh: 'B (B 大調)',        rootPc: 11, isMinor: false },
+];
+
+/**
+ * Multi Pad 4 大經典音樂型態分類 (遵循 GEMINI.md 鐵律)
+ */
+export type PadMusicalType =
+  | 'EMPTY'         // 空軌 (0 音符)
+  | 'DRUM_SFX'      // 打擊節奏 / 罐頭音效 (鐵律 CM = OFF，移調時跳過)
+  | 'CHORD_TEXTURE' // 純和聲織體 / 1、5 音脈衝 / 琶音刷弦 (唯一合法開啟 CM = ON 並做 CM7 正規化)
+  | 'SHORT_MOTIF'   // 開放骨幹音短動機 (1~2 小節無 3 度與導音，如 2011-2 Pad 1，建議 CM = OFF)
+  | 'MELODY_INTRO'; // 跨小節長旋律 / 完整前奏 / 含和聲轉折或導音花音 (如 2010-1 空港，鐵律強制 CM = OFF 並用固定調性平移)
+
+/**
+ * 單一 Pad 軌道 (Pad 1 ~ 4) 樂理與混音診斷結果
+ */
+export interface PadTrackDiagnosis {
+  padNum: number;               // 1 ~ 4
+  name: string;                 // N1 ~ N4 名稱
+  icon: string;                 // I1 ~ I4 圖示
+  repeat: boolean;              // RP 旗標
+  chordMatch: boolean;          // CM 旗標
+  channel: number;              // 0 ~ 15
+  noteCount: number;
+  barLength: number;
+  pitchMin: number | null;
+  pitchMax: number | null;
+  pitchRangeLabel: string;
+  distinctPitchClasses: number[];
+  distinctPitchNames: string[];
+  hasLeadingOrChromaticTone: boolean;
+  musicalType: PadMusicalType;
+  musicalTypeLabelZh: string;
+  recommendedChordMatch: boolean;
+  hasChordMatchConflict: boolean; // 若為長旋律卻開啟了 CM = ON，標記為衝突警示
+  recommendationReasonZh: string;
+  voiceInfo: {
+    msb: number;
+    lsb: number;
+    pc: number;
+    voiceName: string;
+    category: string;
+    panelCode: string;
+  };
+  mixing: {
+    volume: number;
+    pan: number;
+    expression: number;
+    reverb: number;
+    chorus: number;
+  };
+}
+
+/**
+ * 整份 Multi Pad (.PAD) 專案綜合診斷與原曲基準調自動估算結果
+ */
+export interface PadProjectDiagnosis {
+  estimatedKey: string;          // 自動估算之原曲基準調 (如 'Am', 'Em', 'C')
+  estimatedKeyLabelZh: string;   // 如 'Am (A 小調)'
+  estimatedRootPc: number;       // 0 ~ 11
+  estimatedIsMinor: boolean;
+  keyConfidence: number;         // 0 ~ 100
+  keyDetectionReasonZh: string;
+  tracks: PadTrackDiagnosis[];   // Pad 1 ~ Pad 4
+  hasLongMelody: boolean;
+  enforcedRuleSummaryZh: string;
+}
+
+/**
+ * 固定調性 PAD 剛體半音平移選項
+ */
+export interface PadKeyTransposeOptions {
+  /** 原曲基準調 (如 'Am', 'Em', 'C')；可由系統自動估算預填，亦可由使用者手動指定覆寫 */
+  sourceKey?: string;
+  /** 目標調性 (如 'Em', 'Cm', 'Am', 'Dm') */
+  targetKey?: string;
+  /** 若使用者直接指定半音偏移量 (-24 ~ +24)，則優先以此半音數平移 */
+  customSemitones?: number;
+  /** 平移方向偏好：'up' (向上 0~+11)、'down' (向下 -11~0)、'auto' (預設：只要最高音不超過 maxPitchLimit 優先向上平移保持明亮音色，否則自動折返) */
+  direction?: 'up' | 'down' | 'auto';
+  /** 指定要平移的 Pad 編號 (1~4)，未指定則自動平移所有非鼓組且有音符之 Pad */
+  padNumbers?: number[];
+  /** 高音八度折返保護上限 (預設 96 即 C7；超過時依 octaveWrapMode 自動降八度) */
+  maxPitchLimit?: number;
+  /** 低音八度折返保護下限 (預設 36 即 C2) */
+  minPitchLimit?: number;
+  /** 八度折返策略：'track' (預設：整軌統一降/升八度以保持旋律線條不斷裂) | 'note' (單音折返) | 'none' (不折返) */
+  octaveWrapMode?: 'track' | 'note' | 'none';
+  /** 是否強制鎖定 Track 0 為 CM0000 (預設 true，遵循固定調性 PAD 轉換鐵律) */
+  enforceFixedKeyCM0000?: boolean;
+  /** 是否自動在 Pad 名稱 (N1~N4) 加上或更新目標調性後綴，如 'Lead 1 (Em)' (預設 true) */
+  appendKeySuffixToNames?: boolean;
+  /** 自訂名稱調性後綴文字 (例如傳入 'Em原調' 則產出 'Lead 1 (Em原調)'；未傳入則預設使用 targetKey 如 'Em') */
+  keySuffixLabel?: string;
+}
+
+/**
+ * 固定調性 PAD 剛體半音平移執行結果
+ */
+export interface PadKeyTransposeResult {
+  success: boolean;
+  sourceKey: string;
+  targetKey: string;
+  baseSemitoneShift: number;
+  cmTag: string;
+  rpTag: string;
+  padNames: string[];
+  trackResults: Array<{
+    padNum: number;
+    skipped: boolean;
+    reason?: string;
+    noteCount: number;
+    appliedSemitones: number;
+    octaveWrapped: boolean;
+    oldPitchRange: [number, number] | null;
+    newPitchRange: [number, number] | null;
+  }>;
+}
 
 /**
  * Yamaha Pad 屬性與混音編輯核心模組
@@ -159,9 +315,10 @@ export class YamahaPadModifier {
 
   /**
    * 同步 Pad 控制標籤 (RP, CM, N1~N4, I1~I4) 至 Track 0
-   * 遵循 Yamaha 官方 Multi Pad 標準規範：所有控制標籤皆為 Tick 0 之 MIDI Text Event (Meta 0x01)
+   * 遵循 Yamaha 官方 Multi Pad 標準規範與實機驗收鐵律：
+   * - Track 0 開頭第 1 個事件必須為 CMxxxx，緊接著 RPxxxx、N1~N4、I1~I4 (皆為 Tick 0 之 Meta 0x01 Text Event)
    */
-  private static syncControlTagsToTrack0(parsed: YamahaFileParsed): void {
+  public static syncControlTagsToTrack0(parsed: YamahaFileParsed): void {
     if (!parsed.padConfig || parsed.tracks.length === 0) return;
     const track0 = parsed.tracks[0];
     const cfg = parsed.padConfig;
@@ -184,19 +341,7 @@ export class YamahaPadModifier {
       return true;
     });
 
-    // 2. 確保控制標籤插入在 Track 0 最前端（Tick 0），遵循 Yamaha 原廠規範
-    // 找到第一個 delta > 0 的事件或 EndOfTrack，將標籤置於 Tick 0
-    let insertPos = 0;
-    // 跳過開頭的 TrackName (0x03)、Copyright (0x02)、TimeSignature (0x58)、Tempo (0x51)
-    while (insertPos < track0.events.length && track0.events[insertPos].delta === 0) {
-      const m = track0.events[insertPos];
-      if (m.type === 'meta' && (m.metaType === 0x2f || m.metaType === 1 || m.metaType === 6)) {
-        break;
-      }
-      insertPos++;
-    }
-
-    // 生成標籤字串 (CMxxxx 必須優先於 RPxxxx)
+    // 2. 生成標籤字串 (Track 0 開頭第 1 個事件必須為 CMxxxx，接著 RPxxxx，再依序 N1~N4、I1~I4)
     const cmTag = `CM${cfg.chordMatchFlags.map((f) => (f ? '1' : '0')).join('')}`;
     const rpTag = `RP${cfg.repeatFlags.map((f) => (f ? '1' : '0')).join('')}`;
 
@@ -208,15 +353,630 @@ export class YamahaPadModifier {
     for (let i = 0; i < 4; i++) {
       const num = i + 1;
       const name = cfg.names[i] || `Pad${num}`;
-      const icon = cfg.icons[i] || 'S809';
       newControlEvents.push(this.createMarkerEvent(`N${num}${name}`));
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const num = i + 1;
+      const icon = cfg.icons[i] || 'S809';
       newControlEvents.push(this.createMarkerEvent(`I${num}${icon}`));
     }
 
-    track0.events.splice(insertPos, 0, ...newControlEvents);
+    // 強制置於 Track 0 最開頭 (Index 0, Tick 0)
+    track0.events.splice(0, 0, ...newControlEvents);
 
     // 重新編碼 Track 0 的 rawChunk
     this.rebuildTrackRawChunk(track0);
+  }
+
+  /**
+   * 解析調性字串 (如 'Am', 'Em', 'C#m', 'Bbm', 'C', 'Eb' 等)，回傳標準調性定義
+   */
+  public static resolvePadKeyDefinition(keyStr: string): PadKeyDefinition {
+    const clean = (keyStr || 'Am').trim();
+    const aliasMap: Record<string, string> = {
+      'a#m': 'Bbm', 'bbm': 'Bbm',
+      'dbm': 'C#m', 'c#m': 'C#m',
+      'd#m': 'Ebm', 'ebm': 'Ebm',
+      'gbm': 'F#m', 'f#m': 'F#m',
+      'abm': 'G#m', 'g#m': 'G#m',
+      'c#': 'Db',   'db': 'Db',
+      'd#': 'Eb',   'eb': 'Eb',
+      'gb': 'F#',   'f#': 'F#',
+      'g#': 'Ab',   'ab': 'Ab',
+      'a#': 'Bb',   'bb': 'Bb',
+    };
+    const normalized = aliasMap[clean.toLowerCase()] || clean;
+    const found = PAD_KEY_LIST.find(k => k.key.toLowerCase() === normalized.toLowerCase());
+    return found || PAD_KEY_LIST[0]; // 預設回退至 Am
+  }
+
+  /**
+   * 計算從「原曲基準調 (sourceKey)」平移至「目標調性 (targetKey)」的半音差
+   */
+  public static calculateSemitoneShift(
+    sourceKey: string,
+    targetKey: string,
+    direction: 'up' | 'down' | 'auto' = 'auto',
+    highestTrackPitch: number = 84,
+    maxPitchLimit: number = 96
+  ): {
+    semitones: number;
+    upSemitones: number;
+    downSemitones: number;
+    sourceDef: PadKeyDefinition;
+    targetDef: PadKeyDefinition;
+  } {
+    const sourceDef = this.resolvePadKeyDefinition(sourceKey);
+    const targetDef = this.resolvePadKeyDefinition(targetKey);
+    const upSemitones = (targetDef.rootPc - sourceDef.rootPc + 12) % 12;
+    const downSemitones = upSemitones === 0 ? 0 : upSemitones - 12;
+
+    let semitones = upSemitones;
+    if (direction === 'up') {
+      semitones = upSemitones;
+    } else if (direction === 'down') {
+      semitones = downSemitones;
+    } else {
+      // 'auto': 只要向上平移後不超過 maxPitchLimit (預設 C7 = 96)，優先採向上平移以維持明亮音域 (如 Am ➔ Em 為 +7 半音)；
+      // 若向上平移會衝破 maxPitchLimit，則改採向下平移 (如 -5 半音)
+      if (highestTrackPitch + upSemitones <= maxPitchLimit) {
+        semitones = upSemitones;
+      } else {
+        semitones = downSemitones;
+      }
+    }
+
+    return {
+      semitones,
+      upSemitones,
+      downSemitones,
+      sourceDef,
+      targetDef,
+    };
+  }
+
+  /**
+   * 全面診斷 Multi Pad (.PAD) 專案：
+   * 1. 自動診斷 Pad 1 ~ Pad 4 各軌樂器音色、混音、音符音域、音級與「4 大經典音樂型態」
+   * 2. 自動估算全檔「原曲基準調 (Estimated Source Key)」(供 UI 預填，使用者亦可隨時手動覆寫)
+   */
+  public static analyzePadProject(parsed: YamahaFileParsed): PadProjectDiagnosis {
+    const noteNames = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
+    const tracksDiagnosis: PadTrackDiagnosis[] = [];
+
+    // 確保 padConfig 存在
+    if (!parsed.padConfig) {
+      parsed.padConfig = {
+        names: ['Pad 1', 'Pad 2', 'Pad 3', 'Pad 4'],
+        icons: ['S809', 'S809', 'S809', 'S809'],
+        repeatFlags: [false, false, false, false],
+        chordMatchFlags: [false, false, false, false],
+      };
+    }
+
+    // 全檔音級統計 (用於自動估算原曲基準調)
+    const globalPcWeights = new Array(12).fill(0);
+    const trackFinalPcs: number[] = [];
+    const trackFirstPcs: number[] = [];
+
+    for (let padNum = 1; padNum <= 4; padNum++) {
+      const track = parsed.tracks[padNum];
+      const name = parsed.padConfig.names[padNum - 1] || `Pad ${padNum}`;
+      const icon = parsed.padConfig.icons[padNum - 1] || 'S809';
+      const repeat = parsed.padConfig.repeatFlags[padNum - 1] ?? false;
+      const chordMatch = parsed.padConfig.chordMatchFlags[padNum - 1] ?? false;
+
+      if (!track || !track.events) {
+        tracksDiagnosis.push({
+          padNum,
+          name,
+          icon,
+          repeat,
+          chordMatch,
+          channel: padNum - 1,
+          noteCount: 0,
+          barLength: 1,
+          pitchMin: null,
+          pitchMax: null,
+          pitchRangeLabel: '無音符',
+          distinctPitchClasses: [],
+          distinctPitchNames: [],
+          hasLeadingOrChromaticTone: false,
+          musicalType: 'EMPTY',
+          musicalTypeLabelZh: '空軌 (無音符)',
+          recommendedChordMatch: false,
+          hasChordMatchConflict: false,
+          recommendationReasonZh: '此軌無音符，預設關閉 Chord Match',
+          voiceInfo: { msb: 0, lsb: 0, pc: 0, voiceName: 'Grand Piano', category: 'Piano', panelCode: '0-0-1' },
+          mixing: { volume: 100, pan: 64, expression: 127, reverb: 40, chorus: 0 },
+        });
+        continue;
+      }
+
+      // 提取通道、音色與混音 CC
+      const firstChanEv = track.events.find(e => e.channel !== undefined);
+      const channel = firstChanEv?.channel ?? (padNum - 1);
+
+      const findCC = (ccNum: number, fallback: number): number => {
+        const ev = track.events.find(e => e.type === 'controlChange' && e.controller === ccNum);
+        return ev?.value !== undefined ? ev.value : fallback;
+      };
+
+      const msb = findCC(0, 0);
+      const lsb = findCC(32, 0);
+      const pcEv = track.events.find(e => e.type === 'programChange');
+      const pc = pcEv?.program ?? 0;
+
+      const resolvedVoice = resolveYamahaVoiceWithAlias(msb, lsb, pc);
+      const voiceName = resolvedVoice?.voice ? resolvedVoice.voice.name : `Program ${pc + 1}`;
+      const category = resolvedVoice?.voice ? resolvedVoice.voice.category : 'Synth';
+      const panelCode = resolvedVoice ? resolvedVoice.panelCode : `${msb}-${lsb}-${pc + 1}`;
+
+      const volume = findCC(7, 100);
+      const pan = findCC(10, 64);
+      const expression = findCC(11, 127);
+      const reverb = findCC(91, 40);
+      const chorus = findCC(93, 0);
+
+      // 提取音符清單與小節數
+      const notes = this.extractTrackNotes(track);
+      const barLength = this.getPadBarLength(parsed, padNum);
+      const noteCount = notes.length;
+
+      if (noteCount === 0) {
+        tracksDiagnosis.push({
+          padNum,
+          name,
+          icon,
+          repeat,
+          chordMatch,
+          channel,
+          noteCount: 0,
+          barLength,
+          pitchMin: null,
+          pitchMax: null,
+          pitchRangeLabel: '無音符',
+          distinctPitchClasses: [],
+          distinctPitchNames: [],
+          hasLeadingOrChromaticTone: false,
+          musicalType: 'EMPTY',
+          musicalTypeLabelZh: '空軌 (無音符)',
+          recommendedChordMatch: false,
+          hasChordMatchConflict: false,
+          recommendationReasonZh: '此軌無發聲音符',
+          voiceInfo: { msb, lsb, pc, voiceName, category, panelCode },
+          mixing: { volume, pan, expression, reverb, chorus },
+        });
+        continue;
+      }
+
+      const pitches = notes.map(n => n.note);
+      const pitchMin = Math.min(...pitches);
+      const pitchMax = Math.max(...pitches);
+      const minLabel = `${noteNames[pitchMin % 12]}${Math.floor(pitchMin / 12) - 1}`;
+      const maxLabel = `${noteNames[pitchMax % 12]}${Math.floor(pitchMax / 12) - 1}`;
+      const pitchRangeLabel = `${minLabel} (${pitchMin}) ~ ${maxLabel} (${pitchMax})`;
+
+      const distinctPcs = Array.from(new Set(pitches.map(p => p % 12))).sort((a, b) => a - b);
+      const distinctPitchNames = distinctPcs.map(pcVal => noteNames[pcVal]);
+
+      const isDrumTrack = channel === 9 || msb === 126 || msb === 127 || category === 'Drums';
+
+      // 若非鼓組，納入全曲調性統計
+      if (!isDrumTrack) {
+        for (const n of notes) {
+          const pcVal = n.note % 12;
+          // 依時長與力度加權
+          const weight = Math.max(1, Math.round(n.durationTick / 120)) * (n.velocity / 64);
+          globalPcWeights[pcVal] += weight;
+        }
+        trackFirstPcs.push(notes[0].note % 12);
+        trackFinalPcs.push(notes[notes.length - 1].note % 12);
+      }
+
+      // 檢查是否含有半音階導音或非白鍵變化音 (或相鄰兩個半音，如 G#-A, F#-G#-A, D#-E)
+      let adjSemitonesCount = 0;
+      const pcSet = new Set(distinctPcs);
+      for (const pVal of distinctPcs) {
+        if (pcSet.has((pVal + 1) % 12)) {
+          adjSemitonesCount++;
+        }
+      }
+      const hasBlackKey = distinctPcs.some(pVal => [1, 3, 6, 8, 10].includes(pVal));
+      const hasLeadingOrChromaticTone = hasBlackKey || adjSemitonesCount >= 3;
+
+      // 判定 4 大音樂型態與 Chord Match 推薦鐵律
+      let musicalType: PadMusicalType;
+      let musicalTypeLabelZh: string;
+      let recommendedChordMatch: boolean;
+      let recommendationReasonZh: string;
+
+      if (isDrumTrack) {
+        musicalType = 'DRUM_SFX';
+        musicalTypeLabelZh = '打擊節奏 / 音效 (Drums / SFX)';
+        recommendedChordMatch = false;
+        recommendationReasonZh = '打擊樂軌鐵律強制關閉 Chord Match (CM=0)，防止換和弦時鼓點音高錯亂';
+      } else if (
+        distinctPcs.length <= 2 &&
+        distinctPcs.every(pVal => [0, 4, 7, 9].includes(pVal)) &&
+        noteCount >= 8
+      ) {
+        // 如 Balloon.S910.pad 第 3 軌 (純 1、5 音 C 與 G 脈衝)
+        musicalType = 'CHORD_TEXTURE';
+        musicalTypeLabelZh = '純和弦織體 / 1、5音脈衝 (Chord Texture)';
+        recommendedChordMatch = true;
+        recommendationReasonZh = '純 1、5 音骨幹伴奏織體，適合開啟 Chord Match (CM=1) 隨左手即時跟隨和弦';
+      } else if (barLength <= 2 && noteCount <= 8 && !hasBlackKey) {
+        // 如 2011-2_PAD.PAD 第 1 軌 (2 小節 6 音符 E-D-B 開放骨幹音短動機)
+        musicalType = 'SHORT_MOTIF';
+        musicalTypeLabelZh = '開放骨幹音短動機 (Short Motif)';
+        recommendedChordMatch = false;
+        recommendationReasonZh = '短小骨幹音動機，建議關閉 Chord Match (CM=0) 避免被 C 大調 NTT 壓扁走音';
+      } else {
+        // 跨小節長旋律 / 完整前奏 (如 2010-1 空港 Pad 2/3，或 2011-2 Pad 3/4)
+        musicalType = 'MELODY_INTRO';
+        musicalTypeLabelZh = hasLeadingOrChromaticTone
+          ? '完整前奏 / 帶導音花音長旋律 (Melody Intro with Leading Tone)'
+          : '跨小節長旋律 / 前奏對位 (Long Melodic Phrase)';
+        recommendedChordMatch = false;
+        recommendationReasonZh = '長旋律/前奏鐵律強制關閉 Chord Match (CM=0)，請使用「指定調性剛體平移」以 100% 保留演歌導音與音程';
+      }
+
+      const hasChordMatchConflict =
+        (musicalType === 'MELODY_INTRO' || musicalType === 'DRUM_SFX') && chordMatch === true;
+
+      tracksDiagnosis.push({
+        padNum,
+        name,
+        icon,
+        repeat,
+        chordMatch,
+        channel,
+        noteCount,
+        barLength,
+        pitchMin,
+        pitchMax,
+        pitchRangeLabel,
+        distinctPitchClasses: distinctPcs,
+        distinctPitchNames,
+        hasLeadingOrChromaticTone,
+        musicalType,
+        musicalTypeLabelZh,
+        recommendedChordMatch,
+        hasChordMatchConflict,
+        recommendationReasonZh,
+        voiceInfo: { msb, lsb, pc, voiceName, category, panelCode },
+        mixing: { volume, pan, expression, reverb, chorus },
+      });
+    }
+
+    // 2. 自動估算全檔原曲基準調 (Estimated Source Key)
+    const keyEst = this.estimatePadSourceKey(globalPcWeights, trackFirstPcs, trackFinalPcs);
+    const hasLongMelody = tracksDiagnosis.some(t => t.musicalType === 'MELODY_INTRO');
+    const enforcedRuleSummaryZh = hasLongMelody
+      ? '偵測到跨小節完整前奏/長旋律軌：遵循實機鐵律，轉調時將自動鎖定 CM0000 並執行全軌純剛體半音平移，100% 保護和聲導音與旋律花音零失真。'
+      : '各軌均為短動機或伴奏織體，可依需求切換固定調性平移或和弦跟隨。';
+
+    return {
+      estimatedKey: keyEst.key,
+      estimatedKeyLabelZh: keyEst.labelZh,
+      estimatedRootPc: keyEst.rootPc,
+      estimatedIsMinor: keyEst.isMinor,
+      keyConfidence: keyEst.confidence,
+      keyDetectionReasonZh: keyEst.reasonZh,
+      tracks: tracksDiagnosis,
+      hasLongMelody,
+      enforcedRuleSummaryZh,
+    };
+  }
+
+  /**
+   * 內部輔助：綜合音級權重、和聲導音解決 (如 G#->A, D#->E) 與各軌收尾主音，自動估算原曲基準調
+   */
+  private static estimatePadSourceKey(
+    pcWeights: number[],
+    firstPcs: number[],
+    finalPcs: number[]
+  ): { key: string; labelZh: string; rootPc: number; isMinor: boolean; confidence: number; reasonZh: string } {
+    const totalWeight = pcWeights.reduce((a, b) => a + b, 0);
+    if (totalWeight <= 0) {
+      const def = this.resolvePadKeyDefinition('C');
+      return {
+        key: def.key,
+        labelZh: def.labelZh,
+        rootPc: def.rootPc,
+        isMinor: def.isMinor,
+        confidence: 50,
+        reasonZh: '無有效旋律音符，預設為 C 大調',
+      };
+    }
+
+    // 對全部 24 個大小調評分
+    // 自然小調音階半音偏移: [0, 2, 3, 5, 7, 8, 10]，另加和聲小調導音 (11) 與旋律小調大六度 (9)
+    // 自然大調音階半音偏移: [0, 2, 4, 5, 7, 9, 11]
+    let bestDef = PAD_KEY_LIST[0];
+    let bestScore = -Infinity;
+    let bestReason = '';
+
+    for (const candidate of PAD_KEY_LIST) {
+      const r = candidate.rootPc;
+      let score = 0;
+      const reasons: string[] = [];
+
+      if (candidate.isMinor) {
+        // 小調評分模型
+        const tonicW = pcWeights[r];               // 1 (主音，如 Am 的 A)
+        const supertonicW = pcWeights[(r + 2) % 12]; // 2 (如 B)
+        const minorThirdW = pcWeights[(r + 3) % 12]; // b3 (小三度，如 C)
+        const majorThirdW = pcWeights[(r + 4) % 12]; // 3 (大三度衝突音，如 C#)
+        const fourthW = pcWeights[(r + 5) % 12];     // 4 (如 D)
+        const fifthW = pcWeights[(r + 7) % 12];      // 5 (屬音，如 E)
+        const minorSixthW = pcWeights[(r + 8) % 12]; // b6 (如 F)
+        const majorSixthW = pcWeights[(r + 9) % 12]; // 6 (旋律小調大六度，如 F#)
+        const minorSevW = pcWeights[(r + 10) % 12];  // b7 (如 G)
+        const leadingToneW = pcWeights[(r + 11) % 12]; // 7 (和聲小調導音，如 G#)
+
+        score += tonicW * 3.2 + fifthW * 2.5 + minorThirdW * 2.8 + fourthW * 1.5 + supertonicW * 1.4 + minorSixthW * 1.4 + minorSevW * 1.2;
+        score -= majorThirdW * 3.5; // 大三度扣分
+
+        // 和聲小調導音特徵加分 (同時有主音 r、小三度 r+3、屬音 r+7 與導音 r+11)
+        if (leadingToneW > 0 && tonicW > 0 && minorThirdW > 0) {
+          score += leadingToneW * 3.5 + totalWeight * 0.35;
+          const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+          reasons.push(`偵測到和聲小調導音 ${noteNames[(r + 11) % 12]} 解決至主音 ${noteNames[r]}`);
+          if (majorSixthW > 0) {
+            score += majorSixthW * 2.0 + totalWeight * 0.15;
+            reasons.push(`含旋律小調大六度花音 ${noteNames[(r + 9) % 12]}`);
+          }
+        }
+
+        // 收尾音 (Cadence) 落在主音或屬音強力加權
+        const cadenceTonicCount = finalPcs.filter(pc => pc === r).length;
+        const cadenceFifthCount = finalPcs.filter(pc => pc === (r + 7) % 12).length;
+        if (cadenceTonicCount > 0) {
+          score += totalWeight * (0.35 * cadenceTonicCount);
+          reasons.push(`${cadenceTonicCount} 軌樂句尾音收束於主音`);
+        } else if (cadenceFifthCount > 0) {
+          score += totalWeight * (0.15 * cadenceFifthCount);
+          reasons.push(`樂句半終止於屬音`);
+        }
+
+        // 首音落在主音或屬音加權
+        const startTonicOrFifth = firstPcs.filter(pc => pc === r || pc === (r + 7) % 12).length;
+        if (startTonicOrFifth > 0) {
+          score += totalWeight * (0.12 * startTonicOrFifth);
+        }
+      } else {
+        // 大調評分模型
+        const tonicW = pcWeights[r];               // 1 (主音)
+        const supertonicW = pcWeights[(r + 2) % 12]; // 2
+        const majorThirdW = pcWeights[(r + 4) % 12]; // 3 (大三度)
+        const minorThirdW = pcWeights[(r + 3) % 12]; // b3 (小三度衝突音)
+        const fourthW = pcWeights[(r + 5) % 12];     // 4
+        const fifthW = pcWeights[(r + 7) % 12];      // 5 (屬音)
+        const majorSixthW = pcWeights[(r + 9) % 12]; // 6
+        const majorSevW = pcWeights[(r + 11) % 12];  // 7
+
+        score += tonicW * 3.0 + fifthW * 2.4 + majorThirdW * 2.6 + fourthW * 1.4 + supertonicW * 1.3 + majorSixthW * 1.3 + majorSevW * 1.3;
+        score -= minorThirdW * 3.5;
+
+        const cadenceTonicCount = finalPcs.filter(pc => pc === r).length;
+        if (cadenceTonicCount > 0) {
+          score += totalWeight * (0.3 * cadenceTonicCount);
+          reasons.push(`${cadenceTonicCount} 軌樂句尾音收束於大調主音`);
+        }
+
+        const startTonicCount = firstPcs.filter(pc => pc === r).length;
+        if (startTonicCount > 0) {
+          score += totalWeight * (0.15 * startTonicCount);
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestDef = candidate;
+        bestReason = reasons.length > 0
+          ? `${reasons.join('、')}，判定原曲基準調為 ${candidate.labelZh}`
+          : `依全軌音階分佈與骨幹音權重，估算原曲基準調為 ${candidate.labelZh}`;
+      }
+    }
+
+    const confidence = Math.min(98, Math.max(60, Math.round((bestScore / (totalWeight * 4)) * 100)));
+    return {
+      key: bestDef.key,
+      labelZh: bestDef.labelZh,
+      rootPc: bestDef.rootPc,
+      isMinor: bestDef.isMinor,
+      confidence,
+      reasonZh: bestReason,
+    };
+  }
+
+  /**
+   * 固定調性 PAD 純剛體半音平移引擎 (Pure Fixed-Key Transposition Engine)
+   * 嚴格遵循 GEMINI.md 實機驗收鐵律：
+   * 1. 支援自動估算或由使用者手動指定「原曲基準調 (sourceKey)」與「目標調性 (targetKey)」，或自訂半音偏移量
+   * 2. 全軌音符執行純剛體半音平移 (Pure Semitone Pitch Shift)，100% 保留演歌導音 (G#->D#)、大六度花音 (F#->C#) 與所有裝飾音程
+   * 3. 支援超過 C7 (MIDI 96) 之八度折返防呆保護
+   * 4. 強制將 Track 0 開頭第 1 個事件鎖定為 CM0000 (關閉琴端自然小調吸附)，並在 N1~N4 自動標註目標調性後綴
+   */
+  public static transposePadKey(
+    parsed: YamahaFileParsed,
+    options: PadKeyTransposeOptions
+  ): PadKeyTransposeResult {
+    // 1. 確保基礎診斷與 padConfig 初始化
+    const diagnosis = this.analyzePadProject(parsed);
+    const effectiveSourceKey = options.sourceKey ? options.sourceKey.trim() : diagnosis.estimatedKey;
+    const effectiveTargetKey = options.targetKey ? options.targetKey.trim() : effectiveSourceKey;
+
+    const maxPitchLimit = options.maxPitchLimit ?? 96; // 預設 C7 (96)
+    const minPitchLimit = options.minPitchLimit ?? 36; // 預設 C2 (36)
+    const octaveWrapMode = options.octaveWrapMode ?? 'track';
+    const enforceFixedKeyCM0000 = options.enforceFixedKeyCM0000 ?? true;
+    const appendKeySuffixToNames = options.appendKeySuffixToNames ?? true;
+
+    // 找出所有非鼓組軌的當前最高音，供 'auto' 方向判斷
+    const melodyMaxPitches = diagnosis.tracks
+      .filter(t => t.musicalType !== 'DRUM_SFX' && t.musicalType !== 'EMPTY' && t.pitchMax !== null)
+      .map(t => t.pitchMax!);
+    const globalHighestPitch = melodyMaxPitches.length > 0 ? Math.max(...melodyMaxPitches) : 84;
+
+    // 2. 計算基準半音差
+    let baseSemitoneShift = 0;
+    if (options.customSemitones !== undefined) {
+      baseSemitoneShift = Math.round(options.customSemitones);
+    } else {
+      const shiftInfo = this.calculateSemitoneShift(
+        effectiveSourceKey,
+        effectiveTargetKey,
+        options.direction ?? 'auto',
+        globalHighestPitch,
+        maxPitchLimit
+      );
+      baseSemitoneShift = shiftInfo.semitones;
+    }
+
+    const targetPads = options.padNumbers ?? [1, 2, 3, 4];
+    const trackResults: PadKeyTransposeResult['trackResults'] = [];
+
+    // 3. 逐軌執行純剛體半音平移
+    for (let padNum = 1; padNum <= 4; padNum++) {
+      const trkDiag = diagnosis.tracks[padNum - 1];
+      const track = parsed.tracks[padNum];
+
+      if (!targetPads.includes(padNum)) {
+        trackResults.push({
+          padNum,
+          skipped: true,
+          reason: '未勾選此軌',
+          noteCount: trkDiag?.noteCount ?? 0,
+          appliedSemitones: 0,
+          octaveWrapped: false,
+          oldPitchRange: trkDiag && trkDiag.pitchMin !== null && trkDiag.pitchMax !== null ? [trkDiag.pitchMin, trkDiag.pitchMax] : null,
+          newPitchRange: trkDiag && trkDiag.pitchMin !== null && trkDiag.pitchMax !== null ? [trkDiag.pitchMin, trkDiag.pitchMax] : null,
+        });
+        continue;
+      }
+
+      if (!track || !trkDiag || trkDiag.musicalType === 'EMPTY') {
+        trackResults.push({
+          padNum,
+          skipped: true,
+          reason: '空軌 (0 音符)',
+          noteCount: 0,
+          appliedSemitones: 0,
+          octaveWrapped: false,
+          oldPitchRange: null,
+          newPitchRange: null,
+        });
+        continue;
+      }
+
+      if (trkDiag.musicalType === 'DRUM_SFX') {
+        trackResults.push({
+          padNum,
+          skipped: true,
+          reason: '打擊樂軌自動跳過移調',
+          noteCount: trkDiag.noteCount,
+          appliedSemitones: 0,
+          octaveWrapped: false,
+          oldPitchRange: [trkDiag.pitchMin!, trkDiag.pitchMax!],
+          newPitchRange: [trkDiag.pitchMin!, trkDiag.pitchMax!],
+        });
+        continue;
+      }
+
+      const oldMin = trkDiag.pitchMin!;
+      const oldMax = trkDiag.pitchMax!;
+      let appliedSemitones = baseSemitoneShift;
+      let octaveWrapped = false;
+
+      // 整軌八度折返防呆保護 (保持整軌旋律線條連續不斷裂)
+      if (octaveWrapMode === 'track') {
+        while (oldMax + appliedSemitones > maxPitchLimit && appliedSemitones > -24) {
+          appliedSemitones -= 12;
+          octaveWrapped = true;
+        }
+        while (oldMin + appliedSemitones < minPitchLimit && appliedSemitones < 24) {
+          appliedSemitones += 12;
+          octaveWrapped = true;
+        }
+      }
+
+      let newMin = 127;
+      let newMax = 0;
+
+      for (const ev of track.events) {
+        if ((ev.type === 'noteOn' || ev.type === 'noteOff') && ev.noteNumber !== undefined) {
+          let newPitch = ev.noteNumber + appliedSemitones;
+          if (octaveWrapMode === 'note') {
+            while (newPitch > maxPitchLimit) {
+              newPitch -= 12;
+              octaveWrapped = true;
+            }
+            while (newPitch < minPitchLimit) {
+              newPitch += 12;
+              octaveWrapped = true;
+            }
+          }
+          newPitch = Math.max(0, Math.min(127, newPitch));
+          ev.noteNumber = newPitch;
+          if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0) {
+            if (newPitch < newMin) newMin = newPitch;
+            if (newPitch > newMax) newMax = newPitch;
+          }
+        }
+      }
+
+      // 重建該軌 MTrk 二進位資料
+      this.rebuildTrackRawChunk(track);
+
+      trackResults.push({
+        padNum,
+        skipped: false,
+        noteCount: trkDiag.noteCount,
+        appliedSemitones,
+        octaveWrapped,
+        oldPitchRange: [oldMin, oldMax],
+        newPitchRange: newMin <= newMax ? [newMin, newMax] : [oldMin, oldMax],
+      });
+    }
+
+    // 4. 強制鎖定 CM0000 (關閉全數 Chord Match) 與更新 N1~N4 調性後綴
+    if (enforceFixedKeyCM0000 && parsed.padConfig) {
+      parsed.padConfig.chordMatchFlags = [false, false, false, false];
+    }
+
+    if (appendKeySuffixToNames && parsed.padConfig) {
+      const suffix = (options.keySuffixLabel || effectiveTargetKey).trim();
+      if (suffix) {
+        parsed.padConfig.names = parsed.padConfig.names.map((rawName, idx) => {
+          const baseName = (rawName || `Pad ${idx + 1}`)
+            .replace(/\s*\([^)]*\)\s*$/, '') // 移除舊有的 (Am)、(Em原調) 等後綴，避免多次轉調重複疊加
+            .trim();
+          return `${baseName} (${suffix})`;
+        });
+      }
+    }
+
+    // 5. 同步寫入 Track 0 最開頭並重建 Track 0 二進位
+    this.syncControlTagsToTrack0(parsed);
+
+    const cfg = parsed.padConfig!;
+    const cmTag = `CM${cfg.chordMatchFlags.map(f => (f ? '1' : '0')).join('')}`;
+    const rpTag = `RP${cfg.repeatFlags.map(f => (f ? '1' : '0')).join('')}`;
+
+    return {
+      success: true,
+      sourceKey: effectiveSourceKey,
+      targetKey: effectiveTargetKey,
+      baseSemitoneShift,
+      cmTag,
+      rpTag,
+      padNames: [...cfg.names],
+      trackResults,
+    };
   }
 
   private static createMarkerEvent(text: string): MidiEvent {

@@ -5425,8 +5425,8 @@
     <section>
       <div id="drop-zone" class="drop-zone">
         <span class="drop-zone-icon">📂</span>
-        <div class="drop-zone-title">點擊選擇或拖曳 Yamaha STY 伴奏檔 或 標準 MIDI (.mid) 音樂檔至此</div>
-        <div class="drop-zone-desc">支援 .sty, .prs, .sst 原廠伴奏格式，以及 .mid, .midi 標準音樂檔（直拉播放並自動解析小節、速度、16 通道與使用樂器）</div>
+        <div class="drop-zone-title">點擊選擇或拖曳 Yamaha STY 伴奏檔、Multi Pad (.pad) 或 標準 MIDI (.mid) 音樂檔至此</div>
+        <div class="drop-zone-desc">支援 .sty, .prs, .sst 原廠伴奏格式、.pad (Multi Pad 插音檔，支援固定調性剛體平移與 4 軌修改)，以及 .mid, .midi 標準音樂檔</div>
         <div class="sample-bar" onclick="event.stopPropagation()">
           <button id="btn-open-new-style" class="btn-create-style" title="從無到有建立全新的 Yamaha SFF2 伴奏檔案">
             ✨ 建立全新伴奏 (New Style)
@@ -5435,11 +5435,12 @@
           <button class="sample-btn" data-file="LoveSong.T547.sty">🎵 LoveSong.T547.sty (70 BPM)</button>
           <button class="sample-btn" data-file="4006_SX900.T547.sty">🎵 4006_SX900.T547.sty (92 BPM)</button>
           <button class="sample-btn" data-file="1024_容易受傷的女人.sty">🎵 容易受傷的女人.sty (66 BPM)</button>
-          <button class="sample-btn" data-file="SX920_V2_4Bar_Test.sty">🎵 SX920_V2_4Bar_Test.sty (120 BPM)</button>
+          <button class="sample-btn" data-file="2010-1_PAD.PAD" style="border-color: rgba(245, 158, 11, 0.55); color: #fbbf24;">🎹 2010-1_PAD.PAD (空港 Am)</button>
+          <button class="sample-btn" data-file="2011-2_PAD.PAD" style="border-color: rgba(245, 158, 11, 0.55); color: #fbbf24;">🎹 2011-2_PAD.PAD (Am)</button>
           <button class="sample-btn" data-file="demo_groove.mid" style="border-color: rgba(16, 185, 129, 0.5); color: #34d399;">🎼 demo_groove.mid (MIDI 範例曲)</button>
         </div>
       </div>
-      <input type="file" id="file-input" accept=".sty,.prs,.sst,.mid,.midi" style="display: none;">
+      <input type="file" id="file-input" accept=".sty,.prs,.sst,.pad,.PAD,.mid,.midi" style="display: none;">
     </section>
 
     <!-- 伴奏規格儀表板 -->
@@ -5654,6 +5655,102 @@
             <button id="btn-reset-progression" class="btn-progression-reset">🔄 還原預設進行</button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- 🎹 Multi Pad (.PAD) 調性平移與 4 軌視覺化修改工作台 -->
+    <section id="pad-studio-panel" class="midi-inspector-panel" style="display: none; border-color: rgba(245, 158, 11, 0.4);">
+      <div class="panel-header" style="margin-bottom: 0;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <span style="color: #fbbf24; font-size: 1rem;">🎹 Multi Pad (.PAD) 調性平移與 4 軌修改工作台 (Pad Key Transposer &amp; Studio)</span>
+          <span id="pad-studio-cm-badge" style="font-size: 0.75rem; padding: 2px 10px; border-radius: 999px; background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.45); color: #fcd34d; font-weight: 700;">Track 0: CM0000 · RP0000</span>
+        </div>
+        <button id="btn-export-pad-file" class="btn-export" style="background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b;" title="匯出當前修改或調性平移後的標準 Yamaha Multi Pad (.PAD) 檔案">
+          <span>💾</span>
+          <span>匯出轉換後 .PAD 檔案</span>
+        </button>
+      </div>
+
+      <!-- 區塊 1：智慧調性診斷與固定調性剛體半音平移控制中心 -->
+      <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-size: 0.88rem; font-weight: 700; color: #fbbf24;">🔀 固定調性剛體半音平移器 (Fixed-Key Transposer)：</span>
+            <span id="pad-auto-key-badge" style="font-size: 0.78rem; padding: 3px 10px; border-radius: 6px; background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.35); color: #7dd3fc; font-weight: 600;">💡 系統自動估算：Am (A 小調)</span>
+          </div>
+          <span id="pad-key-reason-text" style="font-size: 0.74rem; color: #94a3b8;"></span>
+        </div>
+
+        <!-- 基準調 (可手動更改) ➔ 目標調 與 半音控制列 -->
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(30, 41, 59, 0.7); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08);">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="select-pad-source-key" style="font-size: 0.82rem; font-weight: 700; color: #cbd5e1;">原曲基準調 (可手動更改)：</label>
+            <select id="select-pad-source-key" class="chord-select" style="min-width: 155px; border-color: rgba(56, 189, 248, 0.5); color: #38bdf8; font-weight: 700;"></select>
+          </div>
+
+          <span style="font-size: 1.1rem; color: #fbbf24; font-weight: 700;">➔</span>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="select-pad-target-key" style="font-size: 0.82rem; font-weight: 700; color: #fcd34d;">轉換目標調性：</label>
+            <select id="select-pad-target-key" class="chord-select" style="min-width: 155px; border-color: rgba(245, 158, 11, 0.6); color: #fbbf24; font-weight: 700;"></select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="select-pad-shift-dir" style="font-size: 0.78rem; color: #94a3b8;">方向：</label>
+            <select id="select-pad-shift-dir" class="chord-select" style="font-size: 0.78rem;">
+              <option value="auto">自動最佳音域 (不超過 C7 優先向上)</option>
+              <option value="up">強制向上平移 (+0 ~ +11 半音)</option>
+              <option value="down">強制向下平移 (-11 ~ 0 半音)</option>
+            </select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="input-pad-key-suffix" style="font-size: 0.78rem; color: #94a3b8;">名稱後綴：</label>
+            <input type="text" id="input-pad-key-suffix" value="Em" style="width: 78px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.18); color: #f8fafc; padding: 4px 8px; border-radius: 5px; font-size: 0.8rem;" title="自動寫入 Track 0 N1~N4 的調性括號標記，如 (Em) 或 (Em原調)">
+          </div>
+
+          <span id="pad-shift-preview-badge" style="font-size: 0.82rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.45); color: #6ee7b7;">位移：0 半音</span>
+
+          <button type="button" id="btn-apply-pad-transpose" class="midi-locator-btn active" style="background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b; color: #fff; font-weight: 700; padding: 6px 14px;" title="以原曲基準調為起點，將所有旋律 Pad 剛體平移至目標調性，並強制鎖定 CM0000">
+            🔀 套用調性平移 (鎖定 CM0000)
+          </button>
+
+          <button type="button" id="btn-reset-pad-transpose" class="midi-locator-btn" style="background: rgba(148, 163, 184, 0.14); border-color: rgba(148, 163, 184, 0.35); color: #cbd5e1; padding: 6px 10px;" title="還原至載入時的原始音高 (0 半音位移)">
+            🔄 還原原始音高
+          </button>
+        </div>
+
+        <!-- 常用目標調性一鍵快捷列 + 半音/八度微調 -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="font-size: 0.76rem; color: #94a3b8;">⚡ 常用目標調快捷轉換：</span>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="Am">Am 調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="Cm">Cm 調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="Dm">Dm 調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="Em">Em 調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="Fm">Fm 調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="Gm">Gm 調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="C">C 大調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="F">F 大調</button>
+            <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="G">G 大調</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 0.76rem; color: #94a3b8;">微調：</span>
+            <button type="button" class="midi-locator-btn" id="btn-pad-semi-minus" title="全軌降 1 半音">-1 半音</button>
+            <button type="button" class="midi-locator-btn" id="btn-pad-semi-plus" title="全軌升 1 半音">+1 半音</button>
+            <button type="button" class="midi-locator-btn" id="btn-pad-oct-minus" title="全軌降 1 八度 (-12 半音)">-12 八度</button>
+            <button type="button" class="midi-locator-btn" id="btn-pad-oct-plus" title="全軌升 1 八度 (+12 半音)">+12 八度</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 區塊 2：Pad 1 ~ Pad 4 四軌獨立修改卡片網格 -->
+      <div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+          <span style="font-size: 0.86rem; font-weight: 700; color: #e2e8f0;">🎛️ Pad 1 ~ Pad 4 軌道屬性、音色、混音與單軌音符修改 (點擊任一 Pad 卡片可展開下方鋼琴捲軸修改音符)：</span>
+          <span id="pad-studio-status-msg" style="font-size: 0.76rem; color: #34d399; font-weight: 600;"></span>
+        </div>
+        <div id="pad-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px;"></div>
       </div>
     </section>
 

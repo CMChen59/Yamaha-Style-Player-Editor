@@ -1,6 +1,6 @@
 # 📊 Yamaha Style Player & Editor — 專案進度與待辦總表 (Single Source of Truth)
 
-> **最後更新**：2026-11-22 (今日全部重大關鍵修復圓滿結案：起拍邊界音過濾、副歌鈸音/Pad NTT 修正、Intro B/Ending A 殘留與 819 幽靈 CC11 淨化、起拍標準事件優先級、Fill In 過門聲部鏡像與 Auto Fill In 機制實機大驗收通過)  
+> **最後更新**：2026-11-23 (完成 Multi Pad 固定調性剛體半音平移核心引擎與 4 軌視覺化修改工作台 UI，支援自動估算+手動覆寫原曲基準調、原始音高基準快照無損重算、CM0000 鎖定與單軌鋼琴捲軸聯動，待家中 PSR-SX920 實機驗收)  
 > **使用說明**：本檔案為跨電腦（公司 ↔ 家裡）的**唯一進度基準**。凡已列入「✅ 已完成並封存」之項目，均已通過測試與實機驗證，請勿重複確認或重做；新對話開始時請直接聚焦於「🚧 當前待處理項目」。
 
 ---
@@ -20,6 +20,7 @@
 | **【任務 2-4C 終極】** | **全自動切片深層淨化管線、標準事件優先級與過門聲部鏡像 (實機驗收通過)** | [`style-modifier.ts`](../src/core/writer/style-modifier.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`GEMINI.md`](../GEMINI.md) | ✅ 已完成並實機驗收（邊界音過濾、副歌鈸音/Pad NTT 修正、消除 819 幽靈 CC11、事件標準優先級重整、Fill In 鏡像與 Auto Fill In 無縫切換，琴端表現與原廠一致） |
 | **【任務 4-1 基礎】** | **Multi Pad (.PAD) 二進位結構解析與全軌屬性寫入** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`yamaha-writer.ts`](../src/core/writer/yamaha-writer.ts) | ✅ 已完成（完整支援 5 軌 SMF1 結構、`CMxxxx` / `RPxxxx` / `N1~N4` 控制標記） |
 | **【任務 4-1 終極】** | **Multi Pad 和弦跟隨適用邊界、固定調性鐵律與 STY 插音分工架構實機結案** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`GEMINI.md`](../GEMINI.md), `2010_空港_Intro_Am調.PAD` | ✅ 已完成並實機結案（PSR-SX920 雙向驗收：證實長旋律開 CM 必走音，CM0000 指定調性為 100% 依譜還原唯一解；插音歸 STY Phrase 聲部） |
+| **【任務 4-1A】** | **Multi Pad 調性平移引擎與 4 軌視覺化修改工作台 UI (Pad Key Transposer & Studio)** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`index.html`](../index.html), [`test-pad-key-transposition.test.ts`](../tests/test-pad-key-transposition.test.ts) | ✅ 已完成程式與單元測試（支援 4 大型態診斷、原曲基準調自動估算+手動更改、原始音高基準快照無損重算、Track 0 鎖定 `CM0000`、4 軌名稱/音色/混音/鋼琴捲軸修改與 `.PAD` 匯出；已產出 PAD 待家中實琴驗收） |
 
 ---
 
