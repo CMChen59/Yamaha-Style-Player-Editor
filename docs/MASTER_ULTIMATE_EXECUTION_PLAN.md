@@ -58,14 +58,11 @@ flowchart TD
 ### 🟠 【優先級 P1】歷史遺留問題精準收斂（Bug Fixes & Hardening）
 > **定位**：在搭建全新 MIDI 切片功能前，將之前遇到的轉調走音與顯示盲點徹底收斂結案，確保底層演算法堅如磐石。
 
-- [ ] **【任務 1-1】Phrase 1 / Phrase 2 原音直通（Root Fixed）琴端走音問題徹底解決**
-  - **歷史遺留紀錄**：[`CASM_PHRASE_CHORD_FOLLOWING_ISSUE_AND_HANDOVER.md`](file:///C:/Users/CM/.gemini/antigravity/brain/b3239a14-9d39-4a21-8dce-6c23091cc3ca/CASM_PHRASE_CHORD_FOLLOWING_ISSUE_AND_HANDOVER.md)
-  - **現象**：在 CASM 設定為 `Root Fixed + Bypass` 時，實體琴彈奏部分小和弦仍感覺旋律音高跑位或跳八度。
-  - **具體排查與修復**：
-    1. **Ctb2 二進位大小調表對稱性**：確認 Minor 表（Byte 34~39）與 Major 表（Byte 28~33）是否 100% 寫入相同參數。
-    2. **聲部 Flag (Byte 13) 調整**：測試打擊樂旗標 `0x07` 與旋律旗標 `0x03` 對 SX920 韌體 Bypass 的影響。
-    3. **High Key 臨界值防跳八度**：將 HiKey 設定為極值，徹底禁用琴端內部的八度強制折返（Octave Wrap）。
-  - **工時**：1 天 ｜ **驗收**：實體琴彈奏 Cm、Fm、G7 時，Phrase 1 笛子旋律音高不動如山。
+- [x] **【任務 1-1】Phrase 1 / Phrase 2 與跨段落轉調走音問題徹底解決（已於 2026-11-22 實機驗收結案）**
+  - **實機定案根因與解法（取代早期 Root Fixed + HiKey 舊假設）**：
+    1. **CASM 段落獨立隔離（CSEG Isolation）**：防止 `Intro / Ending` 非 C 調直通規則覆寫共享 `CSEG 0` 而污染 `Main A~D`。
+    2. **原曲直通基準根音全域鎖定 C (`sourceChordRoot = 0`)**：`Intro / Ending`（`NTT = Bypass`）一律鎖定 `Root = 0 (C)`，消除 `Sync Start = C` 觸發時誤降半音之走調。
+    3. **半小節（2 拍）高解析度和弦反向正規化與聲部 NTT 校準**：`Main / Fill` 循環段落以 2 拍為單位正規化至 `CM7`（大調）或 `Cm`（小調，`chordType = 8, NTT = Minor`）；單音過門插音配 `NTT = Melody`，多音三和弦鋪底（Ch 14/15）配 `NTT = Chord`，琴端手彈換和弦 100% 精準跟隨無走音。
 
 - [x] **【任務 1-2】PSR-SX920 原廠 2,395 種音色代碼與別名顯示零落差（已於 2026-11-09 完成並通過測試）**
   - **現象**：4006.STY Main A 中 Chord 1 顯示 104-21-1 vs 琴端 104-1-1 之別名對照。
@@ -109,16 +106,17 @@ flowchart LR
     3. 實裝 `MidiSliceAssembler`，支援 1920 PPQ 縮放對齊、多段落累積整合至同一 STY 專案與雙向模式切換。
   - **工時**：1.5 天 ｜ **優先級**：⭐⭐⭐⭐
 
-- [ ] **【任務 2-4】自動化 SFF2 二進位 CASM 注入與基準調性標準化**
+- [x] **【任務 2-4】自動化 SFF2 二進位 CASM 注入、三合一基準調性分流與全自動切片深層淨化管線（已於 2026-11-22 實機大驗收通過）**
   - **具體實作**：
-    1. 呼叫我們已測試完善的 `casm-generator.ts`，自動將截取下來的小節正規化為 **C 基準調（Source Root = C）**。
-    2. 自動配置標準原廠 NTT/NTR 規則（Bass 設為 Bass NTT、鼓組 Bypass、伴奏軌 Chord NTT）。
+    1. **三合一基準和弦智慧分流**：`Intro / Ending` 自動配置 `ORIGINAL_PASS_THROUGH`（0 移調，`sourceChordRoot = 0 (C)`, `NTT = Bypass`）；`Main / Fill` 依切片起點和弦分流為 `CM7_MAJOR`（大調 CM7 母體）或 `CM_MINOR`（小調 Cm 母體，`chordType = 8, NTT = Minor`）。
+    2. **半小節（2 拍）高解析度和弦反向正規化與拍級（Beat）切片**：支援弱起首音自動吸附與 `Bar : Beat` 拍級切割，以 2 拍為單位反向正規化雙和弦小節，完整保留 8 節過門插音。
+    3. **CASM 段落獨立隔離（CSEG Isolation）與深層淨化**：自動剝離共享 CSEG 防跨段落污染；自動過濾跨界殘留音、起拍 Note 49/57 大鈸與 800+ 顆舊範本幽靈 CC11 淡出曲線；強制標準 MIDI 事件優先級排序（先 Bank/PC/CC 後 NoteOn），並補齊 Fill In 聲部鏡像，琴端表現與原廠 100% 一致。
   - **工時**：1.5 天 ｜ **優先級**：⭐⭐⭐⭐⭐
 
 ---
 
 ### 🟢 【優先級 P3】STY 伴奏深度細修手感大躍進（The Editor Studio）
-> **定位**：切下來的伴奏如果有音符彈錯、太小聲、或需要微調加花，在此視圖精細修飾。
+> **定位**：切下來的伴奏如果有音符彈錯、太小聲、或需要微調加花，在此視圖精細修飾。（註：PAD 底層之 `batchUpdateNotes`、`batchDeleteNotes`、`copyPadMeasure`、`deletePadMeasure`、`shiftPadOctave`、`quantizePadTrack` 已於 `pad-modifier.ts` 實裝完成）
 
 - [ ] **【任務 3-1】樂句剪貼簿 (Clipboard: Copy / Cut / Paste)**
   - **具體實作**：
@@ -141,42 +139,33 @@ flowchart LR
 ---
 
 ### 🔵 【優先級 P4】Multi Pad 專屬工坊與樣式混搭（The Expansion Lab）
-> **定位**：伴奏之外的王牌武器——獨立 Multi Pad 製作與跨風格音軌拼貼。
+> **定位**：伴奏之外的王牌武器——嚴格遵循 2026-11-21 實機驗收鎖定之「Multi Pad 三位一體鐵律」與「指定調性專屬 PAD (`CM0000`) 轉換規範」。
 
-- [ ] **【任務 4-1】Multi Pad (.pad) 一鍵抽取與專屬製作器**
-  - **背景**：在 `tests/pad-inspector.test.ts` 中已完全掌握 Yamaha 原廠 `.pad` 結構。
+- [ ] **【任務 4-1】Multi Pad (.pad) 一鍵抽取與三位一體專屬製作器**
+  - **背景**：已於 PSR-SX920 實機完成《空港》與原廠 `Balloon.S910.pad` 雙向驗收，徹底確立 Multi Pad 適用邊界。
   - **具體實作**：
-    1. 使用者在 MIDI 或 STY 中框選一段精彩的樂句（如 2 小節電吉他 Solo、薩克斯風花音、前奏管弦樂琶音）。
-    2. 點擊「抽取為 Multi Pad」，指派給 Pad 1 / Pad 2 / Pad 3 / Pad 4。
-    3. 自動生成 `NTT = Melody` 規範，保證在琴上換和弦或按 Transpose 移調時旋律完全和諧。
-    4. 一鍵透過 USB 直傳 SX920 User 磁區的 Multi Pad 目錄！
-  - **工時**：2.5 天 ｜ **優先級**：⭐⭐⭐⭐
+    1. 使用者在 MIDI 或 STY 中框選一段樂句，點擊「抽取為 Multi Pad」指派給 Pad 1 ~ 4。
+    2. **強制遵循三位一體分流鐵律**：
+       - **長旋律 / 完整前奏（Intro / Solo / 跨小節帶和聲轉折或導音花音）**：**鐵律強制關閉 Chord Match（`CM = 0`）**，避免被琴端自然小調削平導音或換和弦撕裂旋律。
+       - **純和弦織體（1、5 音脈衝、琶音、刷弦）或單一小節固定和弦短插音**：允許開啟 `Chord Match = ON` 並執行 `CM7` 正規化。
+       - **隨和弦連續變化的跨小節副奏對位**：系統主動提示並引導使用者切入 `.STY` 的 `Phrase 1 / Phrase 2` 聲部（搭配 STY CASM `NTT = Melody`），嚴禁誤做在 Multi Pad 中。
+    3. 一鍵匯出或透過 USB 直傳 SX920 User 磁區的 Multi Pad 目錄！
+  - **工時**：2 天 ｜ **優先級**：⭐⭐⭐⭐
 
-- [ ] **【任務 4-1A】Multi Pad CASM 視覺化編輯與智慧和弦轉調修復器 (Smart Pad CASM & Chord Match Studio)**
-  - **背景與痛點**：
-    - 使用者實戰回報：Multi Pad 包含旋律插音（如吉他/薩克斯風 Fill-in），開啟 `Chord Match`（和弦跟隨）後，原調（如 Am）聽感正常，但換和弦（如 Em）後旋律完全走音變形。
-    - 根因分析：
-      1. NTT 誤設為 `Chord`（和弦對照表），非和弦經過音被粗暴壓平/吸附到三和弦音上。
-      2. Source Root 誤設為預設的 `C`，導致琴端音程計算偏移 3 個半音（小三度差）。
-      3. HiKey 折返點導致旋律被跨八度腰斬。
+- [ ] **【任務 4-1A】Multi Pad 視覺化工作台與「指定調性包（Fixed-Key `CM0000`）」一鍵轉調匯出器**
+  - **背景與實機定案鐵律**：
+    - 經 PSR-SX920 實機驗證證實：原廠 Multi Pad 無 CASM 區塊，琴端對 `CM = ON` 強制以 C 大調自然小調解譯。凡帶和聲轉折（如 $Am \to E7$）、演歌和聲導音（$G\#$）或大六度花音（$F\#$）之長旋律前奏，唯一且 100% 依譜完美還原的途徑即為 **「指定調性專屬 PAD（`CM0000` + 純剛體半音平移）」**。
   - **具體實作**：
-    1. **檔案支援與格式自適應**：
-       - `file-input` 增加 `.pad` 副檔名過濾，支援拖曳任意 `.pad` 檔案即刻解析載入。
-       - 自動識別 `fallbackFormat = 'PAD'` 並讀取內部 `padConfig` 與 `CASM` 區塊。
-    2. **視覺化 Pad 1 ~ 4 卡片工作台 (Pad Dashboard)**：
-       - 呈現 Pad 1~4 獨立名稱、圖示 (Icon)、音色 (Voice)、時長小節數。
-       - 提供直覺的硬體開關：🔁 Repeat（循環）與 🎵 Chord Match（和弦跟隨）。
-    3. **智慧樂句型態選單 (Smart Phrase Preset)**：
-       - 【旋律插音 / 副旋律 (Melodic Lead / Solo Fill)】➔ 自動配置 `NTT = Melody`、`NTR = Root Transpose`（保證線性音階平移，不壓扁經過音）。
-       - 【和弦節奏 / 刷弦伴奏 (Chords / Strumming)】➔ 自動配置 `NTT = Chord`。
-       - 【打擊樂 / 罐頭音效 (Drums / SFX)】➔ 自動配置 `Chord Match = OFF`、`NTT = Bypass`。
-    4. **基準和弦智慧偵測 (Auto Detect Source Chord)**：
-       - 自動掃描音軌第一小節音符與貝斯，自動識別原曲調性（如 Am），將 `Source Root` 設為 A、`Chord Type` 設為 Minor，杜絕預設 C 大調計算偏差。
-    5. **專家 CASM 進階微調抽屜**：
-       - 支援自訂調整 `HiKey`（0~11）與 `Note Limits`（Low Limit ~ High Limit）。
-    6. **虛擬和弦即時轉調試聽條 (In-App Audition Bar)**：
-       - 畫面提供 C, Am, Em, F, G, Dm 即時和弦按鈕，點擊即時調用音訊引擎模擬琴端轉調發聲，確認無走音再一鍵匯出 `.PAD` 檔！
-  - **工時**：2 天 ｜ **優先級**：⭐⭐⭐⭐⭐
+    1. **視覺化 Pad 1 ~ 4 卡片工作台 (Pad Dashboard)**：
+       - 呈現 Pad 1~4 獨立名稱 (`N1~N4`)、圖示 (`I1~I4`)、音色 (Voice)、時長小節數。
+       - 提供直覺的硬體開關：🔁 Repeat (`RPxxxx`) 與 🎵 Chord Match (`CMxxxx`)，並在長旋律軌誤開 CM 時發出樂理防呆警示。
+    2. **指定調性包（Fixed-Key Transposition）一鍵生成與匯出**：
+       - 自動偵測或由使用者指定原曲基準調（如 `Em 原調` 或 `Am 調`），選擇任意目標調性（如 `Am`、`Cm`、`Dm`、`Em`、`Gm` 等 12 調）。
+       - 執行 **全軌純剛體半音平移（Pure Semitone Pitch Shift）**，100% 保留演歌導音與花音音程零失真，並自動實施超過 `C7 (96)` 之八度折返保護。
+       - Track 0 自動強制寫入 `CM0000` 並清除殘留 Style 段落標記，`N1~N4` 自動加上目標調性後綴（如 `Lead 1 (Am調)`、`Lead 1 (Em原調)`）。
+    3. **和聲織體軌 CM7 正規化輔助**：
+       - 針對單純的琶音/刷弦軌（開啟 `CM = 1` 者），提供一鍵歸一化至 `CM7` 四音母體與打擊樂軌強制鎖定 `CM = 0` 防呆。
+  - **工時**：1.5 天 ｜ **優先級**：⭐⭐⭐⭐⭐
 
 - [ ] **【任務 4-2】樣式組合器 (Style Assembler / Part Stager)**
   - **具體實作**：

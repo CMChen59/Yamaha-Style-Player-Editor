@@ -10,6 +10,7 @@
 | 階段 / 任務編號 | 功能與問題描述 | 核心實作檔案 | 狀態與備註 |
 | :--- | :--- | :--- | :--- |
 | **【任務 0-3】** | **Web MIDI 琴端真實發聲引擎 & Port 1/2 路由修復** | [`midi-manager.ts`](../src/core/audio/midi-manager.ts), [`sty-playback-engine.ts`](../src/player/sty-playback-engine.ts) | ✅ 已完成（預設鎖定 Port 1、音色回溯、CC11=127 防無聲、預排視窗 0 掛音） |
+| **【任務 1-1】** | **Phrase 1/2 與全段落走音根因徹底解決（CSEG 段落隔離 + 直通 Root 鎖定 C + 半小節正規化）** | [`casm-modifier.ts`](../src/core/writer/casm-modifier.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts) | ✅ 已完成並實機結案（取代早期 `Root Fixed / HiKey` 舊假設；以 CSEG 獨立剝離、直通 Root=0 鎖定 C、三和弦鋪底 `NTT=Chord` 與半小節正規化徹底根除走音） |
 | **【任務 1-2】** | **PSR-SX920 2,395 音色庫校準與別名雙向映射** | [`yamaha-voices.ts`](../src/core/data/yamaha-voices.ts) | ✅ 已完成（含 `0-113-75` 排笛修正、`104-21-1` 新舊碼對照、GM 中文譯名） |
 | **【任務 2-1】** | **MIDI 音樂檔全景透視儀表板與 16 通道檢測器** | [`midi-song-analyzer.ts`](../src/core/parser/midi-song-analyzer.ts), [`yamaha-parser.ts`](../src/core/parser/yamaha-parser.ts) | ✅ 已完成（含曲中變速積分、Big5/GBK 解碼、16 通道獨立 Solo/Mute/混音） |
 | **【任務 2-2】** | **MIDI 小節區間循環試聽定位器** | [`player-app.ts`](../src/player/player-app.ts) | ✅ 已完成（支援自訂起訖小節、1~4/8/16 快速鍵、停止重設指針、防跳動獨奏鈕） |
@@ -150,20 +151,19 @@
         2. Yamaha 琴端韌體在第 4 拍後半拍（> 4.5 拍）按下時會觸發超時靜音截斷保護（Time Window Expired）。
       - 鐵律定案：所有 Fill In 段落必須與 Main 聲部完全鏡像對齊；使用者在 PSR-SX920 實測將 `Fill In AA / BB / CC / DD / BA` 補齊原曲過門後，回報「**確實補齊 Fill In 後幾乎和原廠的一模一樣了**」，圓滿完成實機演奏大驗收！
 
-12. **[當前第一優先 🚧 任務 2-4B] 段落分流智慧裝配策略（Intro/Ending 全軌齊奏 vs Main/Fill 純律動伴奏）**
-   - **背景**：如《容易受傷的女人》第 26~33 小節切為 `Intro B` 時，需要連同前奏/間奏 Solo 電吉他與弦樂鋪底共 7 軌齊開；而切為 `Main A`（第 6~13 小節）時則應維持純伴奏律動，排除斷續 Solo。
-   - **目標**：
-     - 當目標段落選為 `Intro A~D` 或 `Ending` 時，自動切換為「全軌道大樂隊直通模式」（納入副奏/前奏 Solo 樂器，預設原曲和弦直通）。
-     - 當目標段落選為 `Main A~D` 或 `Fill In` 時，維持「純伴奏律動模式」（排除主旋律與單次 Solo，開啟和弦正規化）。
+12. **[當前第一優先 🚧 任務 2-4B 收尾] 段落分流智慧聲部自動納入（Intro/Ending 副奏 Solo 自動勾選 vs Main/Fill 純律動伴奏）**
+   - **已完成部分**：在 [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) 中，切換 `Intro / Ending` 已自動推薦 `ORIGINAL_PASS_THROUGH (原曲和弦直通，NTT = Bypass)`；切換 `Main / Fill` 已自動依切片起點和弦分流 `CM7_MAJOR` 或 `CM_MINOR`。
+   - **剩餘待收尾目標**：
+     - 當目標段落選為 `Intro A~D` 或 `Ending A~D` 時，除了全曲人聲主唱（Global Vocal Melody）維持排除外，若該切片區間內有高活躍度的前奏/間奏 Solo 副奏樂軌（如《容易受傷的女人》第 26~33 節的間奏電吉他 Solo），自動將其納入 `Phrase 1 / Phrase 2` 形成大樂隊齊奏。
+     - 當目標段落切回 `Main A~D` 或 `Fill In` 時，維持「純伴奏律動模式」（排除單次 Solo）。
 
-4. **[後續待處理 📋 任務 2-4D] 藉由小節樂器出入場與密度變化自動推薦段落（Auto Section Detection）**
+13. **[後續待處理 📋 任務 2-4D] 藉由小節樂器出入場與密度變化自動推薦段落（Auto Section Detection）**
    - **目標**：自動掃描 MIDI 各小節的樂器進退場、Program Change 與音符密度，在切片介面提供一鍵選取建議區間。
 
 ---
 
-### 📋 後續階段待辦（依 [`MASTER_ULTIMATE_EXECUTION_PLAN.md`](MASTER_ULTIMATE_EXECUTION_PLAN.md) 排序）
+### 📋 後續階段待辦（依 [`MASTER_ULTIMATE_EXECUTION_PLAN.md`](MASTER_ULTIMATE_EXECUTION_PLAN.md) 與 `GEMINI.md` 最新鐵律對齊排序）
 
-- **【任務 1-1】**：Phrase 1 / Phrase 2 原音直通（Root Fixed）於實體琴彈奏小和弦時之防跳八度微調（Ctb2 大小調對稱表與 HiKey 極值）。
 - **【任務 0-1 & 0-2】**：USB-MIDI 官方 SysEx 傳檔協議抓包與一鍵直傳 SX920 User 磁區。
-- **【任務 3-1 ~ 3-3】**：單軌編輯器樂句剪貼簿（Copy/Cut/Paste）、多音符批次編輯（Batch Inspector）、SFF-GE 吉他微調。
-- **【任務 4-1A】**：Multi Pad CASM 視覺化編輯與智慧和弦轉調修復器。
+- **【任務 3-1 ~ 3-3】**：STY 單軌編輯器樂句剪貼簿（Copy/Cut/Paste）、多音符批次編輯（Batch Inspector，註：PAD 底層 `batchUpdateNotes`/`copyPadMeasure`/`quantizePadTrack` 已於 `pad-modifier.ts` 實裝完成）、SFF-GE 吉他微調。
+- **【任務 4-1 & 4-1A】**：Multi Pad 三位一體工作坊與「指定調性包（Fixed-Key `CM0000` 剛體半音平移）」一鍵轉調匯出器（嚴格遵循 `GEMINI.md` 三位一體鐵律：長旋律/前奏強制鎖定 `CM0000` 並提供 12 調性一鍵剛體平移匯出；`Chord Match = ON` 僅限純和弦織體或單一小節不換和弦短動機；跨小節隨和弦變化之插音引導歸入 `.STY` 的 `Phrase 1/2`）。
