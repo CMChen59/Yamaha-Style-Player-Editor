@@ -177,6 +177,7 @@ export class PlayerApp {
   private selectedPadNumsForTranspose: Set<number> = new Set([1, 2, 3, 4]);
   private currentPadTotalSemitoneShift: number = 0;
   private lastTransposedKeySuffix: string = '';
+  private userPreferredTargetKey: string | null = null;
 
   constructor() {
     document.addEventListener('DOMContentLoaded', () => this.init());
@@ -887,12 +888,14 @@ export class PlayerApp {
         const rpStr = `RP${(parsed.padConfig?.repeatFlags || [false, false, false, false]).map(f => (f ? '1' : '0')).join('')}`;
         this.labelStyleInfo.textContent = `格式: Multi Pad SMF1 (5 軌) ｜ 自動估算基準調: ${diag.estimatedKeyLabelZh} ｜ 控制碼: ${cmStr} / ${rpStr} ｜ 速度: ${this.baseBpm} BPM ｜ 總小節: ${analysis.totalBars} 小節 ｜ 總音符: ${analysis.totalNotes} 顆`;
 
-        // 預填原曲基準調 (使用者可隨時手動更改) 與預設目標調
+        // 預填原曲基準調 (使用者可隨時手動更改) 與預設目標調 (若使用者先前已選擇目標調則自動記憶保留)
         if (this.selectPadSourceKey) {
           this.selectPadSourceKey.value = diag.estimatedKey;
         }
         if (this.selectPadTargetKey) {
-          const defaultTarget = diag.estimatedKey === 'Am' ? 'Em' : 'Am';
+          const defaultTarget = (this.userPreferredTargetKey && PAD_KEY_LIST.some(k => k.key === this.userPreferredTargetKey))
+            ? this.userPreferredTargetKey
+            : (diag.estimatedKey === 'Am' ? 'Em' : 'Am');
           this.selectPadTargetKey.value = defaultTarget;
           if (this.inputPadKeySuffix) this.inputPadKeySuffix.value = defaultTarget;
         }
@@ -3346,16 +3349,37 @@ export class PlayerApp {
     this.selectPadSourceKey.value = 'Am';
     this.selectPadTargetKey.value = 'Em';
 
-    const onKeyChange = () => {
+    const onTargetKeyChange = () => {
       if (this.inputPadKeySuffix && this.selectPadTargetKey) {
         this.inputPadKeySuffix.value = this.selectPadTargetKey.value;
       }
+      if (this.selectPadTargetKey) {
+        this.userPreferredTargetKey = this.selectPadTargetKey.value;
+      }
       this.updatePadShiftPreview();
+      // 若先前已套用過平移，使用者切換目標調時自動以新目標調重新平移
+      if (this.currentPadTotalSemitoneShift !== 0) {
+        this.applyPadTransposition();
+      }
     };
 
-    this.selectPadSourceKey.addEventListener('change', () => this.updatePadShiftPreview());
-    this.selectPadTargetKey.addEventListener('change', onKeyChange);
-    this.selectPadShiftDir?.addEventListener('change', () => this.updatePadShiftPreview());
+    const onSourceKeyChange = () => {
+      this.updatePadKeyBadge();
+      this.updatePadShiftPreview();
+      // 若先前已套用過平移，使用者切換基準調時自動以新基準調重新平移
+      if (this.currentPadTotalSemitoneShift !== 0) {
+        this.applyPadTransposition();
+      }
+    };
+
+    this.selectPadSourceKey.addEventListener('change', onSourceKeyChange);
+    this.selectPadTargetKey.addEventListener('change', onTargetKeyChange);
+    this.selectPadShiftDir?.addEventListener('change', () => {
+      this.updatePadShiftPreview();
+      if (this.currentPadTotalSemitoneShift !== 0) {
+        this.applyPadTransposition();
+      }
+    });
 
     this.btnApplyPadTranspose?.addEventListener('click', () => {
       this.applyPadTransposition();
@@ -3380,7 +3404,10 @@ export class PlayerApp {
     document.querySelectorAll('.pad-quick-key-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const targetKey = (btn as HTMLElement).getAttribute('data-target-key') || 'Em';
-        if (this.selectPadTargetKey) this.selectPadTargetKey.value = targetKey;
+        if (this.selectPadTargetKey) {
+          this.selectPadTargetKey.value = targetKey;
+          this.userPreferredTargetKey = targetKey;
+        }
         if (this.inputPadKeySuffix) this.inputPadKeySuffix.value = targetKey;
         this.updatePadShiftPreview();
         this.applyPadTransposition();
@@ -3489,6 +3516,29 @@ export class PlayerApp {
   }
 
   /**
+   * 即時更新頂部基準調徽章 (若使用者手動覆寫原曲基準調，標示為手動指定)
+   */
+  private updatePadKeyBadge() {
+    if (!this.padAutoKeyBadge) return;
+    const initDiag = this.initialPadDiagnosis || this.currentPadDiagnosis;
+    if (!initDiag) return;
+    const currentSrcKey = this.selectPadSourceKey?.value || initDiag.estimatedKey;
+    const estimatedKey = initDiag.estimatedKey;
+    const estimatedLabel = initDiag.estimatedKeyLabelZh;
+    const conf = initDiag.keyConfidence;
+
+    if (currentSrcKey !== estimatedKey) {
+      const srcItem = PAD_KEY_LIST.find(k => k.key === currentSrcKey);
+      const srcLabel = srcItem ? srcItem.labelZh : currentSrcKey;
+      this.padAutoKeyBadge.textContent = `🎯 手動指定基準調：${srcLabel} ｜ (原始自動估算: ${estimatedLabel} ${conf}%)`;
+      this.padAutoKeyBadge.style.color = '#38bdf8';
+    } else {
+      this.padAutoKeyBadge.textContent = `💡 原始檔案自動估算：${estimatedLabel} (${conf}%)`;
+      this.padAutoKeyBadge.style.color = '';
+    }
+  }
+
+  /**
    * 執行 Multi Pad 固定調性剛體半音平移 (永遠以原始載入音符快照為基準，原曲基準調保持不變、不重複疊加！)
    */
   private applyPadTransposition(customTotalSemitones?: number) {
@@ -3572,10 +3622,7 @@ export class PlayerApp {
     if (this.padStudioCmBadge) {
       this.padStudioCmBadge.textContent = `Track 0: ${cmStr} · ${rpStr}`;
     }
-    // 頂部自動估算徽章永遠顯示「原始載入檔案」的估算調性，不會隨轉調後音符而亂跳
-    if (this.padAutoKeyBadge) {
-      this.padAutoKeyBadge.textContent = `💡 原始檔案自動估算：${initDiag.estimatedKeyLabelZh} (${initDiag.keyConfidence}%)`;
-    }
+    this.updatePadKeyBadge();
     if (this.padKeyReasonText) {
       this.padKeyReasonText.textContent = initDiag.keyDetectionReasonZh;
     }
@@ -3982,6 +4029,29 @@ export class PlayerApp {
     }
 
     try {
+      // 匯出前防呆同步校驗：檢查當前 UI 下拉選單 (基準調、目標調、方向) 是否與已套用平移狀態一致
+      if (this.selectPadSourceKey && this.selectPadTargetKey) {
+        const srcKey = this.selectPadSourceKey.value || 'Am';
+        const dstKey = this.selectPadTargetKey.value || 'Em';
+        const dir = (this.selectPadShiftDir?.value as 'auto' | 'up' | 'down') || 'auto';
+
+        const initDiag = this.initialPadDiagnosis || this.currentPadDiagnosis;
+        const maxPitches = initDiag
+          ? initDiag.tracks.filter(t => t.pitchMax !== null && t.musicalType !== 'DRUM_SFX').map(t => t.pitchMax!)
+          : [84];
+        const highestPitch = maxPitches.length > 0 ? Math.max(...maxPitches) : 84;
+        const shiftInfo = YamahaPadModifier.calculateSemitoneShift(srcKey, dstKey, dir, highestPitch, 96);
+        const expectedSuffix = this.inputPadKeySuffix?.value.trim() || dstKey;
+
+        // 若使用者在介面上變更或指定了目標調 (且不同於基準調)，但尚未點擊套用，或位移狀態不符，在匯出前自動精準套用一次！
+        const isShiftSynced = (this.currentPadTotalSemitoneShift === shiftInfo.semitones) &&
+                              (this.lastTransposedKeySuffix === expectedSuffix);
+        if (!isShiftSynced && (srcKey !== dstKey || this.currentPadTotalSemitoneShift !== 0)) {
+          console.log(`[PAD Export] 偵測到 UI 設定 (${srcKey} ➔ ${dstKey}, 位移 ${shiftInfo.semitones}) 與當前套用狀態不一致，匯出前自動執行平移...`);
+          this.applyPadTransposition();
+        }
+      }
+
       // 確保 Track 0 控制標籤與各軌 rawChunk 最新
       YamahaPadModifier.syncControlTagsToTrack0(this.currentParsed);
       for (const trk of this.currentParsed.tracks) {
@@ -3995,7 +4065,7 @@ export class PlayerApp {
       a.href = url;
 
       const baseName = (this.currentFileName || 'MultiPad').replace(/\.pad$/i, '');
-      const keyTag = this.lastTransposedKeySuffix || this.selectPadSourceKey?.value || 'Edited';
+      const keyTag = this.lastTransposedKeySuffix || this.selectPadTargetKey?.value || this.selectPadSourceKey?.value || 'Edited';
       const downloadName = `${baseName}_${keyTag}.PAD`;
       a.download = downloadName;
       document.body.appendChild(a);

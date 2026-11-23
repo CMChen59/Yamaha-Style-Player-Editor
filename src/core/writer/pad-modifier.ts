@@ -335,15 +335,24 @@ export class YamahaPadModifier {
     const track0 = parsed.tracks[0];
     const cfg = parsed.padConfig;
 
-    // 1. 移除舊有的控制標籤 (RP, CM, N1~N4, I1~I4) 以及殘留的伴奏段落標記 (Intro, Main, Fill 等)
-    track0.events = track0.events.filter((ev) => {
-      if (ev.type === 'meta' && (ev.metaType === 1 || ev.metaType === 6 || ev.metaType === 7) && ev.text) {
+    // 1. 先計算各事件的絕對 Tick，移除舊有的控制標籤 (RP, CM, N1~N4, I1~I4) 以及殘留的伴奏段落標記 (Meta 0x06/0x07 或 Intro, Main, Fill, Ending)，並嚴格保持剩餘事件的絕對時間軸 (Delta-Time 守恆)
+    let curTick = 0;
+    const annotated = track0.events.map((ev, index) => {
+      curTick += ev.delta;
+      return { ev: { ...ev }, absTick: curTick, index };
+    });
+
+    const filtered = annotated.filter(({ ev }) => {
+      if (ev.type === 'meta' && (ev.metaType === 1 || ev.metaType === 6 || ev.metaType === 7) && ev.text !== undefined) {
         const t = ev.text.trim();
         if (t.startsWith('RP') || t.startsWith('CM') || /^N[1-4]/.test(t) || /^I[1-4]/.test(t)) {
           return false;
         }
-        // 若為 Multi Pad，排除殘留的 Style 段落標記，避免琴端韌體誤判
+        // 若為 Multi Pad，排除殘留的 Style 段落標記 (包含 Meta 0x06/0x07 Marker 或 Intro/Main/Fill/Ending 文字)，避免琴端韌體誤判
         if (parsed.format === 'PAD') {
+          if (ev.metaType === 6 || ev.metaType === 7) {
+            return false;
+          }
           const lower = t.toLowerCase();
           if (lower.startsWith('intro') || lower.startsWith('main') || lower.startsWith('fill') || lower.startsWith('ending')) {
             return false;
@@ -351,6 +360,14 @@ export class YamahaPadModifier {
         }
       }
       return true;
+    });
+
+    let prevTick = 0;
+    track0.events = filtered.map((item) => {
+      const delta = Math.max(0, item.absTick - prevTick);
+      prevTick = item.absTick;
+      item.ev.delta = delta;
+      return item.ev;
     });
 
     // 2. 生成標籤字串 (Track 0 開頭第 1 個事件必須為 CMxxxx，接著 RPxxxx，再依序 N1~N4、I1~I4)
@@ -471,6 +488,8 @@ export class YamahaPadModifier {
     const globalPcWeights = new Array(12).fill(0);
     const trackFinalPcs: number[] = [];
     const trackFirstPcs: number[] = [];
+    const bar1DownbeatPcs: number[] = [];
+    const firstBeatLimit = parsed.division || 96;
 
     for (let padNum = 1; padNum <= 4; padNum++) {
       const track = parsed.tracks[padNum];
@@ -585,6 +604,9 @@ export class YamahaPadModifier {
         }
         trackFirstPcs.push(notes[0].note % 12);
         trackFinalPcs.push(notes[notes.length - 1].note % 12);
+        if (notes[0].startTick < firstBeatLimit) {
+          bar1DownbeatPcs.push(notes[0].note % 12);
+        }
       }
 
       // 檢查是否含有半音階導音或非白鍵變化音 (或相鄰兩個半音，如 G#-A, F#-G#-A, D#-E)
@@ -664,7 +686,7 @@ export class YamahaPadModifier {
     }
 
     // 2. 自動估算全檔原曲基準調 (Estimated Source Key)
-    const keyEst = this.estimatePadSourceKey(globalPcWeights, trackFirstPcs, trackFinalPcs);
+    const keyEst = this.estimatePadSourceKey(globalPcWeights, trackFirstPcs, trackFinalPcs, bar1DownbeatPcs);
     const hasLongMelody = tracksDiagnosis.some(t => t.musicalType === 'MELODY_INTRO');
     const enforcedRuleSummaryZh = hasLongMelody
       ? '偵測到跨小節完整前奏/長旋律軌：遵循實機鐵律，轉調時將自動鎖定 CM0000 並執行全軌純剛體半音平移，100% 保護和聲導音與旋律花音零失真。'
@@ -684,12 +706,13 @@ export class YamahaPadModifier {
   }
 
   /**
-   * 內部輔助：綜合音級權重、和聲導音解決 (如 G#->A, D#->E) 與各軌收尾主音，自動估算原曲基準調
+   * 內部輔助：綜合音級權重、首拍強拍主音、和聲導音解決 (如 G#->A, D#->E) 與各軌收尾終止式 (全終止主音 / 半終止屬音)，自動估算原曲基準調
    */
   private static estimatePadSourceKey(
     pcWeights: number[],
     firstPcs: number[],
-    finalPcs: number[]
+    finalPcs: number[],
+    bar1DownbeatPcs: number[] = []
   ): { key: string; labelZh: string; rootPc: number; isMinor: boolean; confidence: number; reasonZh: string } {
     const totalWeight = pcWeights.reduce((a, b) => a + b, 0);
     if (totalWeight <= 0) {
@@ -762,21 +785,40 @@ export class YamahaPadModifier {
       } else {
         // 大調評分模型
         const tonicW = pcWeights[r];               // 1 (主音)
+        const flatTwoW = pcWeights[(r + 1) % 12];    // b2 (調外衝突音)
         const supertonicW = pcWeights[(r + 2) % 12]; // 2
-        const majorThirdW = pcWeights[(r + 4) % 12]; // 3 (大三度)
         const minorThirdW = pcWeights[(r + 3) % 12]; // b3 (小三度衝突音)
-        const fourthW = pcWeights[(r + 5) % 12];     // 4
+        const majorThirdW = pcWeights[(r + 4) % 12]; // 3 (大三度)
+        const fourthW = pcWeights[(r + 5) % 12];     // 4 (完全四度，如 C 大調之 F)
+        const tritoneW = pcWeights[(r + 6) % 12];    // #4 (增四度經過音)
         const fifthW = pcWeights[(r + 7) % 12];      // 5 (屬音)
+        const flatSixW = pcWeights[(r + 8) % 12];    // b6 (調外衝突音)
         const majorSixthW = pcWeights[(r + 9) % 12]; // 6
-        const majorSevW = pcWeights[(r + 11) % 12];  // 7
+        const flatSevenW = pcWeights[(r + 10) % 12]; // b7 (降七度衝突音，例如 G 大調若出現大量還原 F 則為 b7 衝突)
+        const majorSevW = pcWeights[(r + 11) % 12];  // 7 (大七度導音)
 
-        score += tonicW * 3.0 + fifthW * 2.4 + majorThirdW * 2.6 + fourthW * 1.4 + supertonicW * 1.3 + majorSixthW * 1.3 + majorSevW * 1.3;
-        score -= minorThirdW * 3.5;
+        score += tonicW * 3.0 + fifthW * 2.4 + majorThirdW * 2.6 + fourthW * 1.6 + supertonicW * 1.3 + majorSixthW * 1.3 + majorSevW * 1.4;
+        // 調外音扣分 (特別防範將 C 大調含少量 #4 經過音並半終止於 G 的樂句誤判為 G 大調)
+        score -= minorThirdW * 3.5 + flatTwoW * 2.2 + flatSixW * 2.2 + flatSevenW * 2.6 + tritoneW * 1.1;
+        if (flatSevenW > majorSevW) {
+          score -= (flatSevenW - majorSevW) * 2.5;
+        }
+
+        // 第 1 小節第 1 拍強拍 (Downbeat) 起音於大調主音強力加權
+        const downbeatTonicCount = bar1DownbeatPcs.filter(pc => pc === r).length;
+        if (downbeatTonicCount > 0) {
+          score += totalWeight * (0.25 * downbeatTonicCount);
+          reasons.push(`${downbeatTonicCount} 軌於首拍強拍起音於大調主音`);
+        }
 
         const cadenceTonicCount = finalPcs.filter(pc => pc === r).length;
+        const cadenceFifthCount = finalPcs.filter(pc => pc === (r + 7) % 12).length;
         if (cadenceTonicCount > 0) {
-          score += totalWeight * (0.3 * cadenceTonicCount);
+          score += totalWeight * (0.28 * cadenceTonicCount);
           reasons.push(`${cadenceTonicCount} 軌樂句尾音收束於大調主音`);
+        } else if (cadenceFifthCount > 0) {
+          score += totalWeight * (0.18 * cadenceFifthCount);
+          reasons.push(`${cadenceFifthCount} 軌樂句半終止於大調屬音 (Sol)`);
         }
 
         const startTonicCount = firstPcs.filter(pc => pc === r).length;
