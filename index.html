@@ -239,6 +239,59 @@
     }
 
     /* 聲音發聲來源選擇 (Audio Output Routing) */
+    /* 頂部三大工作台切換列 (Workspace Switcher) */
+    .workspace-switcher {
+      position: sticky;
+      top: 0;
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      background: rgba(11, 16, 28, 0.94);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 12px;
+    }
+    .workspace-switcher .ws-label {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-right: 2px;
+      white-space: nowrap;
+    }
+    .ws-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(30, 41, 59, 0.7);
+      color: #cbd5e1;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .ws-pill:hover:not(:disabled):not(.active) { background: rgba(51, 65, 85, 0.85); }
+    .ws-pill:disabled { opacity: 0.38; cursor: not-allowed; }
+    .ws-pill .ws-badge {
+      font-size: 0.71rem;
+      font-weight: 600;
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+      color: #94a3b8;
+    }
+    .ws-pill[data-ws="MIDI"].active { background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: #6ee7b7; }
+    .ws-pill[data-ws="STY"].active { background: rgba(56, 189, 248, 0.2); border-color: #38bdf8; color: #7dd3fc; }
+    .ws-pill[data-ws="PAD"].active { background: rgba(245, 158, 11, 0.22); border-color: #f59e0b; color: #fcd34d; }
+    .ws-pill.active .ws-badge { background: rgba(255, 255, 255, 0.16); color: inherit; }
+
     .output-panel {
       background: var(--bg-panel);
       border: 1px solid var(--border-color);
@@ -5446,6 +5499,14 @@
       <input type="file" id="file-input" accept=".sty,.prs,.sst,.pad,.PAD,.mid,.midi" style="display: none;">
     </section>
 
+    <!-- 頂部三大工作台切換列：MIDI 原曲選段 ⇄ STY 伴奏工作台 ⇄ Multi Pad 工作台 -->
+    <nav id="workspace-switcher" class="workspace-switcher" aria-label="工作台切換">
+      <span class="ws-label">工作台</span>
+      <button type="button" class="ws-pill" data-ws="MIDI" title="MIDI 原曲選段：試聽並挑選小節區間，切片成 STY 或存入 Pad"><span>🎼 MIDI 原曲選段</span><span class="ws-badge" id="ws-badge-MIDI">尚未載入</span></button>
+      <button type="button" class="ws-pill" data-ws="STY" title="STY 伴奏工作台：8 聲部伴奏、段落與 CASM 編輯"><span>🎵 STY 伴奏工作台</span><span class="ws-badge" id="ws-badge-STY">尚未建立</span></button>
+      <button type="button" class="ws-pill" data-ws="PAD" title="Multi Pad 工作台：4 軌插音、調性平移與編輯"><span>🎹 Multi Pad 工作台</span><span class="ws-badge" id="ws-badge-PAD">尚未建立</span></button>
+    </nav>
+
     <!-- 伴奏規格儀表板 -->
     <section class="style-banner">
       <div>
@@ -5453,10 +5514,6 @@
         <div id="style-info" class="style-info">請載入 STY 檔案以開始播放</div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <button id="btn-return-to-midi" class="btn-banner-action" style="display: none; background: rgba(99, 102, 241, 0.2); border-color: #6366f1; color: #a5b4fc; min-width: 170px;" title="返回原本載入的 MIDI 原曲繼續切片提取其他段落">
-          <span>🔙</span>
-          <span>返回 MIDI 原曲繼續切片</span>
-        </button>
         <button id="btn-export-sty" class="btn-export" title="匯出當前編輯後的完整 STY 伴奏檔 (保留 SFF2 / CASM / OTS)">
           <span>💾</span>
           <span>匯出 STY 伴奏檔</span>

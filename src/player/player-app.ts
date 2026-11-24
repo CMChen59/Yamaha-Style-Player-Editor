@@ -134,13 +134,16 @@ export class PlayerApp {
   private btnOpenAddSection!: HTMLButtonElement;
   private midiSliceAssignModal!: MidiSliceAssignModal;
   private btnOpenSliceModal: HTMLButtonElement | null = null;
-  private btnReturnToMidi: HTMLButtonElement | null = null;
   private currentlyAuditionMutedChannels: number[] = [];
   private currentWorkspace: 'MIDI' | 'STY' | 'PAD' = 'STY';
   private workingStyleParsed: YamahaFileParsed | null = null;
+  private savedStyleParsed: YamahaFileParsed | null = null;
+  private savedStyleFileName: string = '';
   private sourceSongParsed: YamahaFileParsed | null = null;
   private sourceSongAnalysis: MidiSongAnalysis | null = null;
   private sourceSongFileName: string = '';
+  private savedPadParsed: YamahaFileParsed | null = null;
+  private savedPadFileName: string = '';
   private newStyleModal!: NewStyleModal;
   private btnOpenNewStyle!: HTMLButtonElement;
   // 🎹 虛擬和弦轉調測試元件
@@ -248,7 +251,6 @@ export class PlayerApp {
     this.mixerContainer = document.getElementById('mixer-grid')!;
     this.midiStatusPill = document.getElementById('midi-status-pill')!;
     this.btnExportSty = document.getElementById('btn-export-sty') as HTMLButtonElement;
-    this.btnReturnToMidi = document.getElementById('btn-return-to-midi') as HTMLButtonElement | null;
     this.btnOpenAddSection = document.getElementById('btn-open-add-section') as HTMLButtonElement;
     this.btnOpenSectionClone = document.getElementById('btn-open-section-clone') as HTMLButtonElement;
     this.btnOpenSectionImport = document.getElementById('btn-open-section-import') as HTMLButtonElement;
@@ -331,6 +333,16 @@ export class PlayerApp {
   }
 
   private setupEventListeners() {
+    // 頂部三大工作台切換列 (Workspace Switcher)
+    document.querySelectorAll('#workspace-switcher .ws-pill').forEach((pill) => {
+      pill.addEventListener('click', () => {
+        const targetWs = pill.getAttribute('data-ws') as 'MIDI' | 'STY' | 'PAD';
+        if (targetWs) {
+          this.switchWorkspaceByUser(targetWs);
+        }
+      });
+    });
+
     // Tier 2-1: 段落小節長度調整快捷按鈕
     document.querySelectorAll('.btn-sec-bar').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -588,11 +600,6 @@ export class PlayerApp {
     // 💾 匯出 STY 伴奏檔案
     this.btnExportSty.addEventListener('click', () => {
       this.exportCurrentStyle();
-    });
-
-    // 🔙 返回 MIDI 原曲繼續切片
-    this.btnReturnToMidi?.addEventListener('click', () => {
-      this.switchToMidiSongMode();
     });
 
     // 🎯 MIDI 音樂檔小節區間試聽定位器事件
@@ -880,7 +887,8 @@ export class PlayerApp {
       // 1. 判斷是否為 Yamaha Multi Pad (.PAD) 檔案
       if (isPadFile || parsed.format === 'PAD') {
         parsed.format = 'PAD';
-        if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = 'none';
+        this.savedPadParsed = parsed;
+        this.savedPadFileName = name;
         this.setWorkspace('PAD');
         if (this.btnExportSty) {
           this.btnExportSty.style.display = '';
@@ -947,7 +955,6 @@ export class PlayerApp {
         this.sourceSongParsed = parsed;
         this.sourceSongAnalysis = analysis;
         this.sourceSongFileName = name;
-        if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = 'none';
 
         this.activeSectionName = '__MIDI_SONG__';
         styPlaybackEngine.loadSongMode(1, analysis.totalBars);
@@ -973,6 +980,8 @@ export class PlayerApp {
       }
 
       // Yamaha STY 伴奏檔模式：顯示伴奏段落矩陣、虛擬和弦轉調與 8 大伴奏混音盤
+      this.savedStyleParsed = parsed;
+      this.savedStyleFileName = name;
       this.setWorkspace('STY');
       if (this.btnExportSty) this.btnExportSty.style.display = '';
 
@@ -1016,6 +1025,7 @@ export class PlayerApp {
     show(this.sectionMatrixPanel, mode === 'STY' ? '' : 'none');
     show(this.mixerPanel, mode === 'STY' ? '' : 'none');
     this.currentWorkspace = mode;
+    this.syncWorkspaceSwitcherUI();
   }
 
   /** 目前所在工作台 (供後續頂部工作台切換列與徽章使用) */
@@ -1556,6 +1566,9 @@ export class PlayerApp {
       });
 
       this.workingStyleParsed = result.styleParsed;
+      this.savedStyleParsed = result.styleParsed;
+      this.savedStyleFileName = `${this.currentFileName.replace(/\.[^/.]+$/, '')}_Arranger.sty`;
+      this.syncWorkspaceSwitcherUI();
       this.showSliceAssembleResultModal(result);
     } catch (err: any) {
       console.error('切片裝配失敗:', err);
@@ -1703,37 +1716,45 @@ export class PlayerApp {
   }
 
   /**
-   * 切換至組裝中的 STY 伴奏風格模式並選定指定段落試聽
+   * 切換至 STY 伴奏風格工作台並選定指定段落試聽
    */
-  private switchToAssembledStyleMode(targetSection: string) {
-    if (!this.workingStyleParsed) return;
+  private switchToAssembledStyleMode(targetSection?: string) {
+    const style = this.workingStyleParsed || this.savedStyleParsed;
+    if (!style) return;
 
     // 停止當前任何播放
     styPlaybackEngine.stop();
 
-    this.currentParsed = this.workingStyleParsed;
+    this.currentParsed = style;
     this.currentSongAnalysis = null;
-    this.currentFileName = `${(this.workingStyleParsed as any).styleName || 'Arranger'}.sty`;
-    this.baseBpm = this.workingStyleParsed.bpm || 120;
+    this.currentFileName = this.savedStyleFileName || `${(style as any).styleName || 'Arranger'}.sty`;
+    this.baseBpm = style.bpm || 120;
 
-    styPlaybackEngine.loadParsed(this.workingStyleParsed);
+    styPlaybackEngine.loadParsed(style);
     this.syncMixerVolumes();
     this.trackEditor?.clearHistory();
 
     // 更新介面元素可見度 (切換為 Yamaha STY 伴奏模式)
     this.setWorkspace('STY');
-    if (this.btnExportSty) this.btnExportSty.style.display = '';
-    if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = this.sourceSongParsed ? 'inline-flex' : 'none';
+    if (this.btnExportSty) {
+      this.btnExportSty.style.display = '';
+      this.btnExportSty.innerHTML = '<span>💾</span><span>匯出 STY 伴奏檔</span>';
+    }
 
-    this.labelStyleTitle.textContent = `🎵 ${this.currentFileName} (由 MIDI 切片裝配)`;
-    this.labelStyleInfo.textContent = `格式: SFF2 伴奏風格 | 速度: ${this.baseBpm} BPM | 拍號: ${this.workingStyleParsed.timeSignature.numerator}/${this.workingStyleParsed.timeSignature.denominator} | 段落數: ${this.workingStyleParsed.sections.length} 個段落`;
+    const hasSff2 = style.tracks.some(t => t.events.some(e => e.channel !== undefined && e.channel >= 8 && e.channel <= 15));
+    this.labelStyleTitle.textContent = `🎵 ${this.currentFileName}`;
+    this.labelStyleInfo.textContent = `格式: ${hasSff2 ? 'SFF2 (現代高音質)' : 'SFF1'} | 初始速度: ${this.baseBpm} BPM | 拍號: ${style.timeSignature.numerator}/${style.timeSignature.denominator} | PPQ: ${style.division} | 段落數: ${style.sections.length} 個段落`;
 
     this.sliderBpm.value = this.baseBpm.toString();
     this.labelBpmValue.textContent = this.baseBpm.toString();
 
-    // 渲染段落按鈕並選取剛剛切片組裝的段落
+    // 渲染段落按鈕並選取剛剛切片組裝或指定的段落
     this.renderSectionButtons();
-    this.selectSection(targetSection);
+    const sections = styPlaybackEngine.getSections();
+    const secToSelect = targetSection || this.activeSectionName || (sections.find(s => s.name.toLowerCase() === 'main a') || sections[0])?.name;
+    if (secToSelect) {
+      this.selectSection(secToSelect);
+    }
     this.updatePlayStateUI();
   }
 
@@ -1762,7 +1783,6 @@ export class PlayerApp {
     // 切換為 MIDI 音樂檔模式介面
     this.setWorkspace('MIDI');
     if (this.btnExportSty) this.btnExportSty.style.display = 'none';
-    if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = 'none';
 
     this.labelStyleTitle.textContent = `🎼 ${this.sourceSongFileName} (標準 MIDI 音樂檔)`;
     const tempoStr = this.sourceSongAnalysis.hasTempoChanges
@@ -1775,6 +1795,139 @@ export class PlayerApp {
 
     this.renderMidiSongInspector(this.sourceSongAnalysis);
     this.updatePlayStateUI();
+  }
+
+  /**
+   * 切換回 Multi Pad 工作台
+   */
+  private switchToPadStudioMode() {
+    if (!this.savedPadParsed) return;
+
+    styPlaybackEngine.stop();
+
+    this.currentParsed = this.savedPadParsed;
+    this.currentFileName = this.savedPadFileName || 'MultiPad.PAD';
+    this.baseBpm = this.savedPadParsed.bpm || 120;
+
+    const analysis = MidiSongAnalyzer.analyze(this.savedPadParsed, this.currentFileName);
+    this.currentSongAnalysis = analysis;
+    this.activeSectionName = '__MIDI_SONG__';
+    styPlaybackEngine.loadSongMode(1, Math.max(1, analysis.totalBars));
+
+    this.setWorkspace('PAD');
+    if (this.btnExportSty) {
+      this.btnExportSty.style.display = '';
+      this.btnExportSty.innerHTML = '<span>💾</span><span>匯出 .PAD 檔案</span>';
+    }
+
+    const diag = this.currentPadDiagnosis || YamahaPadModifier.analyzePadProject(this.savedPadParsed);
+    this.currentPadDiagnosis = diag;
+
+    this.labelStyleTitle.textContent = `🎹 ${this.currentFileName} (Yamaha Multi Pad 插音檔)`;
+    const cmStr = `CM${(this.savedPadParsed.padConfig?.chordMatchFlags || [false, false, false, false]).map(f => (f ? '1' : '0')).join('')}`;
+    const rpStr = `RP${(this.savedPadParsed.padConfig?.repeatFlags || [false, false, false, false]).map(f => (f ? '1' : '0')).join('')}`;
+    this.labelStyleInfo.textContent = `格式: Multi Pad SMF1 (5 軌) ｜ 自動估算基準調: ${diag.estimatedKeyLabelZh} ｜ 控制碼: ${cmStr} / ${rpStr} ｜ 速度: ${this.baseBpm} BPM ｜ 總小節: ${analysis.totalBars} 小節 ｜ 總音符: ${analysis.totalNotes} 顆`;
+
+    this.sliderBpm.value = this.baseBpm.toString();
+    this.labelBpmValue.textContent = this.baseBpm.toString();
+
+    this.renderPadStudioDashboard();
+    this.setFocusedChannel(this.focusedChannel);
+    this.labelPosition.textContent = `小節 01 / ${Math.max(1, analysis.totalBars).toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
+    this.updatePlayStateUI();
+  }
+
+  /**
+   * 使用者點擊頂部工作台切換列膠囊按鈕時的調度邏輯
+   */
+  private switchWorkspaceByUser(targetWs: 'MIDI' | 'STY' | 'PAD') {
+    if (targetWs === this.currentWorkspace) return;
+
+    if (targetWs === 'MIDI') {
+      if (this.sourceSongParsed && this.sourceSongAnalysis) {
+        this.switchToMidiSongMode();
+      } else {
+        alert('尚未載入 MIDI 原曲檔案。請由頂部【選擇檔案】載入 .mid 檔案以進行選段試聽與切片。');
+      }
+      return;
+    }
+
+    if (targetWs === 'STY') {
+      if (this.workingStyleParsed || this.savedStyleParsed) {
+        this.switchToAssembledStyleMode();
+      } else if (this.sourceSongParsed) {
+        alert('尚未建立 STY 伴奏。請在 MIDI 原曲選段中選取小節區間，並點擊【✂️ 切片並裝配為 STY】以建立伴奏風格。');
+      } else {
+        alert('尚未載入或建立 STY 伴奏檔。請由頂部【選擇檔案】載入 .sty 檔案，或載入 MIDI 檔案進行切片。');
+      }
+      return;
+    }
+
+    if (targetWs === 'PAD') {
+      if (this.savedPadParsed) {
+        this.switchToPadStudioMode();
+      } else {
+        const create = confirm('目前尚未載入 Multi Pad 專案。\n\n是否立即建立全新 4 軌空白專案 (4 小節 · 120 BPM · CM0000) 開始創作？');
+        if (create) {
+          this.createNewBlankMultiPad();
+        }
+      }
+      return;
+    }
+  }
+
+  /**
+   * 即時同步頂部工作台切換列的高亮狀態與三大徽章
+   */
+  private syncWorkspaceSwitcherUI() {
+    // 1. 高亮目前工作台 pill
+    document.querySelectorAll('#workspace-switcher .ws-pill').forEach((pill) => {
+      const ws = pill.getAttribute('data-ws');
+      if (ws === this.currentWorkspace) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.remove('active');
+      }
+    });
+
+    // 2. 更新徽章狀態
+    const badgeMidi = document.getElementById('ws-badge-MIDI');
+    if (badgeMidi) {
+      if (this.sourceSongParsed && this.sourceSongAnalysis) {
+        badgeMidi.textContent = `${this.sourceSongAnalysis.totalBars} 節`;
+        badgeMidi.style.color = '#6ee7b7';
+      } else {
+        badgeMidi.textContent = '未載入';
+        badgeMidi.style.color = '';
+      }
+    }
+
+    const badgeSty = document.getElementById('ws-badge-STY');
+    if (badgeSty) {
+      if (this.workingStyleParsed) {
+        badgeSty.textContent = `已切 ${this.workingStyleParsed.sections.length} 段`;
+        badgeSty.style.color = '#7dd3fc';
+      } else if (this.savedStyleParsed) {
+        badgeSty.textContent = `${this.savedStyleParsed.sections.length} 段`;
+        badgeSty.style.color = '#7dd3fc';
+      } else {
+        badgeSty.textContent = '尚未建立';
+        badgeSty.style.color = '';
+      }
+    }
+
+    const badgePad = document.getElementById('ws-badge-PAD');
+    if (badgePad) {
+      if (this.savedPadParsed) {
+        const diag = this.currentPadDiagnosis || YamahaPadModifier.analyzePadProject(this.savedPadParsed);
+        const activeTracks = diag.tracks.filter(t => t.noteCount > 0).length;
+        badgePad.textContent = `${activeTracks}/4 軌`;
+        badgePad.style.color = '#fcd34d';
+      } else {
+        badgePad.textContent = '尚未建立';
+        badgePad.style.color = '';
+      }
+    }
   }
 
   /**
