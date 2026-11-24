@@ -4,6 +4,7 @@ import * as path from 'path';
 import { YamahaParser } from '../src/core/parser/yamaha-parser';
 import { YamahaWriter } from '../src/core/writer/yamaha-writer';
 import { YamahaPadModifier } from '../src/core/writer/pad-modifier';
+import { YamahaPadSynthesizer } from '../src/core/writer/pad-synthesizer';
 
 describe('【第一階段驗收】Multi Pad 調性診斷與固定調性剛體半音平移引擎', () => {
   const sample2010Path = path.resolve(__dirname, '../samples/2010-1_PAD.PAD');
@@ -170,5 +171,58 @@ describe('【第一階段驗收】Multi Pad 調性診斷與固定調性剛體半
     // 4. 清空 Pad 2 音符
     YamahaPadModifier.clearPadTrackNotes(parsed, 2);
     expect(YamahaPadModifier.extractTrackNotes(parsed.tracks[2]).length).toBe(0);
+  });
+
+  it('5. 【第三階段驗收】Multi Pad CC 自動化曲線 (CC11 Expression / CC1 Modulation) 替換與即時二進位 RawChunk 寫回', () => {
+    const parsed = YamahaPadSynthesizer.createBlankProject({
+      projectName: 'TestCCAutomation',
+      bpm: 120,
+      bars: 4,
+      division: 480,
+    });
+
+    // 建立 4 顆音符至 Pad 1
+    const testNotes = [
+      { note: 60, startTick: 0, durationTick: 480, velocity: 100 },
+      { note: 64, startTick: 480, durationTick: 480, velocity: 100 },
+      { note: 67, startTick: 960, durationTick: 480, velocity: 100 },
+      { note: 72, startTick: 1440, durationTick: 480, velocity: 100 },
+    ];
+    YamahaPadModifier.replacePadNotes(parsed, 1, testNotes, 4);
+
+    // 注入一組 CC 11 表情曲線 (漸強 40 -> 127)
+    const newCC11Events = [
+      { relTick: 0, value: 40 },
+      { relTick: 480, value: 70 },
+      { relTick: 960, value: 100 },
+      { relTick: 1440, value: 127 },
+    ];
+    const ok = YamahaPadModifier.replacePadCCEvents(parsed, 1, 11, newCC11Events);
+    expect(ok).toBe(true);
+
+    // 驗證 Pad 1 Track 內事件
+    const pad1Track = parsed.tracks[1];
+    const cc11s = pad1Track.events.filter(e => e.type === 'controlChange' && e.controller === 11);
+    expect(cc11s.length).toBe(4);
+    expect(cc11s.map(e => e.value)).toEqual([40, 70, 100, 127]);
+
+    // 驗證音符並未受損
+    const notesAfter = YamahaPadModifier.extractTrackNotes(pad1Track);
+    expect(notesAfter.length).toBe(4);
+    expect(notesAfter.map(n => n.note)).toEqual([60, 64, 67, 72]);
+
+    // 再次替換為另一組 CC 11 曲線 (驗證舊同類別 CC 徹底清除不堆疊)
+    const updatedCC11Events = [
+      { relTick: 0, value: 127 },
+      { relTick: 960, value: 50 },
+    ];
+    YamahaPadModifier.replacePadCCEvents(parsed, 1, 11, updatedCC11Events);
+    const cc11sSecond = pad1Track.events.filter(e => e.type === 'controlChange' && e.controller === 11);
+    expect(cc11sSecond.length).toBe(2);
+    expect(cc11sSecond.map(e => e.value)).toEqual([127, 50]);
+
+    // 驗證 rawChunk 二進位 buffer 已被同步編碼更新
+    expect(pad1Track.rawChunk).toBeDefined();
+    expect(pad1Track.rawChunk!.length).toBeGreaterThan(0);
   });
 });

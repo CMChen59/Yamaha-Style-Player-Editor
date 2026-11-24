@@ -982,6 +982,17 @@ export class PlayerApp {
   }
 
   private getChannelPartDef(channel: number): PartDef {
+    if (this.currentParsed?.format === 'PAD') {
+      const padNum = channel + 1;
+      const padColors = ['#38bdf8', '#f59e0b', '#10b981', '#a855f7'];
+      const padName = this.currentParsed.padConfig?.names?.[channel] || `Pad ${padNum}`;
+      return {
+        channel,
+        label: `PAD ${padNum} - ${padName}`,
+        defaultName: padName,
+        color: padColors[channel % 4],
+      };
+    }
     if (!styPlaybackEngine.getIsSongMode()) {
       const found = YAMAHA_PARTS.find(p => p.channel === channel);
       if (found) return found;
@@ -1880,13 +1891,32 @@ export class PlayerApp {
     if (!this.trackEditor) return;
     const part = this.getChannelPartDef(this.focusedChannel);
     const events = styPlaybackEngine.getChannelEvents(this.focusedChannel);
-    const totalTicks = styPlaybackEngine.getTotalSectionTicks();
-    const totalBars = styPlaybackEngine.getTotalBars();
+    let totalTicks = styPlaybackEngine.getTotalSectionTicks();
+    let totalBars = styPlaybackEngine.getTotalBars();
     const division = this.currentParsed?.division || 480;
     const timeSig = this.currentParsed?.timeSignature || { numerator: 4, denominator: 4 };
     const voiceInfo = styPlaybackEngine.getPartVoices().get(this.focusedChannel) || null;
     const isActive = this.isChannelActive(this.focusedChannel);
     const ccEvents = styPlaybackEngine.getChannelCCEvents(this.focusedChannel);
+
+    if (this.currentParsed?.format === 'PAD') {
+      const padNum = this.focusedChannel + 1;
+      const diag = YamahaPadModifier.analyzePadProject(this.currentParsed);
+      const padTrack = diag.tracks.find(t => t.padNum === padNum);
+      if (padTrack) {
+        totalBars = padTrack.barLength;
+        const ticksPerBar = (timeSig.numerator || 4) * division;
+        totalTicks = totalBars * ticksPerBar;
+        let maxEventTick = 0;
+        for (const ev of events) {
+          if (ev.relTick > maxEventTick) maxEventTick = ev.relTick;
+        }
+        if (maxEventTick > totalTicks) {
+          totalTicks = maxEventTick;
+          totalBars = Math.ceil(totalTicks / ticksPerBar);
+        }
+      }
+    }
 
     this.trackEditor.loadTrack(
       this.focusedChannel,
@@ -1911,7 +1941,26 @@ export class PlayerApp {
 
     this.focusedTrackBanner.style.setProperty('--part-accent', part.color);
 
-    if (!isActive) {
+    if (this.currentParsed?.format === 'PAD') {
+      const padNum = part.channel + 1;
+      const padName = this.currentParsed.padConfig?.names?.[part.channel] || `Pad ${padNum}`;
+      const diag = YamahaPadModifier.analyzePadProject(this.currentParsed);
+      const padTrack = diag.tracks.find(t => t.padNum === padNum);
+      const barLen = padTrack?.barLength || 1;
+      const cmText = padTrack?.chordMatch ? 'CM 跟隨' : 'CM 關閉 (指定調性)';
+      const rpText = padTrack?.repeat ? '循環 Repeat' : '單次 One-Shot';
+      const codeBadge = voiceInfo
+        ? (voiceInfo.isLegacyAlias && voiceInfo.legacyCodeLabel
+            ? `${voiceInfo.msb}-${voiceInfo.lsb}-${voiceInfo.pc + 1} · 相容舊碼 ${voiceInfo.legacyCodeLabel}`
+            : `${voiceInfo.msb}-${voiceInfo.lsb}-${voiceInfo.pc + 1}`)
+        : '';
+
+      this.focusedTrackTitle.innerHTML = `PAD ${padNum} - ${padName} <span class="banner-status-badge active" style="background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.45); color: #fcd34d;">Multi Pad 音軌 · ${barLen} 小節</span>`;
+      this.focusedTrackVoice.textContent = voiceInfo
+        ? `🎹 ${voiceInfo.voiceName} [${codeBadge}]`
+        : part.defaultName;
+      this.focusedTrackMeta.textContent = `音符數: ${noteCount} 個 ｜ 小節長度: ${barLen} 小節 ｜ 模式: ${cmText} · ${rpText} ｜ 類型: ${padTrack?.musicalTypeLabelZh || '一般'}`;
+    } else if (!isActive) {
       this.focusedTrackTitle.innerHTML = `CH ${part.channel + 1} - ${part.label} <span class="banner-status-badge inactive">⚪ 未啟用 (空白聲部)</span>`;
       this.focusedTrackVoice.innerHTML = `<button id="btn-banner-activate" class="banner-activate-btn" title="為此聲部挑選樂器音色並自動建立 CASM 伴奏轉調規則">➕ 立即啟用此聲部 (挑選樂器)</button>`;
       this.focusedTrackMeta.textContent = `本段音符數: 0 個 ｜ 狀態: 尚未配置 Yamaha 音色與 CASM 轉調規則 ｜ 點擊「立即啟用」或開始錄音即可自動建立`;
@@ -2541,6 +2590,20 @@ export class PlayerApp {
 
     this.trackEditor?.updateSoloPlayState(isPlaying && currentSolo !== null, currentSolo);
 
+    // 同步 Multi Pad 4 軌齊奏試聽按鈕狀態
+    const btnPlayAll = document.getElementById('btn-pad-play-all') as HTMLButtonElement | null;
+    if (btnPlayAll) {
+      if (isPlaying && currentSolo === null && this.currentParsed?.format === 'PAD') {
+        btnPlayAll.innerHTML = '⏹ 停止齊奏';
+        btnPlayAll.style.background = '#ef4444';
+        btnPlayAll.style.color = '#ffffff';
+      } else {
+        btnPlayAll.innerHTML = '▶ 4 軌齊奏試聽';
+        btnPlayAll.style.background = 'rgba(16, 185, 129, 0.2)';
+        btnPlayAll.style.color = '#34d399';
+      }
+    }
+
     this.updateFocusedBanner();
   }
 
@@ -2645,10 +2708,20 @@ export class PlayerApp {
   }
 
   /**
-   * 將單軌編輯器 CC 控制器自動化曲線即時同步回記憶體中的 STY 結構 (parsed SMF Track 0)
+   * 將單軌編輯器 CC 控制器自動化曲線即時同步回記憶體中的 STY / PAD 結構
    */
   private syncEditorCCEventsToParsed(channel: number, controller: number, events: PlaybackCCEvent[]) {
     if (!this.currentParsed) return;
+    if (this.currentParsed.format === 'PAD') {
+      const padNum = channel + 1;
+      YamahaPadModifier.replacePadCCEvents(
+        this.currentParsed,
+        padNum,
+        controller,
+        events
+      );
+      return;
+    }
     const currentSec = styPlaybackEngine.getCurrentSection()?.name;
     if (!currentSec) return;
     YamahaStyleModifier.replaceSectionChannelCCEvents(
@@ -3426,6 +3499,44 @@ export class PlayerApp {
     });
     document.getElementById('btn-pad-oct-plus')?.addEventListener('click', () => {
       this.applyPadTransposition(this.currentPadTotalSemitoneShift + 12);
+    });
+
+    // ▶ 4 軌齊奏試聽 / ⏹ 停止齊奏
+    const btnPlayAll = document.getElementById('btn-pad-play-all') as HTMLButtonElement | null;
+    btnPlayAll?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!this.currentParsed || this.currentParsed.format !== 'PAD') return;
+
+      if (styPlaybackEngine.getIsPlaying()) {
+        styPlaybackEngine.stop();
+        this.updatePlayStateUI();
+        return;
+      }
+
+      // 計算 4 軌中最大小節數
+      const diag = YamahaPadModifier.analyzePadProject(this.currentParsed);
+      let maxBars = 1;
+      diag.tracks.forEach((t) => {
+        if (t.barLength > maxBars) maxBars = t.barLength;
+      });
+
+      // 解除所有 Pad 通道 (0~3) 靜音與 Solo
+      styPlaybackEngine.setChannelSolo(null);
+      this.syncMixerSoloButtons();
+      for (let ch = 0; ch < 4; ch++) {
+        styPlaybackEngine.setChannelMute(ch, false);
+      }
+      document.querySelectorAll('.btn-pad-card-mute').forEach((btn) => {
+        (btn as HTMLElement).innerHTML = '🔊 發聲';
+        (btn as HTMLElement).style.background = '';
+        (btn as HTMLElement).style.color = '';
+        (btn as HTMLElement).style.fontWeight = '';
+      });
+
+      // 載入全曲範圍並播放
+      styPlaybackEngine.loadSongMode(1, maxBars);
+      styPlaybackEngine.play();
+      this.updatePlayStateUI();
     });
   }
 

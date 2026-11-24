@@ -1732,6 +1732,92 @@ export class YamahaPadModifier {
   }
 
   /**
+   * 替換指定 Pad 音軌中特定控制器 (CC) 的自動化事件流 (如 CC 11 表情、CC 1 顫音、CC 64 延音、CC 74 亮度等)
+   * 遵循 Yamaha Multi Pad 二進位規範：
+   * - 保留所有 NoteOn/NoteOff、Program Change、Pitch Bend 與其他不同 controller 的事件
+   * - 移除該 Track 內所有同 controller 的舊 CC 事件
+   * - 注入新的 CC 事件流，依據 absTick 嚴格排序並重新計算 Delta Times 與 RawChunk
+   */
+  public static replacePadCCEvents(
+    parsed: YamahaFileParsed,
+    padNum: number,
+    controller: number,
+    ccEvents: Array<{ relTick: number; value: number }>
+  ): boolean {
+    if (padNum < 1 || padNum > 4) return false;
+    const track = parsed.tracks[padNum];
+    if (!track || !track.events) return false;
+
+    let channel = padNum - 1;
+    for (const ev of track.events) {
+      if (ev.channel !== undefined) {
+        channel = ev.channel;
+        break;
+      }
+    }
+
+    // 1. 標註現有事件的絕對 Tick，並清除該 Pad 軌中同類別的舊 CC 事件
+    let curTick = 0;
+    const keptEvents: Array<{ ev: MidiEvent; absTick: number; index: number }> = [];
+    track.events.forEach((ev, idx) => {
+      curTick += ev.delta;
+      const isTargetCC =
+        ev.type === 'controlChange' &&
+        ev.controller === controller;
+
+      if (isTargetCC) {
+        // 清除舊的同控制器事件
+        return;
+      }
+      keptEvents.push({ ev: { ...ev }, absTick: curTick, index: idx });
+    });
+
+    // 2. 加入新的 CC 控制器事件
+    let virtualIndex = 9600000;
+    for (const c of ccEvents) {
+      const absTick = Math.max(0, Math.round(c.relTick));
+      const val = Math.max(0, Math.min(127, Math.round(c.value)));
+
+      keptEvents.push({
+        ev: { delta: 0, type: 'controlChange', channel, controller, value: val },
+        absTick,
+        index: virtualIndex++,
+      });
+    }
+
+    // 3. 確保 End of Track 不早於任何新事件
+    const endMeta = keptEvents.find((item) => item.ev.type === 'meta' && item.ev.metaType === 0x2f);
+    if (endMeta) {
+      for (const item of keptEvents) {
+        if (item.ev !== endMeta.ev && item.absTick > endMeta.absTick) {
+          endMeta.absTick = item.absTick;
+        }
+      }
+    }
+
+    // 4. 按時間排序 (若 absTick 相同，End of Track 確保在最後)
+    keptEvents.sort((a, b) => {
+      if (a.absTick !== b.absTick) return a.absTick - b.absTick;
+      if (a.ev.type === 'meta' && a.ev.metaType === 0x2f) return 1;
+      if (b.ev.type === 'meta' && b.ev.metaType === 0x2f) return -1;
+      return a.index - b.index;
+    });
+
+    // 5. 重新計算 Delta-times
+    let prev = 0;
+    track.events = keptEvents.map((item) => {
+      const delta = Math.max(0, item.absTick - prev);
+      prev = item.absTick;
+      item.ev.delta = delta;
+      return item.ev;
+    });
+
+    // 6. 重新編碼該 Track 的二進位 rawChunk
+    this.rebuildTrackRawChunk(track);
+    return true;
+  }
+
+  /**
    * 清理並消除音軌中重複堆疊的 Note-On 與多餘的 Note-Off 事件，防止重疊幽靈音符
    * @returns boolean 是否進行了實質清理與重新計算
    */
