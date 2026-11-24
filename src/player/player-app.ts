@@ -138,6 +138,7 @@ export class PlayerApp {
   private btnOpenSliceModal: HTMLButtonElement | null = null;
   private btnReturnToMidi: HTMLButtonElement | null = null;
   private currentlyAuditionMutedChannels: number[] = [];
+  private currentWorkspace: 'MIDI' | 'STY' | 'PAD' = 'STY';
   private workingStyleParsed: YamahaFileParsed | null = null;
   private sourceSongParsed: YamahaFileParsed | null = null;
   private sourceSongAnalysis: MidiSongAnalysis | null = null;
@@ -523,6 +524,25 @@ export class PlayerApp {
       await this.setOutputMode('both');
     });
 
+    // 單行發聲來源狀態列：模式膠囊、同步/消音代理按鈕與詳細設定摺疊
+    document.querySelectorAll('.output-pill').forEach((pill) => {
+      pill.addEventListener('click', () => {
+        const mode = (pill as HTMLElement).getAttribute('data-mode') as PlaybackOutputMode;
+        void this.setOutputMode(mode);
+      });
+    });
+    document.getElementById('btn-output-compact-sync')?.addEventListener('click', () => {
+      this.btnSyncMidiParts?.click();
+    });
+    document.getElementById('btn-output-compact-panic')?.addEventListener('click', () => {
+      this.btnMidiPanic?.click();
+    });
+    document.getElementById('btn-output-detail-toggle')?.addEventListener('click', () => {
+      this.setOutputDetailExpanded(!this.isOutputDetailExpanded());
+    });
+    this.setOutputDetailExpanded(localStorage.getItem('outputDetailExpanded') === '1');
+    this.syncOutputCompactBar(styPlaybackEngine.getOutputMode());
+
     this.selectMidiPort.addEventListener('change', () => {
       if (this.selectMidiPort.value) {
         midiManager.selectOutput(this.selectMidiPort.value);
@@ -674,10 +694,37 @@ export class PlayerApp {
     });
   }
 
+  private isOutputDetailExpanded(): boolean {
+    const body = document.getElementById('output-detail-body');
+    return !!body && body.style.display !== 'none';
+  }
+
+  /** 展開 / 收合發聲來源詳細設定 (MIDI 埠、測試按鈕、接線說明)，並記住使用者偏好 */
+  private setOutputDetailExpanded(expanded: boolean, persist: boolean = true) {
+    const body = document.getElementById('output-detail-body');
+    const toggle = document.getElementById('btn-output-detail-toggle');
+    if (body) body.style.display = expanded ? 'block' : 'none';
+    if (toggle) toggle.textContent = expanded ? '⚙️ 詳細設定 ▴' : '⚙️ 詳細設定 ▾';
+    if (persist) localStorage.setItem('outputDetailExpanded', expanded ? '1' : '0');
+  }
+
+  /** 同步單行狀態列的膠囊啟用狀態，以及僅在琴端模式才顯示的 同步 / 消音 按鈕 */
+  private syncOutputCompactBar(mode: PlaybackOutputMode) {
+    document.querySelectorAll('.output-pill').forEach((pill) => {
+      pill.classList.toggle('active', (pill as HTMLElement).getAttribute('data-mode') === mode);
+    });
+    const isMidi = mode !== 'webaudio';
+    const sync = document.getElementById('btn-output-compact-sync');
+    const panic = document.getElementById('btn-output-compact-panic');
+    if (sync) sync.style.display = isMidi ? '' : 'none';
+    if (panic) panic.style.display = isMidi ? '' : 'none';
+  }
+
   private async setOutputMode(mode: PlaybackOutputMode) {
     this.btnOutputWebAudio.classList.toggle('active', mode === 'webaudio');
     this.btnOutputMidi.classList.toggle('active', mode === 'midi');
     this.btnOutputBoth?.classList.toggle('active', mode === 'both');
+    this.syncOutputCompactBar(mode);
 
     if (mode === 'webaudio') {
       this.midiDrawer.style.display = 'none';
@@ -692,6 +739,8 @@ export class PlayerApp {
         ? `⚡ 當前輸出：雙模同步 (電腦 + ${name})`
         : `🎹 當前輸出：實體電子琴 (${name})`;
       styPlaybackEngine.setOutputMode(mode);
+      // 尚未選到任何 MIDI 輸出埠時自動展開詳細設定，方便使用者完成接線 (不覆寫已記憶的偏好)
+      if (!selected) this.setOutputDetailExpanded(true, false);
     }
   }
 
@@ -849,11 +898,7 @@ export class PlayerApp {
       if (isPadFile || parsed.format === 'PAD') {
         parsed.format = 'PAD';
         if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = 'none';
-        if (this.padStudioPanel) this.padStudioPanel.style.display = 'flex';
-        if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'none';
-        if (this.chordAuditionBar) this.chordAuditionBar.style.display = 'none';
-        if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = 'none';
-        if (this.mixerPanel) this.mixerPanel.style.display = 'none';
+        this.setWorkspace('PAD');
         if (this.btnExportSty) {
           this.btnExportSty.style.display = '';
           this.btnExportSty.innerHTML = '<span>💾</span><span>匯出 .PAD 檔案</span>';
@@ -910,7 +955,6 @@ export class PlayerApp {
         return;
       }
 
-      if (this.padStudioPanel) this.padStudioPanel.style.display = 'none';
       if (this.btnExportSty) {
         this.btnExportSty.innerHTML = '<span>💾</span><span>匯出 STY 伴奏檔</span>';
       }
@@ -926,10 +970,7 @@ export class PlayerApp {
         styPlaybackEngine.loadSongMode(1, analysis.totalBars);
 
         // 切換介面為「MIDI 音樂檔全景透視與 16 通道直播模式」（不建立假段落）
-        if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'flex';
-        if (this.chordAuditionBar) this.chordAuditionBar.style.display = 'none';
-        if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = 'none';
-        if (this.mixerPanel) this.mixerPanel.style.display = 'none';
+        this.setWorkspace('MIDI');
         if (this.btnExportSty) this.btnExportSty.style.display = 'none';
 
         this.labelStyleTitle.textContent = `🎼 ${name} (標準 MIDI 音樂檔)`;
@@ -949,10 +990,7 @@ export class PlayerApp {
       }
 
       // Yamaha STY 伴奏檔模式：顯示伴奏段落矩陣、虛擬和弦轉調與 8 大伴奏混音盤
-      if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'none';
-      if (this.chordAuditionBar) this.chordAuditionBar.style.display = '';
-      if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = '';
-      if (this.mixerPanel) this.mixerPanel.style.display = '';
+      this.setWorkspace('STY');
       if (this.btnExportSty) this.btnExportSty.style.display = '';
 
       // 更新樣式資訊
@@ -979,6 +1017,27 @@ export class PlayerApp {
       alert(`解析檔案失敗: ${err.message}`);
       this.labelStyleTitle.textContent = `解析失敗: ${err.message}`;
     }
+  }
+
+  /**
+   * 工作台統一切換入口：集中管理 MIDI 原曲 / STY 伴奏 / Multi Pad 三大模式的面板顯示與隱藏，
+   * 避免各載入流程各自操作 style.display 造成狀態不同步。
+   */
+  private setWorkspace(mode: 'MIDI' | 'STY' | 'PAD') {
+    const show = (el: HTMLElement | null, display: string) => {
+      if (el) el.style.display = display;
+    };
+    show(this.padStudioPanel, mode === 'PAD' ? 'flex' : 'none');
+    show(this.midiInspectorPanel, mode === 'MIDI' ? 'flex' : 'none');
+    show(this.chordAuditionBar, mode === 'STY' ? '' : 'none');
+    show(this.sectionMatrixPanel, mode === 'STY' ? '' : 'none');
+    show(this.mixerPanel, mode === 'STY' ? '' : 'none');
+    this.currentWorkspace = mode;
+  }
+
+  /** 目前所在工作台 (供後續頂部工作台切換列與徽章使用) */
+  public getCurrentWorkspace(): 'MIDI' | 'STY' | 'PAD' {
+    return this.currentWorkspace;
   }
 
   private getChannelPartDef(channel: number): PartDef {
@@ -1679,10 +1738,7 @@ export class PlayerApp {
     this.trackEditor?.clearHistory();
 
     // 更新介面元素可見度 (切換為 Yamaha STY 伴奏模式)
-    if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'none';
-    if (this.chordAuditionBar) this.chordAuditionBar.style.display = '';
-    if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = '';
-    if (this.mixerPanel) this.mixerPanel.style.display = '';
+    this.setWorkspace('STY');
     if (this.btnExportSty) this.btnExportSty.style.display = '';
     if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = this.sourceSongParsed ? 'inline-flex' : 'none';
 
@@ -1721,10 +1777,7 @@ export class PlayerApp {
     styPlaybackEngine.loadSongMode(s, e);
 
     // 切換為 MIDI 音樂檔模式介面
-    if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'flex';
-    if (this.chordAuditionBar) this.chordAuditionBar.style.display = 'none';
-    if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = 'none';
-    if (this.mixerPanel) this.mixerPanel.style.display = 'none';
+    this.setWorkspace('MIDI');
     if (this.btnExportSty) this.btnExportSty.style.display = 'none';
     if (this.btnReturnToMidi) this.btnReturnToMidi.style.display = 'none';
 
@@ -3085,10 +3138,7 @@ export class PlayerApp {
     this.sliderBpm.value = config.bpm.toString();
     this.labelBpmValue.textContent = config.bpm.toString();
 
-    if (this.midiInspectorPanel) this.midiInspectorPanel.style.display = 'none';
-    if (this.chordAuditionBar) this.chordAuditionBar.style.display = '';
-    if (this.sectionMatrixPanel) this.sectionMatrixPanel.style.display = '';
-    if (this.mixerPanel) this.mixerPanel.style.display = '';
+    this.setWorkspace('STY');
     if (this.btnExportSty) this.btnExportSty.style.display = '';
 
     // 更新頂部儀表板

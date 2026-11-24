@@ -5466,10 +5466,25 @@
 
     <!-- 聲音發聲來源選擇 (Audio Output Routing) -->
     <section class="output-panel">
-      <div class="panel-header">
-        <span>聲音發聲來源選擇 (Audio Output Routing)</span>
-        <span id="output-current-status" style="font-size: 0.78rem; color: #38bdf8; font-weight: normal;">🔊 當前輸出：電腦喇叭 / 耳機 (Web Audio)</span>
+      <!-- 單行發聲來源狀態列 (預設收合詳細設定；點擊 ⚙️ 展開) -->
+      <div id="output-compact-bar" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0;">
+          <span style="font-size: 0.82rem; font-weight: 700; color: #cbd5e1; white-space: nowrap;">🔊 發聲來源</span>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button type="button" class="midi-locator-btn output-pill" data-mode="webaudio" style="min-width: 92px;" title="電腦喇叭 / 耳機 (Web Audio 軟體合成)">🔊 電腦喇叭</button>
+            <button type="button" class="midi-locator-btn output-pill" data-mode="midi" style="min-width: 92px;" title="Yamaha 實體電子琴 (PSR-SX920 Web MIDI)">🎹 實體琴</button>
+            <button type="button" class="midi-locator-btn output-pill" data-mode="both" style="min-width: 92px;" title="雙模同步發聲 (電腦 + PSR-SX920)">⚡ 雙模同步</button>
+          </div>
+          <span id="output-current-status" style="font-size: 0.78rem; color: #38bdf8; font-weight: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;">🔊 當前輸出：電腦喇叭 / 耳機 (Web Audio)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button type="button" id="btn-output-compact-sync" class="midi-locator-btn" style="display: none; color: #7dd3fc;" title="立即將目前聲部音色與混音推播至琴端">📡 同步音色</button>
+          <button type="button" id="btn-output-compact-panic" class="midi-locator-btn" style="display: none; color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);" title="全通道緊急消音 (All Sound Off)">🛑 消音</button>
+          <button type="button" id="btn-output-detail-toggle" class="midi-locator-btn" style="min-width: 118px;" title="展開 / 收合 MIDI 埠選擇、測試按鈕與接線說明">⚙️ 詳細設定 ▾</button>
+        </div>
       </div>
+
+      <div id="output-detail-body" style="display: none; margin-top: 10px;">
       <div class="output-tabs-container">
         <button id="btn-output-webaudio" class="output-card-btn active">
           <div class="output-card-icon">🔊</div>
@@ -5536,6 +5551,7 @@
           <div>3. 請確認琴上的總音量旋鈕與 <strong>[STYLE-ACMP]</strong> 伴奏音量滑桿已開啟。</div>
           <div>4. <strong>實體琴鍵連線步進錄音</strong>：在下方單軌專注編輯器中點擊「🔴 步進錄音」，直接在 PSR-SX920 琴鍵上彈奏單音或多音和弦，放開琴鍵即自動精準記錄並依時值推進！支援空白鍵休止、T 鍵延音與退步撤銷。</div>
         </div>
+      </div>
       </div>
     </section>
 
