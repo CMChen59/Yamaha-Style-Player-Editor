@@ -82,7 +82,6 @@ export class PlayerApp {
   private inputCustomBars!: HTMLInputElement;
   private btnApplyCustomBars!: HTMLButtonElement;
   private btnPlay!: HTMLButtonElement;
-  private btnPlaySolo!: HTMLButtonElement;
   private btnStop!: HTMLButtonElement;
   private btnLoop!: HTMLButtonElement;
   private sliderBpm!: HTMLInputElement;
@@ -101,7 +100,6 @@ export class PlayerApp {
   private focusedTrackTitle!: HTMLElement;
   private focusedTrackVoice!: HTMLElement;
   private focusedTrackMeta!: HTMLElement;
-  private btnBannerSolo!: HTMLButtonElement;
   private btnBannerMute!: HTMLButtonElement;
 
   // 🎹 單軌專注編輯工作台 (Phase 2 & 3: 展開音符、拍子、樂器、力度拉桿與數字輸入)
@@ -237,7 +235,6 @@ export class PlayerApp {
     this.inputCustomBars = document.getElementById('input-custom-bars') as HTMLInputElement;
     this.btnApplyCustomBars = document.getElementById('btn-apply-custom-bars') as HTMLButtonElement;
     this.btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
-    this.btnPlaySolo = document.getElementById('btn-play-solo') as HTMLButtonElement;
     this.btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
     this.btnLoop = document.getElementById('btn-loop') as HTMLButtonElement;
     this.sliderBpm = document.getElementById('slider-bpm') as HTMLInputElement;
@@ -262,7 +259,6 @@ export class PlayerApp {
     this.focusedTrackTitle = document.getElementById('focused-track-title')!;
     this.focusedTrackVoice = document.getElementById('focused-track-voice')!;
     this.focusedTrackMeta = document.getElementById('focused-track-meta')!;
-    this.btnBannerSolo = document.getElementById('btn-banner-solo') as HTMLButtonElement;
     this.btnBannerMute = document.getElementById('btn-banner-mute') as HTMLButtonElement;
 
     // 聲音輸出控制元件
@@ -438,11 +434,6 @@ export class PlayerApp {
       }
     });
 
-    // 🎧 單軌獨奏播放
-    this.btnPlaySolo.addEventListener('click', () => {
-      this.toggleSoloPlay();
-    });
-
     this.btnStop.addEventListener('click', () => {
       styPlaybackEngine.stop();
       this.updatePlayStateUI();
@@ -451,15 +442,7 @@ export class PlayerApp {
       this.labelPosition.textContent = `小節 01 / ${totalBars.toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
     });
 
-    // 焦點橫幅快捷按鈕
-    this.btnBannerSolo.addEventListener('click', () => {
-      const currentSolo = styPlaybackEngine.getChannelSolo();
-      const nextSolo = currentSolo === this.focusedChannel ? null : this.focusedChannel;
-      styPlaybackEngine.setChannelSolo(nextSolo);
-      this.syncMixerSoloButtons();
-      this.updatePlayStateUI();
-    });
-
+    // 焦點橫幅快捷按鈕 (單軌獨奏請使用單軌編輯器內的「僅播此軌」)
     this.focusedTrackVoice.style.cursor = 'pointer';
     this.focusedTrackVoice.title = '點擊開啟 Yamaha 原廠音色庫更換音色';
     this.focusedTrackVoice.addEventListener('click', () => {
@@ -2037,14 +2020,10 @@ export class PlayerApp {
       this.focusedTrackMeta.textContent = `區間音符數: ${noteCount} 個 ｜ MIDI 通道: CH ${part.channel + 1} ｜ 類型: ${voiceInfo?.category || 'General'}${codeBadge ? ` ｜ 三聯號: ${codeBadge}` : ''}`;
     }
 
-    // 更新橫幅上的獨奏與靜音按鈕狀態
+    // 更新橫幅上的靜音按鈕狀態
     const isMuted = styPlaybackEngine.isChannelMuted(part.channel);
     this.btnBannerMute.classList.toggle('active-mute', isMuted);
     this.btnBannerMute.textContent = isMuted ? '🔊 取消靜音' : '🔇 靜音此軌';
-
-    const isSolo = styPlaybackEngine.getChannelSolo() === part.channel;
-    this.btnBannerSolo.classList.toggle('active-solo', isSolo);
-    this.btnBannerSolo.textContent = isSolo ? '⏹ 解除獨奏' : '🎧 獨奏此軌 (Solo)';
   }
 
   private syncMixerSoloButtons() {
@@ -2619,20 +2598,14 @@ export class PlayerApp {
         // 全曲合奏播放中
         this.btnPlay.classList.add('playing');
         this.btnPlay.innerHTML = '⏸ 暫停全曲 (Pause)';
-        this.btnPlaySolo.classList.remove('playing');
-        this.btnPlaySolo.innerHTML = '🎧 僅播此軌 (Solo)';
       } else {
-        // 單軌獨奏中
+        // 單軌獨奏中 (由單軌編輯器或 Pad 卡片的獨奏按鈕觸發)
         this.btnPlay.classList.remove('playing');
         this.btnPlay.innerHTML = '▶ 播放全曲 (All)';
-        this.btnPlaySolo.classList.add('playing');
-        this.btnPlaySolo.innerHTML = '⏸ 暫停獨奏 (Pause)';
       }
     } else {
       this.btnPlay.classList.remove('playing');
       this.btnPlay.innerHTML = '▶ 播放全曲 (All)';
-      this.btnPlaySolo.classList.remove('playing');
-      this.btnPlaySolo.innerHTML = '🎧 僅播此軌 (Solo)';
 
       // 播放停止或播畢時，若伴奏切片彈窗正處於純伴奏試聽模式，自動還原按鈕狀態並解除通道靜音
       if (this.midiSliceAssignModal?.getIsAuditioningAccomp()) {
