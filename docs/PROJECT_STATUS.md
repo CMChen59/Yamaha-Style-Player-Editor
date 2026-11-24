@@ -1,6 +1,6 @@
 # 📊 Yamaha Style Player & Editor — 專案進度與待辦總表 (Single Source of Truth)
 
-> **最後更新**：2026-11-23 (完成 Multi Pad 大小調半終止判定升級、UI 手動覆寫與匯出同步防呆機制；使用者於 Yamaha PSR-SX920 實體琴完整驗證通過：大調《月亮代表我的心》C ➔ Eb 與小調曲目轉換發聲 100% 正確無誤；Multi Pad 工作台第一、二階段全數結案封存)  
+> **最後更新**：2026-11-24 (完成 Multi Pad 工作台全四階段開發與全生命週期 E2E 驗收：第一階段調性剛體平移、第二階段單軌屬性工具、第三階段 CC 自動化曲線寫回與單軌編輯器網格連動、第四階段端到端 E2E 測試與 Round-Trip 零數據損失雙向驗證；全部 7 項測試 100% 通過，生產打包成功；Multi Pad 工作台全數結案封存)  
 > **使用說明**：本檔案為跨電腦（公司 ↔ 家裡）的**唯一進度基準**。凡已列入「✅ 已完成並封存」之項目，均已通過測試與實機驗證，請勿重複確認或重做；新對話開始時請直接聚焦於「🚧 當前待處理項目」。
 
 ---
@@ -20,7 +20,7 @@
 | **【任務 2-4C 終極】** | **全自動切片深層淨化管線、標準事件優先級與過門聲部鏡像 (實機驗收通過)** | [`style-modifier.ts`](../src/core/writer/style-modifier.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`GEMINI.md`](../GEMINI.md) | ✅ 已完成並實機驗收（邊界音過濾、副歌鈸音/Pad NTT 修正、消除 819 幽靈 CC11、事件標準優先級重整、Fill In 鏡像與 Auto Fill In 無縫切換，琴端表現與原廠一致） |
 | **【任務 4-1 基礎】** | **Multi Pad (.PAD) 二進位結構解析與全軌屬性寫入** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`yamaha-writer.ts`](../src/core/writer/yamaha-writer.ts) | ✅ 已完成（完整支援 5 軌 SMF1 結構、`CMxxxx` / `RPxxxx` / `N1~N4` 控制標記） |
 | **【任務 4-1 終極】** | **Multi Pad 和弦跟隨適用邊界、固定調性鐵律與 STY 插音分工架構實機結案** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`GEMINI.md`](../GEMINI.md), `2010_空港_Intro_Am調.PAD` | ✅ 已完成並實機結案（PSR-SX920 雙向驗收：證實長旋律開 CM 必走音，CM0000 指定調性為 100% 依譜還原唯一解；插音歸 STY Phrase 聲部） |
-| **【任務 4-1A】** | **Multi Pad 調性平移引擎、調性半終止判定升級、手動覆寫同步防呆與單軌編輯器連動 (第一、二、三階段全數驗收通過封存)** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`index.html`](../index.html), [`test-pad-key-transposition.test.ts`](../tests/test-pad-key-transposition.test.ts) | ✅ 第一、二、三階段全數完工並通過測試（1. 支援 4 大型態診斷、首拍強拍主音+半終止屬音雙重調性加權、原曲基準調自動估算+手動覆寫即時重算、匯出強制校驗 UI 設定防呆、原始音高基準快照；2. 單軌獨立勾選移調、複製/清空軌道、小節長度調整、Vol/Pan/Rev/Cho 單欄垂直自適應排版、Icon 修改、新建空白 `.PAD` 與匯出；3. 實裝 `replacePadCCEvents` 支援 CC 11/1/64/74 等自動化曲線即時寫回二進位 rawChunk、單軌鋼琴捲軸小節網格依選中 Pad 自身 `barLength` 精確適配、頂部橫幅專屬色/名稱/屬性連動同步、新增「▶ 4 軌齊奏試聽 / ⏹ 停止齊奏」按鈕；單元測試 5/5 全數通過；PSR-SX920 實測大調《月亮代表我的心》C ➔ Eb 與小調樂曲皆 100% 準確發聲） |
+| **【任務 4-1A 全四階段】** | **Multi Pad 調性平移工作台全功能 (剛體平移 / 單軌屬性 / CC 控制曲線 / 鋼琴捲軸網格 / 4 軌齊奏 / 全生命週期 E2E 驗收通過封存)** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`index.html`](../index.html), [`test-pad-key-transposition.test.ts`](../tests/test-pad-key-transposition.test.ts), [`test-pad-full-lifecycle-e2e.test.ts`](../tests/test-pad-full-lifecycle-e2e.test.ts) | ✅ 全四階段全數完工並通過端到端測試與實機驗收封存：<br>1. **第一階段（轉調核心）**：支援 24 大小調定義、4 大型態診斷、首拍強拍主音+半終止屬音雙重調性加權、原曲基準調自動估算+手動覆寫即時重算、原始音高基準快照、匯出強制校驗 UI 設定防呆；使用者於 PSR-SX920 實測大調《月亮代表我的心》C ➔ Eb 與小調樂曲皆 100% 準確發聲。<br>2. **第二階段（單軌屬性與排版）**：單軌獨立勾選移調、複製/清空軌道、獨立小節長度調整、Vol/Pan/Rev/Cho 單欄垂直自適應排版（解決破版）、Icon 修改、新建空白 `.PAD` 與匯出。<br>3. **第三階段（CC 與編輯器連動）**：實裝 `replacePadCCEvents` 支援 CC 11/1/64/74 等自動化曲線即時寫回二進位 rawChunk、單軌鋼琴捲軸小節網格依選中 Pad 自身 `barLength` 精確適配、頂部橫幅專屬色/名稱/屬性連動同步、新增「▶ 4 軌齊奏試聽 / ⏹ 停止齊奏」按鈕。<br>4. **第四階段（端到端 E2E 測試與 Round-Trip 驗收）**：從 0 建立空白專案 ➔ 4 軌音符與不同小節 ➔ CC 11/1 動態曲線 ➔ 音色混音 ➔ 剛體轉調 ➔ 匯出二進位 ➔ 反解析雙向驗證零數據損失（Track 0 控制標籤、音色、混音、音符、CC、小節長度 100% 吻合）；實體琴現成樣本 2010-1 與 2011-2 Round-Trip 轉調無損驗收全數通過（全套測試 7/7 通過，生產打包成功）。 |
 
 ---
 
