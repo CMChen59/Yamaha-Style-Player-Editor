@@ -965,39 +965,41 @@
       border-color: #94a3b8;
     }
 
-    /* 播放主控制列 */
+    /* 播放主控制列 (單行緊湊排版) */
     .transport-bar {
       background: var(--bg-panel);
       border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 16px 24px;
+      border-radius: 10px;
+      padding: 8px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
+      gap: 8px 14px;
       flex-wrap: wrap;
     }
 
     .transport-main {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 6px;
+      flex-shrink: 0;
     }
 
     .btn-play {
       background: linear-gradient(135deg, #10b981, #059669);
       color: #fff;
       border: none;
-      padding: 10px 24px;
-      border-radius: 8px;
-      font-size: 1rem;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-size: 0.86rem;
       font-weight: 700;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+      white-space: nowrap;
     }
 
     .btn-play:hover {
@@ -1007,23 +1009,24 @@
 
     .btn-play.playing {
       background: linear-gradient(135deg, #f59e0b, #d97706);
-      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
     }
 
     .btn-solo-play {
       background: linear-gradient(135deg, #6366f1, #4f46e5);
       color: #fff;
       border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 0.95rem;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
       font-weight: 700;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+      white-space: nowrap;
     }
 
     .btn-solo-play:hover {
@@ -1033,19 +1036,20 @@
 
     .btn-solo-play.playing {
       background: linear-gradient(135deg, #ec4899, #db2777);
-      box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4);
+      box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
     }
 
     .btn-stop {
       background: rgba(255, 255, 255, 0.08);
       color: #fff;
       border: 1px solid var(--border-color);
-      padding: 10px 18px;
-      border-radius: 8px;
-      font-size: 0.95rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.15s;
+      white-space: nowrap;
     }
 
     .btn-stop:hover {
@@ -1058,11 +1062,12 @@
       background: rgba(255, 255, 255, 0.06);
       color: var(--text-muted);
       border: 1px solid var(--border-color);
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 0.85rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
       cursor: pointer;
       transition: all 0.15s;
+      white-space: nowrap;
     }
 
     .btn-loop.active {
@@ -1072,43 +1077,47 @@
       font-weight: 600;
     }
 
-    /* 播放進度顯示大字體 */
+    /* 播放進度顯示大字體 (緊湊高度) */
     .position-display {
       font-family: "Courier New", Courier, monospace;
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: #38bdf8;
-      background: #090d16;
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: 1px solid rgba(56, 189, 248, 0.2);
-      letter-spacing: 1px;
-    }
-
-    /* 全域總音量控制器 */
-    .master-vol-control {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(30, 41, 59, 0.7);
-      padding: 6px 14px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    .master-vol-label {
-      font-size: 0.82rem;
-      color: #94a3b8;
-      font-weight: 700;
-    }
-    .master-vol-val {
       font-size: 0.88rem;
       font-weight: 700;
       color: #38bdf8;
-      min-width: 44px;
+      background: #090d16;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* 全域總音量控制器 (單行緊湊化) */
+    .master-vol-control {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(30, 41, 59, 0.6);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
+    }
+    .master-vol-label {
+      font-size: 0.74rem;
+      color: #94a3b8;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .master-vol-val {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #38bdf8;
+      min-width: 32px;
       font-family: monospace;
     }
     .master-vol-slider {
-      width: 110px;
+      width: 65px;
       accent-color: #38bdf8;
       cursor: pointer;
     }
@@ -1116,9 +1125,9 @@
       background: rgba(255, 255, 255, 0.06);
       color: #cbd5e1;
       border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 3px 8px;
+      padding: 2px 5px;
       border-radius: 4px;
-      font-size: 0.75rem;
+      font-size: 0.68rem;
       cursor: pointer;
       transition: all 0.2s;
     }
@@ -1127,29 +1136,35 @@
       color: #fff;
     }
 
-    /* 速度控制群 */
+    /* 速度控制群 (單行緊湊化) */
     .bpm-control {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
+      background: rgba(30, 41, 59, 0.5);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      flex-shrink: 0;
     }
 
     .bpm-label {
-      font-size: 0.85rem;
+      font-size: 0.74rem;
       font-weight: 700;
       color: var(--text-muted);
     }
 
     .bpm-val {
-      font-size: 1.15rem;
+      font-size: 0.88rem;
       font-weight: 700;
       color: #fff;
-      min-width: 44px;
+      min-width: 28px;
       text-align: right;
+      font-family: monospace;
     }
 
     .bpm-slider {
-      width: 120px;
+      width: 65px;
       accent-color: var(--accent);
       cursor: pointer;
     }
@@ -1158,10 +1173,12 @@
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid var(--border-color);
       color: var(--text-main);
-      padding: 4px 8px;
+      padding: 2px 5px;
       border-radius: 4px;
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       cursor: pointer;
+      min-width: 22px;
+      text-align: center;
     }
 
     .bpm-btn:hover {
@@ -5640,35 +5657,39 @@
       </div>
     </section>
 
-    <!-- 播放主控制列 -->
+    <!-- 播放主控制列 (單行緊湊排版) -->
     <section class="transport-bar">
-      <div class="transport-main">
-        <button id="btn-play" class="btn-play">▶ 播放全曲 (All)</button>
-        <button id="btn-stop" class="btn-stop">⏹ 停止</button>
-        <button id="btn-loop" class="btn-loop active">🔁 循環: 開啟</button>
+      <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap;">
+        <div class="transport-main">
+          <button id="btn-play" class="btn-play">▶ 播放全曲 (All)</button>
+          <button id="btn-stop" class="btn-stop">⏹ 停止</button>
+          <button id="btn-loop" class="btn-loop active">🔁 循環: 開啟</button>
+        </div>
+
+        <div id="label-position" class="position-display">
+          小節 01 / 01 | 拍 1.0 | Tick 000000
+        </div>
       </div>
 
-      <div id="label-position" class="position-display">
-        小節 01 / 01 | 拍 1.0 | Tick 000000
-      </div>
+      <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap;">
+        <div class="bpm-control">
+          <span class="bpm-label">BPM:</span>
+          <span id="bpm-value" class="bpm-val">120</span>
+          <button id="btn-bpm-minus-10" class="bpm-btn">-10</button>
+          <button id="btn-bpm-minus-1" class="bpm-btn">-1</button>
+          <input type="range" id="slider-bpm" class="bpm-slider" min="40" max="240" value="120">
+          <button id="btn-bpm-plus-1" class="bpm-btn">+1</button>
+          <button id="btn-bpm-plus-10" class="bpm-btn">+10</button>
+          <button id="btn-bpm-reset" class="bpm-btn">重設</button>
+        </div>
 
-      <!-- 全域總音量控制器 (Master Volume) -->
-      <div class="master-vol-control">
-        <span class="master-vol-label">🎚️ 總音量:</span>
-        <span id="master-vol-val" class="master-vol-val">100%</span>
-        <input type="range" id="slider-master-vol" class="master-vol-slider" min="0" max="150" step="5" value="100">
-        <button id="btn-master-vol-reset" class="master-vol-btn">重設</button>
-      </div>
-
-      <div class="bpm-control">
-        <span class="bpm-label">BPM:</span>
-        <span id="bpm-value" class="bpm-val">120</span>
-        <button id="btn-bpm-minus-10" class="bpm-btn">-10</button>
-        <button id="btn-bpm-minus-1" class="bpm-btn">-1</button>
-        <input type="range" id="slider-bpm" class="bpm-slider" min="40" max="240" value="120">
-        <button id="btn-bpm-plus-1" class="bpm-btn">+1</button>
-        <button id="btn-bpm-plus-10" class="bpm-btn">+10</button>
-        <button id="btn-bpm-reset" class="bpm-btn">重設</button>
+        <!-- 全域總音量控制器 (Master Volume) -->
+        <div class="master-vol-control">
+          <span class="master-vol-label">🎚️ 總音量:</span>
+          <span id="master-vol-val" class="master-vol-val">100%</span>
+          <input type="range" id="slider-master-vol" class="master-vol-slider" min="0" max="150" step="5" value="100">
+          <button id="btn-master-vol-reset" class="master-vol-btn">重設</button>
+        </div>
       </div>
     </section>
 
