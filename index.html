@@ -5518,12 +5518,15 @@
       <input type="file" id="file-input" accept=".sty,.prs,.sst,.pad,.PAD,.mid,.midi" style="display: none;">
     </section>
 
-    <!-- 頂部三大工作台切換列：MIDI 原曲選段 ⇄ STY 伴奏工作台 ⇄ Multi Pad 工作台 -->
+    <!-- 頂部三大工作台切換列：MIDI 原曲選段 ⇄ STY 伴奏工作台 ⇄ Multi Pad 工作台 + 內建參考手冊 -->
     <nav id="workspace-switcher" class="workspace-switcher" aria-label="工作台切換">
       <span class="ws-label">工作台</span>
       <button type="button" class="ws-pill" data-ws="MIDI" title="MIDI 原曲選段：試聽並挑選小節區間，切片成 STY 或存入 Pad"><span>🎼 MIDI 原曲選段</span><span class="ws-badge" id="ws-badge-MIDI">尚未載入</span></button>
       <button type="button" class="ws-pill" data-ws="STY" title="STY 伴奏工作台：8 聲部伴奏、段落與 CASM 編輯"><span>🎵 STY 伴奏工作台</span><span class="ws-badge" id="ws-badge-STY">尚未建立</span></button>
       <button type="button" class="ws-pill" data-ws="PAD" title="Multi Pad 工作台：4 軌插音、調性平移與編輯"><span>🎹 Multi Pad 工作台</span><span class="ws-badge" id="ws-badge-PAD">尚未建立</span></button>
+      <button type="button" id="btn-open-reference-center" class="ws-pill" style="margin-left: auto; background: rgba(139, 92, 246, 0.18); border-color: rgba(167, 139, 250, 0.5); color: #ddd6fe;" title="開啟系統內建的 Yamaha 伴奏樂理、CASM NTR/NTT 轉調規則與 Multi Pad 參考手冊">
+        <span>📖 樂理與 NTR/NTT 參考手冊</span>
+      </button>
     </nav>
 
     <!-- 伴奏規格儀表板 -->
@@ -5976,7 +5979,22 @@
         </div>
         <span id="focused-track-meta" class="focused-meta">音符數: 0 ｜ MIDI 通道: 9</span>
       </div>
-      <div class="focused-track-actions">
+      <div class="focused-track-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div id="banner-casm-controls" style="display: none; align-items: center; gap: 6px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.25); padding: 4px 8px; border-radius: 8px;">
+          <button type="button" id="btn-banner-fixed-bypass" class="btn-banner-action" style="padding: 4px 10px; font-size: 0.76rem; white-space: nowrap;" title="一鍵切換此聲部在當前段落的 CASM 固定音高直通鎖定 (NTR = Root Fixed + NTT = Bypass)">
+            🔓 隨和弦轉調中
+          </button>
+          <select id="select-banner-casm-mode" style="background: rgba(9, 13, 22, 0.95); border: 1px solid rgba(148, 163, 184, 0.35); color: #e2e8f0; font-size: 0.75rem; padding: 4px 6px; border-radius: 5px; cursor: pointer;" title="選擇此聲部在當前伴奏段落的 CASM (NTR/NTT) 轉調模式">
+            <option value="FIXED_BYPASS">🔒 固定音高直通 (Fixed + Bypass · 左手換和弦不變音)</option>
+            <option value="TRANSPOSE_MELODY">🎵 旋律音階跟隨 (Transpose + Melody · 保護花音)</option>
+            <option value="TRANSPOSE_CHORD">🎹 和弦內音吸附 (Transpose + Chord · 吸附三和弦)</option>
+            <option value="TRANSPOSE_BASS">🎸 貝斯根音跟隨 (Transpose + Bass)</option>
+            <option value="TRANSPOSE_BYPASS">⚡ 單鍵根音直通 (Transpose + Bypass · 隨根音平移)</option>
+          </select>
+          <button type="button" id="btn-banner-casm-help" style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(167, 139, 250, 0.45); color: #ddd6fe; font-size: 0.73rem; font-weight: 700; padding: 3px 7px; border-radius: 5px; cursor: pointer; white-space: nowrap;" title="查看 NTR (電梯) 與 NTT (磁鐵) 四大組合對照表">
+            ℹ️ NTR/NTT 說明
+          </button>
+        </div>
         <button id="btn-banner-mute" class="btn-banner-action">🔇 靜音此軌 (Mute)</button>
       </div>
     </section>

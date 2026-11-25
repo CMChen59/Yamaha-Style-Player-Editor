@@ -7,6 +7,7 @@ import { getSharedAudioContext } from '../creator/shared-audio-context';
 import { SingleTrackEditor } from './single-track-editor';
 import { YamahaWriter } from '../core/writer/yamaha-writer';
 import { YamahaStyleModifier } from '../core/writer/style-modifier';
+import { CasmModifier, type CasmChannelTranspositionMode } from '../core/writer/casm-modifier';
 import { YamahaPadModifier, PAD_KEY_LIST, PAD_ICON_LIST, type PadProjectDiagnosis } from '../core/writer/pad-modifier';
 import { YamahaPadSynthesizer } from '../core/writer/pad-synthesizer';
 import type { PlaybackNoteEvent, PlaybackCCEvent, PlaybackOutputMode } from './sty-playback-engine';
@@ -342,6 +343,42 @@ export class PlayerApp {
           this.switchWorkspaceByUser(targetWs);
         }
       });
+    });
+
+    // 【任務 5-2】內建互動式樂理與技術參考手冊開啟按鈕
+    document.getElementById('btn-open-reference-center')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openReferenceCenterModal('casm');
+    });
+    document.getElementById('btn-banner-casm-help')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openReferenceCenterModal('casm');
+    });
+
+    // 【任務 2-4E】單軌 CASM 固定音高直通鎖定開關與轉調模式下拉選單
+    document.getElementById('btn-banner-fixed-bypass')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!this.currentParsed || this.currentWorkspace !== 'STY' || styPlaybackEngine.getIsSongMode()) return;
+      const ch = this.focusedChannel;
+      if (ch < 10 || ch > 15) return;
+      const cur = CasmModifier.getSectionChannelRule(this.currentParsed, this.activeSectionName, ch);
+      let nextMode: CasmChannelTranspositionMode = 'FIXED_BYPASS';
+      if (cur.isFixedBypass) {
+        nextMode = ch === 10 ? 'TRANSPOSE_BASS' : (ch >= 14 ? 'TRANSPOSE_MELODY' : 'TRANSPOSE_CHORD');
+      }
+      CasmModifier.setSectionChannelTranspositionMode(this.currentParsed, this.activeSectionName, ch, nextMode);
+      this.updateFocusedBanner();
+    });
+
+    const selectBannerCasm = document.getElementById('select-banner-casm-mode') as HTMLSelectElement | null;
+    selectBannerCasm?.addEventListener('change', (e) => {
+      e.stopPropagation();
+      if (!this.currentParsed || this.currentWorkspace !== 'STY' || styPlaybackEngine.getIsSongMode()) return;
+      const ch = this.focusedChannel;
+      if (ch < 10 || ch > 15) return;
+      const nextMode = selectBannerCasm.value as CasmChannelTranspositionMode;
+      CasmModifier.setSectionChannelTranspositionMode(this.currentParsed, this.activeSectionName, ch, nextMode);
+      this.updateFocusedBanner();
     });
 
     // Tier 2-1: 段落小節長度調整快捷按鈕
@@ -1796,6 +1833,7 @@ export class PlayerApp {
         styleName: `${this.currentFileName.replace(/\.[^/.]+$/, '')}_Arranger`,
         chordMode: config.chordMode,
         normalizeChordsToC: config.normalizeChordsToC,
+        fixedBypassChannels: config.fixedBypassChannels,
       });
 
       this.workingStyleParsed = result.styleParsed;
@@ -2398,18 +2436,307 @@ export class PlayerApp {
             ? `${voiceInfo.msb}-${voiceInfo.lsb}-${voiceInfo.pc + 1} · 相容舊碼 ${voiceInfo.legacyCodeLabel}`
             : `${voiceInfo.msb}-${voiceInfo.lsb}-${voiceInfo.pc + 1}`)
         : '';
-      const modeTag = styPlaybackEngine.getIsSongMode() ? 'MIDI 原曲通道' : '已啟用';
+      const isSong = styPlaybackEngine.getIsSongMode();
+      const modeTag = isSong ? 'MIDI 原曲通道' : '已啟用';
       this.focusedTrackTitle.innerHTML = `CH ${part.channel + 1} - ${part.label} <span class="banner-status-badge active">✅ ${modeTag}</span>`;
       this.focusedTrackVoice.textContent = voiceInfo
         ? `${voiceInfo.voiceName} [${codeBadge}]`
         : part.defaultName;
-      this.focusedTrackMeta.textContent = `區間音符數: ${noteCount} 個 ｜ MIDI 通道: CH ${part.channel + 1} ｜ 類型: ${voiceInfo?.category || 'General'}${codeBadge ? ` ｜ 三聯號: ${codeBadge}` : ''}`;
+
+      let casmMetaSuffix = '';
+      if (!isSong && this.currentWorkspace === 'STY' && this.currentParsed && part.channel >= 8 && part.channel <= 15) {
+        const casmInfo = CasmModifier.getSectionChannelRule(this.currentParsed, this.activeSectionName, part.channel);
+        casmMetaSuffix = ` ｜ CASM (${this.activeSectionName}): ${casmInfo.labelZh}`;
+      }
+      this.focusedTrackMeta.textContent = `區間音符數: ${noteCount} 個 ｜ MIDI 通道: CH ${part.channel + 1} ｜ 類型: ${voiceInfo?.category || 'General'}${codeBadge ? ` ｜ 三聯號: ${codeBadge}` : ''}${casmMetaSuffix}`;
+    }
+
+    // 【任務 2-4E】同步橫幅上的單軌 CASM (NTR/NTT) 固定音高直通鎖定控制組 (僅在 STY 伴奏模式且為非鼓組 Ch 10~15 時顯示)
+    const bannerCasmControls = document.getElementById('banner-casm-controls');
+    const btnBannerFixed = document.getElementById('btn-banner-fixed-bypass') as HTMLButtonElement | null;
+    const selectBannerCasm = document.getElementById('select-banner-casm-mode') as HTMLSelectElement | null;
+    const showCasmControls =
+      this.currentWorkspace === 'STY' &&
+      Boolean(this.currentParsed) &&
+      !styPlaybackEngine.getIsSongMode() &&
+      part.channel >= 10 &&
+      part.channel <= 15;
+
+    if (bannerCasmControls) {
+      bannerCasmControls.style.display = showCasmControls ? 'inline-flex' : 'none';
+      if (showCasmControls && this.currentParsed) {
+        const casmInfo = CasmModifier.getSectionChannelRule(this.currentParsed, this.activeSectionName, part.channel);
+        if (selectBannerCasm) {
+          selectBannerCasm.value = casmInfo.mode;
+        }
+        if (btnBannerFixed) {
+          if (casmInfo.isFixedBypass) {
+            btnBannerFixed.textContent = '🔒 已鎖定固定音高直通';
+            btnBannerFixed.style.background = 'rgba(245, 158, 11, 0.25)';
+            btnBannerFixed.style.borderColor = '#f59e0b';
+            btnBannerFixed.style.color = '#fcd34d';
+          } else {
+            btnBannerFixed.textContent = '🔓 點擊鎖定固定音高';
+            btnBannerFixed.style.background = 'rgba(30, 41, 59, 0.8)';
+            btnBannerFixed.style.borderColor = 'rgba(148, 163, 184, 0.35)';
+            btnBannerFixed.style.color = '#cbd5e1';
+          }
+        }
+      }
     }
 
     // 更新橫幅上的靜音按鈕狀態
     const isMuted = styPlaybackEngine.isChannelMuted(part.channel);
     this.btnBannerMute.classList.toggle('active-mute', isMuted);
     this.btnBannerMute.textContent = isMuted ? '🔊 取消靜音' : '🔇 靜音此軌';
+  }
+
+  /**
+   * 【任務 5-2】開啟系統內建互動式樂理與技術參考手冊 (Web UI Reference Center)
+   */
+  public openReferenceCenterModal(defaultTab: 'casm' | 'pad' | 'slice' | 'voice' = 'casm') {
+    const existing = document.getElementById('reference-center-modal-backdrop');
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'reference-center-modal-backdrop';
+    backdrop.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: rgba(5, 8, 16, 0.82);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    `;
+
+    backdrop.innerHTML = `
+      <div style="width: 100%; max-width: 960px; max-height: 88vh; background: #0f172a; border: 1px solid rgba(167, 139, 250, 0.45); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,0.75); display: flex; flex-direction: column; overflow: hidden; color: #f8fafc;">
+        <!-- 頂部標題與關閉鈕 -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid rgba(148, 163, 184, 0.2);">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.25rem;">📖</span>
+            <div>
+              <div style="font-size: 1rem; font-weight: 800; color: #ddd6fe;">Yamaha PSR-SX920 伴奏樂理與技術參考手冊 (內建知識庫)</div>
+              <div style="font-size: 0.75rem; color: #94a3b8;">整理自實機驗證鐵律 · 隨時在系統內對照 NTR/NTT 轉調矩陣、Multi Pad 4 大型態與切片規範</div>
+            </div>
+          </div>
+          <button type="button" id="btn-close-ref-modal" style="background: rgba(51, 65, 85, 0.7); border: 1px solid rgba(148, 163, 184, 0.3); color: #e2e8f0; border-radius: 8px; padding: 5px 12px; font-size: 0.82rem; font-weight: 700; cursor: pointer;">✕ 關閉手冊</button>
+        </div>
+
+        <!-- 4 大頁籤導航列 -->
+        <div style="display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: rgba(9, 13, 22, 0.75); border-bottom: 1px solid rgba(148, 163, 184, 0.15); flex-wrap: wrap;">
+          <button type="button" class="ref-tab-btn" data-ref-tab="casm" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(167, 139, 250, 0.4); background: rgba(139, 92, 246, 0.22); color: #ddd6fe; font-size: 0.8rem; font-weight: 700; cursor: pointer;">📐 1. CASM 轉調秘笈 (NTR / NTT)</button>
+          <button type="button" class="ref-tab-btn" data-ref-tab="pad" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">🎹 2. Multi Pad 4 大型態與調性指南</button>
+          <button type="button" class="ref-tab-btn" data-ref-tab="slice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">✂️ 3. STY 切片與和弦基準三模式</button>
+          <button type="button" class="ref-tab-btn" data-ref-tab="voice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">🎼 4. SX920 音色三聯號與別名速查</button>
+        </div>
+
+        <!-- 內容捲動區 -->
+        <div id="ref-modal-content" style="padding: 18px 22px; overflow-y: auto; flex: 1; font-size: 0.83rem; line-height: 1.6; color: #e2e8f0;">
+          <!-- Tab 1: CASM NTR/NTT -->
+          <div class="ref-tab-pane" data-pane="casm" style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: rgba(139, 92, 246, 0.12); border: 1px solid rgba(167, 139, 250, 0.35); border-radius: 10px; padding: 12px 14px;">
+              <div style="font-weight: 800; color: #ddd6fe; margin-bottom: 4px;">💡 核心架構：Yamaha 琴端轉調是「電梯 (NTR)」＋「磁鐵 (NTT)」兩階段串聯運算</div>
+              <div style="color: #cbd5e1; font-size: 0.8rem;">
+                <code>原始音符</code> ➔ <strong>【第一階段 NTR (根音電梯)】</strong>決定是否隨左手根音整組上下搬移 ➔ <strong>【第二階段 NTT (和弦磁鐵)】</strong>決定是否拿當前和弦把音符吸附變形 ➔ <code>琴端最終發聲</code>。<br/>
+                <strong style="color: #fcd34d;">★ 鐵律：若要左手每兩拍換和弦時、右手固定旋律 (如 C-D-E-F-G-A-B-C) 死死釘在原音高不變，必須同時設定 <code>NTR = Root Fixed</code> 且 <code>NTT = Bypass</code>（缺一不可）！</strong>
+              </div>
+            </div>
+
+            <div style="font-weight: 800; color: #7dd3fc; font-size: 0.9rem;">📊 NTR / NTT 四大經典組合與琴端實際聽感矩陣</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; background: rgba(15, 23, 42, 0.6);">
+              <thead>
+                <tr style="background: rgba(30, 41, 59, 0.9); color: #94a3b8; text-align: left;">
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">NTR (電梯)</th>
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">NTT (磁鐵)</th>
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">琴端實際聽感與表現</th>
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">經典應用場景</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background: rgba(245, 158, 11, 0.12);">
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fcd34d;">Root Fixed<br/><span style="font-size:0.7rem;color:#94a3b8;">(關閉電梯)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fcd34d;">Bypass<br/><span style="font-size:0.7rem;color:#94a3b8;">(拔掉磁鐵)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); color: #fef3c7;"><strong>【🔒 音高絕對鎖定】</strong>左手隨便換 C ➔ Am ➔ F ➔ G，右手旋律 (如 C-D-E-F-G-A-B-C) <strong>死死釘在原音高，零位移、零變形！</strong>建立時直接寫真實音符，不需改 CM7。</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">1. 貫穿全曲的固定對位插音<br/>2. 左手解鎖防呆 Intro Solo<br/>3. 打擊鼓組 (Drums)</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #34d399;">Root Transpose<br/><span style="font-size:0.7rem;color:#94a3b8;">(開啟電梯)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #34d399;">Bypass<br/><span style="font-size:0.7rem;color:#94a3b8;">(拔掉磁鐵)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);"><strong>【⚡ 整組坐電梯飄移】</strong>旋律內部音程完好，但整條旋律隨左手根音上下暴移。前奏播放時左手若換和弦，旋律會整段坐電梯走調。</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">原廠 Intro / Ending 單鍵直通前奏 (左手單按 C 鍵觸發)</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #f87171;">Root Fixed<br/><span style="font-size:0.7rem;color:#94a3b8;">(關閉電梯)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #f87171;">Chord / Melody<br/><span style="font-size:0.7rem;color:#94a3b8;">(開啟磁鐵)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);"><strong>【⚠️ 原地結巴變形】</strong>音高雖沒大位移，但經過音 (如 D、F) 被和弦強力磁吸拉成和弦內音 (C-D-E-F 變成結巴的 C-C-E-E)。</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">旋律軌應避免此組合</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">Root Transpose<br/><span style="font-size:0.7rem;color:#94a3b8;">(開啟電梯)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">Melody<br/><span style="font-size:0.7rem;color:#94a3b8;">(旋律保護)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);"><strong>【🎵 隨和弦轉調之旋律】</strong>隨左手根音移調，同時保護旋律音程與花音 (以 C 調為相對座標平移)。</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">Main / Fill 一般過門插音 (Phrase 1 / Phrase 2 預設)</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #a78bfa;">Root Transpose<br/><span style="font-size:0.7rem;color:#94a3b8;">(開啟電梯)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #a78bfa;">Chord / Bass<br/><span style="font-size:0.7rem;color:#94a3b8;">(和弦吸附)</span></td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);"><strong>【🎹 標準和弦伴奏】</strong>緊密吸附至左手彈奏的三和弦或七和弦內音，和聲飽滿不撞音。</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">Bass (Ch 11)、Chord 1/2 (Ch 12/13)、Pad 長音鋪底 (Ch 14)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 10px 14px; font-size: 0.79rem;">
+              <strong style="color: #6ee7b7;">🔥 內行編曲家的 Intro 前奏「左手解鎖防呆」混搭玩法：</strong><br/>
+              在同一段 Intro 前奏中，將 <strong>Bass / Chord 1 / Chord 2</strong> 設為 <code>Root Transpose + Chord</code>，而將 <strong>Phrase 1 / Phrase 2 (前奏 Sax 或吉他 Solo)</strong> 鎖定為 <code>🔒 固定音高直通 (Root Fixed + Bypass)</code>。<br/>
+              ➔ <strong>演奏神效</strong>：前奏播放期間，您的左手不再需要懸空呆等，可以隨心所欲地按照和弦進行 (C ➔ Am ➔ F ➔ G) 彈奏伴奏，而前奏 Solo 穩如泰山、100% 絕不翻車走音！
+            </div>
+          </div>
+
+          <!-- Tab 2: Multi Pad 4 大型態 -->
+          <div class="ref-tab-pane" data-pane="pad" style="display: none; flex-direction: column; gap: 14px;">
+            <div style="font-weight: 800; color: #fcd34d; font-size: 0.9rem;">🎹 Multi Pad (.PAD) 4 大音樂型態與 Chord Match (CM) 鐵律</div>
+            <div style="color: #cbd5e1; font-size: 0.8rem;">
+              標準 Multi Pad 檔案無 CASM 區塊，Yamaha 琴端在開啟 Chord Match (CM=1) 時強制假定來源為 C 大調 (CM7)，並在左手按小和弦時強制以「自然小調」削平第 7 度導音 (如 G#、D#) 與第 6 度花音 (F#)。因此系統自動將各軌診斷為 4 大型態：
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; background: rgba(15, 23, 42, 0.6);">
+              <thead>
+                <tr style="background: rgba(30, 41, 59, 0.9); color: #94a3b8; text-align: left;">
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">系統診斷型態標籤</th>
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">樂句特徵</th>
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">琴端 CM 建議</th>
+                  <th style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">轉調與工程處置準則</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background: rgba(245, 158, 11, 0.12);">
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fcd34d;">完整前奏 / 帶導音花音長旋律<br/>(Melody Intro)</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">跨多小節、含演歌導音 (G#/D#) 或和聲轉折 (如《空港》前奏)</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); color: #fca5a5; font-weight: 700;">鐵律 CM = 關閉 (CM0000)</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">使用上方<strong>【固定調性剛體半音平移】</strong>匯出指定調性專屬 PAD，100% 保留導音與花音零失真。</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">開放骨幹音短動機<br/>(Short Motif)</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">1~2 小節、僅 5~6 顆開放骨幹音 (無三度與導音，如 E-D-B)</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); color: #fcd34d;">建議 CM = 關閉</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">關閉 CM 時琴端不做音階壓扁，容錯率極高。</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #34d399;">純和弦織體 / 1、5音脈衝<br/>(Chord Texture)</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">純 C、G 兩音反覆脈衝、吉他分解琶音或刷弦</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); color: #6ee7b7; font-weight: 700;">可開 CM = 開啟</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">唯一適合開啟 Chord Match 隨左手即時變換大小三和弦的伴奏型態。</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #94a3b8;">打擊節奏 / 音效<br/>(Drums / SFX)</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">爵士鼓組、過門鼓點、環境音效</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2); color: #fca5a5; font-weight: 700;">強制 CM = 關閉</td>
+                  <td style="padding: 8px 10px; border: 1px solid rgba(148,163,184,0.2);">轉調平移時系統自動跳過鼓軌，防止鼓點樂器編號被移調破壞。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Tab 3: STY 切片三模式 -->
+          <div class="ref-tab-pane" data-pane="slice" style="display: none; flex-direction: column; gap: 14px;">
+            <div style="font-weight: 800; color: #34d399; font-size: 0.9rem;">✂️ STY 切片三合一基準和弦與段落分流鐵律</div>
+            <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.8rem;">
+              <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 10px 12px;">
+                <strong style="color: #6ee7b7;">1. 【原曲和弦直通 (ORIGINAL_PASS_THROUGH · NTT = Bypass)】— Intro / Ending 預設推薦</strong><br/>
+                • 音符保持原曲真實音高 (0 移調)，CASM 基準根音全域鎖定為 <code>C (Root = 0)</code>，<code>NTT = Bypass</code>。<br/>
+                • 琴端左手以標準 <code>Sync Start = C</code> 單鍵觸發時，100% 原汁原味還原前奏/間奏/尾奏大樂隊齊奏！
+              </div>
+              <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 10px 12px;">
+                <strong style="color: #7dd3fc;">2. 【CM7 大調基準 (CM7_MAJOR)】— 大調 Main / Fill 循環伴奏推薦</strong><br/>
+                • 系統以「半小節 (2 拍)」高解析度自動偵測原曲和弦根音，並將每半小節反向正規化平移回純淨的 C 大調母體 (CM7)。<br/>
+                • 完美解決「一小節雙和弦 (如前半 Em、後半 Am)」的走音問題，同時保留第 4、8 小節所有過門插音。
+              </div>
+              <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 10px 12px;">
+                <strong style="color: #fcd34d;">3. 【Cm 小調基準 (CM_MINOR)】— 小調 Main / Fill 循環伴奏推薦</strong><br/>
+                • 逆向自 Yamaha SX900/SX920 原廠小調伴奏：音符平行平移至 Cm 母體，CASM 標記 <code>sourceChordRoot = 0 (C), sourceChordType = 8 (Minor), NTT = Minor (0x07)</code>。<br/>
+                • 琴端左手彈奏任意小和弦 (Am、Dm、Em) 時執行純半音平行移調，小三度與導音 100% 飽滿不走味。
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 4: SX920 音色速查 -->
+          <div class="ref-tab-pane" data-pane="voice" style="display: none; flex-direction: column; gap: 14px;">
+            <div style="font-weight: 800; color: #c084fc; font-size: 0.9rem;">🎼 Yamaha PSR-SX920 原廠 2,395 種音色三聯號 (MSB-LSB-PC) 與相容舊碼說明</div>
+            <div style="color: #cbd5e1; font-size: 0.8rem;">
+              • <strong>面板 1-based 三聯號</strong>：軟體介面顯示之三聯號（如 <code>[0-113-76]</code>）皆已對齊 Yamaha 琴端面板與 Owner's Manual 的 1-based 編號（內部 MIDI PC 為 0-based 加上 1）。<br/>
+              • <strong>相容舊碼雙向對照</strong>：部分舊琴款（S950/S970/Tyros）製作之 STY/PAD 採用舊版 LSB（如 <code>104-1-1</code>），系統載入時會自動對應至 SX920 最新旗艦音色（如 <code>104-21-1 CFX Concert Grand</code>）並同時標註相容舊碼。
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; background: rgba(15, 23, 42, 0.6);">
+              <thead>
+                <tr style="background: rgba(30, 41, 59, 0.9); color: #94a3b8; text-align: left;">
+                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">常用經典音色名稱</th>
+                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">SX920 面板三聯號 (MSB-LSB-PC)</th>
+                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">類別與特色</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">PanPipes (排笛)</td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>0-113-76</code> (0-based PC=75)</td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Woodwind · 華語/台語抒情前奏經典排笛</td>
+                </tr>
+                <tr>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">SmoothSaxes2 / PopHorns</td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>8-36-83</code> / <code>104-0-62</code></td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Sax / Brass · 《空港》演歌前奏齊奏管樂</td>
+                </tr>
+                <tr>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">SeattleStrings f / LushStrings</td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>104-4-50</code> / <code>8-41-49</code></td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Strings · 飽滿大片弦樂群與過門對位</td>
+                </tr>
+                <tr>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">ConcertGrand1 (音樂會三角鋼琴)</td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>0-122-1</code> (相容舊碼 <code>0-112-1</code>)</td>
+                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Piano · 標準伴奏與分解和弦鋼琴</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+
+    const switchTab = (tabId: string) => {
+      backdrop.querySelectorAll('.ref-tab-btn').forEach((btn) => {
+        const isAct = btn.getAttribute('data-ref-tab') === tabId;
+        const el = btn as HTMLElement;
+        el.style.background = isAct ? 'rgba(139, 92, 246, 0.25)' : 'rgba(30, 41, 59, 0.7)';
+        el.style.borderColor = isAct ? '#a78bfa' : 'rgba(148, 163, 184, 0.25)';
+        el.style.color = isAct ? '#ddd6fe' : '#cbd5e1';
+      });
+      backdrop.querySelectorAll('.ref-tab-pane').forEach((pane) => {
+        const el = pane as HTMLElement;
+        el.style.display = pane.getAttribute('data-pane') === tabId ? 'flex' : 'none';
+      });
+    };
+
+    switchTab(defaultTab);
+
+    backdrop.querySelectorAll('.ref-tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const t = btn.getAttribute('data-ref-tab') || 'casm';
+        switchTab(t);
+      });
+    });
+
+    backdrop.querySelector('#btn-close-ref-modal')?.addEventListener('click', () => {
+      backdrop.remove();
+    });
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) backdrop.remove();
+    });
   }
 
   private syncMixerSoloButtons() {

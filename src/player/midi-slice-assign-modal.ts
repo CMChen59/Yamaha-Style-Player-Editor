@@ -25,6 +25,8 @@ export interface MidiSliceAssignConfig {
   mappingPlan: SongPartMappingPlan;
   chordMode: SliceChordMode;
   normalizeChordsToC: boolean;
+  /** 【任務 2-4E】使用者手動指定鎖定為固定音高直通 (Root Fixed + Bypass) 的伴奏目標通道 (8~15) */
+  fixedBypassChannels?: number[];
 }
 
 export class MidiSliceAssignModal {
@@ -51,6 +53,7 @@ export class MidiSliceAssignModal {
   private currentEndBar: number = 4;
   private currentStartBeat: number = 1;
   private currentSourceParsed?: YamahaFileParsed;
+  private fixedBypassChannels: Set<number> = new Set();
   private onConfirmCallback: ((config: MidiSliceAssignConfig) => void) | null = null;
 
   public getCurrentSourceParsed(): YamahaFileParsed | undefined {
@@ -231,6 +234,7 @@ export class MidiSliceAssignModal {
         mappingPlan: this.currentPlan,
         chordMode: selectedMode,
         normalizeChordsToC: selectedMode !== 'ORIGINAL_PASS_THROUGH',
+        fixedBypassChannels: Array.from(this.fixedBypassChannels),
       };
 
       if (this.onConfirmCallback) {
@@ -478,11 +482,20 @@ export class MidiSliceAssignModal {
         })
       ].join('');
 
+      const isDrumPart = pDef.channel === 8 || pDef.channel === 9;
+      const isFixedBypass = this.fixedBypassChannels.has(pDef.channel);
+
       return `
         <div class="part-assign-card" style="--part-accent: ${this.getPartColor(pDef.channel)};">
-          <div class="part-assign-top">
+          <div class="part-assign-top" style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
             <span class="part-target-label">${catIcon} ${pDef.nameZh}</span>
-            <span class="part-role-desc">${pDef.defaultRole}</span>
+            ${!isDrumPart ? `
+              <label style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; color: #fcd34d; background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.4); padding: 1px 6px; border-radius: 4px; cursor: pointer;"
+                     title="【任務 2-4E】勾選後，此聲部強制鎖定為 NTR = Root Fixed + NTT = Bypass (音符保持原音高不改成 CM7，左手頻繁換和弦時右手絕不變音)">
+                <input type="checkbox" class="chk-slice-part-fixed-bypass" data-target-ch="${pDef.channel}" ${isFixedBypass ? 'checked' : ''} style="accent-color: #f59e0b;" />
+                <span>🔒固定音高直通</span>
+              </label>
+            ` : `<span class="part-role-desc">${pDef.defaultRole}</span>`}
           </div>
 
           <div class="part-source-box">
@@ -501,6 +514,19 @@ export class MidiSliceAssignModal {
         </div>
       `;
     }).join('');
+
+    // 綁定固定音高直通鎖定勾選框
+    this.gridContainerEl.querySelectorAll('.chk-slice-part-fixed-bypass').forEach((chk) => {
+      chk.addEventListener('change', (e) => {
+        const el = e.target as HTMLInputElement;
+        const ch = parseInt(el.getAttribute('data-target-ch') || '14', 10);
+        if (el.checked) {
+          this.fixedBypassChannels.add(ch);
+        } else {
+          this.fixedBypassChannels.delete(ch);
+        }
+      });
+    });
 
     // 綁定各聲部選擇變更事件
     this.gridContainerEl.querySelectorAll('.part-source-select').forEach((sel) => {

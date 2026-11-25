@@ -58,6 +58,8 @@ export interface MidiSliceAssembleOptions {
   chordMode?: SliceChordMode;
   /** @deprecated 相容舊欄位：是否啟用和弦反向正規化為 C 基準大調 (若未指定 chordMode 則使用此欄位) */
   normalizeChordsToC?: boolean;
+  /** 【任務 2-4E】指定單獨鎖定為「固定音高直通 (NTR = Root Fixed + NTT = Bypass)」的目標伴奏通道 (8~15)，其音符保持原音高 0 移調且不隨左手和弦變音 */
+  fixedBypassChannels?: number[];
 }
 
 export interface AssembledPartInfo {
@@ -181,6 +183,7 @@ export class MidiSliceAssembler {
       }
     }
 
+    const fixedBypassSet = new Set<number>(options.fixedBypassChannels || []);
     const barChordMap = new Map<number, BarChordInfo>();
     const subBarChordList: SubBarChordEntry[] = [];
     const detectedChordsByBar: Array<{ bar: number; chordName: string; shiftToC: number }> = [];
@@ -298,7 +301,7 @@ export class MidiSliceAssembler {
               maxSectionTicksTarget,
               barChordMap,
               ticksPerBarSrc,
-              effectiveChordMode,
+              fixedBypassSet.has(targetChannel) ? 'ORIGINAL_PASS_THROUGH' : effectiveChordMode,
               uniformShiftToCm,
               isIntroOrEnding,
               subBarChordList
@@ -323,7 +326,7 @@ export class MidiSliceAssembler {
               maxSectionTicksTarget,
               barChordMap,
               ticksPerBarSrc,
-              effectiveChordMode,
+              fixedBypassSet.has(targetChannel) ? 'ORIGINAL_PASS_THROUGH' : effectiveChordMode,
               uniformShiftToCm,
               isIntroOrEnding,
               subBarChordList
@@ -385,7 +388,7 @@ export class MidiSliceAssembler {
             maxSectionTicksTarget,
             barChordMap,
             ticksPerBarSrc,
-            effectiveChordMode,
+            fixedBypassSet.has(assign.targetChannel) ? 'ORIGINAL_PASS_THROUGH' : effectiveChordMode,
             uniformShiftToCm,
             isIntroOrEnding,
             subBarChordList
@@ -458,6 +461,16 @@ export class MidiSliceAssembler {
         r.ntt = 'Bypass';
         r.sourceChordRoot = 0;
         r.sourceChordType = 2;
+      } else if (fixedBypassSet.has(r.channel)) {
+        // 【任務 2-4E】使用者手動指定鎖定為「固定音高直通 (Root Fixed + Bypass)」之聲部：
+        // 停掉根音位移電梯 (Root Fixed) + 拔掉和弦磁鐵 (Bypass)，音符保持原音高 0 移調，左手任意換和弦時右手絕不變音！
+        r.ntr = 'Root Fixed';
+        r.ntt = 'Bypass';
+        r.sourceChordRoot = 0;
+        r.sourceChordType = 0;
+        r.retriggerRule = 'Pitch Shift';
+        r.noteLowLimit = 0;
+        r.noteHighLimit = 127;
       } else if (effectiveChordMode === 'CM_MINOR') {
         // 小調 Cm 基準模式：Source Chord = Cm (Root 0, Type 8)
         r.sourceChordRoot = 0;

@@ -6,10 +6,21 @@
 import { BinaryWriter } from './binary-writer';
 import type { YamahaFileParsed, YamahaCustomChunk } from '../models/types';
 import { DEFAULT_STYLE_PARTS, type StylePartId } from '../models/style-types';
+import { YamahaParser } from '../parser/yamaha-parser';
 
 export type NtrRule = 'Root Transpose' | 'Root Fixed' | 'Guitar';
 export type NttRule = 'Bypass' | 'Chord' | 'Bass' | 'Melody' | 'Maj-min' | 'Maj-min (Intro)' | 'Minor';
 export type RetriggerRule = 'Stop' | 'Pitch Shift' | 'Retrigger';
+
+/**
+ * 【任務 2-4E】單軌 CASM 轉調模式高階分類 (對應 NTR 電梯 + NTT 磁鐵四大經典組合)
+ */
+export type CasmChannelTranspositionMode =
+  | 'FIXED_BYPASS'      // 🔒 固定音高直通 (Root Fixed + Bypass)：左手頻繁換和弦時，右手音高死死釘在原地絕不走音
+  | 'TRANSPOSE_MELODY'  // 🎵 旋律音階跟隨 (Root Transpose + Melody)：隨和弦轉調並保護旋律音程與花音 (Phrase 1/2 預設)
+  | 'TRANSPOSE_CHORD'   // 🎹 和弦內音吸附 (Root Transpose + Chord)：隨和弦轉調並強力吸附至三和弦/七和弦 (Chord 1/2, Pad 預設)
+  | 'TRANSPOSE_BASS'    // 🎸 貝斯根音跟隨 (Root Transpose + Bass)：隨和弦根音與轉位走動 (Bass 預設)
+  | 'TRANSPOSE_BYPASS'; // ⚡ 單鍵根音直通 (Root Transpose + Bypass)：僅隨根音平行升降、不吸附音階 (原廠 Intro/Ending 預設)
 
 export interface CasmPartRule {
   channel: number;              // MIDI Channel (8 ~ 15, 對應 Ch 9 ~ 16)
@@ -127,6 +138,7 @@ export class CasmModifier {
         let csegMatched = !targetSecLower;
 
         // 若指定了 targetSection，先檢查 Sdec 標籤
+        let isDedicatedSingleSection = false;
         if (targetSecLower) {
           let sdecScan = subOffset;
           while (sdecScan + 8 <= csegEnd) {
@@ -137,6 +149,7 @@ export class CasmModifier {
               const names = sStr.split(/[\x00,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
               if (names.some((n) => n === targetSecLower || n.replace(/\s+/g, '') === targetSecNoSpace)) {
                 csegMatched = true;
+                isDedicatedSingleSection = names.length === 1;
                 break;
               }
             }
@@ -187,7 +200,8 @@ export class CasmModifier {
             }
             subOffset += 8 + subSize;
           }
-          if (targetSecLower) break;
+          // 僅當命中專屬單一段落的 CSEG (names.length === 1) 時才提前結束；若為多段落共享 CSEG 則繼續往後掃描是否有獨立剝離後的專屬 CSEG
+          if (targetSecLower && isDedicatedSingleSection) break;
         }
       }
       offset += 8 + chunkSize;
@@ -247,6 +261,7 @@ export class CasmModifier {
     }
 
     parsed.hasCasm = true;
+    parsed.casmEntries = YamahaParser.parseCasmEntries(casmData);
     return { success: true, message: `成功更新 CASM 轉調規則 (包含 ${sectionsToUse.length} 個段落，${rules.length} 個伴奏聲部)` };
   }
 
@@ -645,9 +660,129 @@ export class CasmModifier {
     }
 
     parsed.hasCasm = true;
+    if (casmChunk.data) {
+      parsed.casmEntries = YamahaParser.parseCasmEntries(casmChunk.data);
+    }
     return {
       success: true,
       message: `成功為伴奏段落 [${sectionName}] 增量配置 CH ${channel + 1} 之 SFF2 CASM 伴奏規則`,
+    };
+  }
+
+  /**
+   * 【任務 2-4E】查詢指定伴奏段落 (sectionName) 與指定通道 (channel: 8~15) 目前生效的 CASM 聲部規則與高階轉調模式
+   */
+  public static getSectionChannelRule(
+    parsed: YamahaFileParsed,
+    sectionName: string,
+    channel: number
+  ): {
+    rule: CasmPartRule;
+    mode: CasmChannelTranspositionMode;
+    isFixedBypass: boolean;
+    labelZh: string;
+    shortBadgeZh: string;
+  } {
+    const rules = this.extractPartRules(parsed, sectionName);
+    const found = rules.find((r) => r.channel === channel) || this.getDefaultPartRules().find((r) => r.channel === channel)!;
+    const mode = this.resolveTranspositionMode(found);
+    const isFixedBypass = mode === 'FIXED_BYPASS';
+
+    let labelZh = '隨和弦轉調 (Root Transpose + Chord)';
+    let shortBadgeZh = '🎹 和弦吸附';
+    if (mode === 'FIXED_BYPASS') {
+      labelZh = '🔒 固定音高直通 (Root Fixed + Bypass · 不隨左手和弦變音)';
+      shortBadgeZh = '🔒 固定音高直通';
+    } else if (mode === 'TRANSPOSE_MELODY') {
+      labelZh = '🎵 旋律音階跟隨 (Root Transpose + Melody · 保護花音)';
+      shortBadgeZh = '🎵 旋律跟隨';
+    } else if (mode === 'TRANSPOSE_BASS') {
+      labelZh = '🎸 貝斯根音跟隨 (Root Transpose + Bass)';
+      shortBadgeZh = '🎸 貝斯根音';
+    } else if (mode === 'TRANSPOSE_BYPASS') {
+      labelZh = '⚡ 單鍵根音直通 (Root Transpose + Bypass · 隨根音平移)';
+      shortBadgeZh = '⚡ 根音直通';
+    }
+
+    return {
+      rule: found,
+      mode,
+      isFixedBypass,
+      labelZh,
+      shortBadgeZh,
+    };
+  }
+
+  /**
+   * 由 CasmPartRule 判定高階轉調模式分類
+   */
+  public static resolveTranspositionMode(rule: CasmPartRule): CasmChannelTranspositionMode {
+    if (rule.ntr === 'Root Fixed' && rule.ntt === 'Bypass') {
+      return 'FIXED_BYPASS';
+    }
+    if (rule.ntt === 'Bypass') {
+      return 'TRANSPOSE_BYPASS';
+    }
+    if (rule.ntt === 'Bass') {
+      return 'TRANSPOSE_BASS';
+    }
+    if (rule.ntt === 'Melody') {
+      return 'TRANSPOSE_MELODY';
+    }
+    return 'TRANSPOSE_CHORD';
+  }
+
+  /**
+   * 【任務 2-4E】一鍵設定指定段落 (sectionName) 與通道 (channel: 8~15) 的 NTR/NTT 轉調模式
+   * - 自動遵守「CASM 段落獨立隔離鐵律 (CSEG Section Isolation Rule)」，不干擾其他伴奏段落
+   * - 自動同步重新解析 parsed.casmEntries，使播放器虛擬和弦試聽與二進位匯出 100% 即時同步生效
+   */
+  public static setSectionChannelTranspositionMode(
+    parsed: YamahaFileParsed,
+    sectionName: string,
+    channel: number,
+    mode: CasmChannelTranspositionMode
+  ): {
+    success: boolean;
+    updatedRule: CasmPartRule;
+    mode: CasmChannelTranspositionMode;
+    message: string;
+  } {
+    const current = this.getSectionChannelRule(parsed, sectionName, channel);
+    const updatedRule: CasmPartRule = { ...current.rule };
+
+    if (mode === 'FIXED_BYPASS') {
+      updatedRule.ntr = 'Root Fixed';
+      updatedRule.ntt = 'Bypass';
+      updatedRule.noteLowLimit = 0;
+      updatedRule.noteHighLimit = 127;
+      updatedRule.sourceChordRoot = 0;
+      updatedRule.sourceChordType = 0;
+    } else if (mode === 'TRANSPOSE_MELODY') {
+      updatedRule.ntr = 'Root Transpose';
+      updatedRule.ntt = 'Melody';
+      updatedRule.hiKey = 6;
+    } else if (mode === 'TRANSPOSE_CHORD') {
+      updatedRule.ntr = 'Root Transpose';
+      updatedRule.ntt = 'Chord';
+      updatedRule.hiKey = 6;
+    } else if (mode === 'TRANSPOSE_BASS') {
+      updatedRule.ntr = 'Root Transpose';
+      updatedRule.ntt = 'Bass';
+      updatedRule.hiKey = 5;
+    } else if (mode === 'TRANSPOSE_BYPASS') {
+      updatedRule.ntr = 'Root Transpose';
+      updatedRule.ntt = 'Bypass';
+      updatedRule.sourceChordRoot = 0;
+      updatedRule.sourceChordType = 0;
+    }
+
+    const res = this.injectOrUpdateSectionCasmRule(parsed, sectionName, channel, updatedRule);
+    return {
+      success: res.success,
+      updatedRule,
+      mode,
+      message: res.message,
     };
   }
 }
