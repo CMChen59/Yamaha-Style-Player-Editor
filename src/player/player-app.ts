@@ -20,7 +20,7 @@ import { MidiSliceAssignModal, type MidiSliceAssignConfig } from './midi-slice-a
 import { MidiSliceAssembler, type MidiSliceAssembleResult } from '../core/writer/midi-slice-assembler';
 import { YamahaStyleSynthesizer } from '../core/writer/style-synthesizer';
 import { ChordTransposer, POPULAR_AUDITION_CHORDS, CHORD_TYPE_INTERVALS, type ChordDefinition, type ChordType } from '../core/writer/chord-transposer';
-import { findYamahaVoice, type YamahaVoice } from '../core/data/yamaha-voices';
+import { findYamahaVoice, searchYamahaVoices, VOICE_CATEGORIES, getLegacyAliasesForVoice, type YamahaVoice } from '../core/data/yamaha-voices';
 import {
   MidiPartAssignMatrix,
   YAMAHA_ARRANGER_PARTS,
@@ -2531,7 +2531,7 @@ export class PlayerApp {
           <button type="button" class="ref-tab-btn" data-ref-tab="casm" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(167, 139, 250, 0.4); background: rgba(139, 92, 246, 0.22); color: #ddd6fe; font-size: 0.8rem; font-weight: 700; cursor: pointer;">📐 1. CASM 轉調秘笈 (NTR / NTT)</button>
           <button type="button" class="ref-tab-btn" data-ref-tab="pad" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">🎹 2. Multi Pad 4 大型態與調性指南</button>
           <button type="button" class="ref-tab-btn" data-ref-tab="slice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">✂️ 3. STY 8 大聲部與切片三模式</button>
-          <button type="button" class="ref-tab-btn" data-ref-tab="voice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">🎼 4. SX920 音色三聯號與別名速查</button>
+          <button type="button" class="ref-tab-btn" data-ref-tab="voice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">🎼 4. SX920 樂器 Data List 全集 (2,395種)</button>
         </div>
 
         <!-- 內容捲動區 -->
@@ -2729,50 +2729,188 @@ export class PlayerApp {
             </div>
           </div>
 
-          <!-- Tab 4: SX920 音色速查 -->
-          <div class="ref-tab-pane" data-pane="voice" style="display: none; flex-direction: column; gap: 14px;">
-            <div style="font-weight: 800; color: #c084fc; font-size: 0.9rem;">🎼 Yamaha PSR-SX920 原廠 2,395 種音色三聯號 (MSB-LSB-PC) 與相容舊碼說明</div>
-            <div style="color: #cbd5e1; font-size: 0.8rem;">
-              • <strong>面板 1-based 三聯號</strong>：軟體介面顯示之三聯號（如 <code>[0-113-76]</code>）皆已對齊 Yamaha 琴端面板與 Owner's Manual 的 1-based 編號（內部 MIDI PC 為 0-based 加上 1）。<br/>
-              • <strong>相容舊碼雙向對照</strong>：部分舊琴款（S950/S970/Tyros）製作之 STY/PAD 採用舊版 LSB（如 <code>104-1-1</code>），系統載入時會自動對應至 SX920 最新旗艦音色（如 <code>104-21-1 CFX Concert Grand</code>）並同時標註相容舊碼。
+          <!-- Tab 4: SX920 完整 Data List 音色庫 -->
+          <div class="ref-tab-pane" data-pane="voice" style="display: none; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <div style="font-weight: 800; color: #c084fc; font-size: 0.92rem;">🎼 Yamaha PSR-SX920 原廠樂器 Data List 全集 (共 2,395 種音色速查)</div>
+                <div style="color: #94a3b8; font-size: 0.76rem;">收錄官方 Data List 2,395 種原廠音色、面板 1-based 三聯號身分證 (MSB-LSB-PC) 與相容舊碼雙向索引</div>
+              </div>
+              <div id="ref-voice-count-badge" style="font-size: 0.75rem; color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 8px; border-radius: 999px;">
+                共 2,395 種原廠音色
+              </div>
             </div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; background: rgba(15, 23, 42, 0.6);">
-              <thead>
-                <tr style="background: rgba(30, 41, 59, 0.9); color: #94a3b8; text-align: left;">
-                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">常用經典音色名稱</th>
-                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">SX920 面板三聯號 (MSB-LSB-PC)</th>
-                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">類別與特色</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">PanPipes (排笛)</td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>0-113-76</code> (0-based PC=75)</td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Woodwind · 華語/台語抒情前奏經典排笛</td>
-                </tr>
-                <tr>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">SmoothSaxes2 / PopHorns</td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>8-36-83</code> / <code>104-0-62</code></td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Sax / Brass · 《空港》演歌前奏齊奏管樂</td>
-                </tr>
-                <tr>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">SeattleStrings f / LushStrings</td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>104-4-50</code> / <code>8-41-49</code></td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Strings · 飽滿大片弦樂群與過門對位</td>
-                </tr>
-                <tr>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #7dd3fc;">ConcertGrand1 (音樂會三角鋼琴)</td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);"><code>0-122-1</code> (相容舊碼 <code>0-112-1</code>)</td>
-                  <td style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">Piano · 標準伴奏與分解和弦鋼琴</td>
-                </tr>
-              </tbody>
-            </table>
+
+            <!-- 搜尋與即時分類過濾器 -->
+            <div style="display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 10px 12px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="text" id="ref-voice-search-input" placeholder="🔍 輸入樂器名稱、中文、或三聯號 (如 CFX, 104-21-1, 排笛, 貝斯, 0-113-76)..."
+                       style="flex: 1; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); color: #f8fafc; font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; outline: none;" />
+                <button type="button" id="ref-voice-search-clear" style="background: rgba(51, 65, 85, 0.6); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; cursor: pointer;">清除</button>
+              </div>
+
+              <!-- 樂器分類標籤列 -->
+              <div id="ref-voice-cat-list" style="display: flex; align-items: center; gap: 5px; overflow-x: auto; padding-bottom: 2px;">
+                <!-- 由 JS 動態生成 VOICE_CATEGORIES 膠囊 -->
+              </div>
+            </div>
+
+            <!-- 音色 Data List 表格 (固定表頭 + 捲動容器) -->
+            <div style="max-height: 420px; overflow-y: auto; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; background: rgba(15, 23, 42, 0.6);">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.77rem;">
+                <thead style="position: sticky; top: 0; z-index: 2; background: rgba(30, 41, 59, 0.98); box-shadow: 0 1px 3px rgba(0,0,0,0.4);">
+                  <tr style="color: #94a3b8; text-align: left;">
+                    <th style="padding: 7px 10px; border-bottom: 1px solid rgba(148,163,184,0.25); width: 125px;">SX920 面板三聯號</th>
+                    <th style="padding: 7px 10px; border-bottom: 1px solid rgba(148,163,184,0.25); width: 180px;">英文名稱</th>
+                    <th style="padding: 7px 10px; border-bottom: 1px solid rgba(148,163,184,0.25); width: 180px;">中文名稱</th>
+                    <th style="padding: 7px 10px; border-bottom: 1px solid rgba(148,163,184,0.25); width: 110px;">分類 / 類型</th>
+                    <th style="padding: 7px 10px; border-bottom: 1px solid rgba(148,163,184,0.25);">特色與適用場景</th>
+                  </tr>
+                </thead>
+                <tbody id="ref-voice-table-body">
+                  <!-- 由 JS 動態渲染音色列表 -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 載入更多列 -->
+            <div id="ref-voice-load-more-row" style="display: flex; align-items: center; justify-content: center; padding: 4px 0;">
+              <button type="button" id="btn-ref-voice-load-more" style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(167, 139, 250, 0.4); color: #ddd6fe; padding: 5px 16px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; cursor: pointer;">⬇ 載入更多音色...</button>
+            </div>
           </div>
         </div>
       </div>
     `;
 
     document.body.appendChild(backdrop);
+
+    // 🎹 初始化 Data List 音色速查 (Tab 4) 互動控制器
+    let currentVoiceCat: string = 'ALL';
+    let currentVoiceKw: string = '';
+    let currentVoiceLimit: number = 60;
+
+    const catListEl = backdrop.querySelector('#ref-voice-cat-list');
+    const tableBodyEl = backdrop.querySelector('#ref-voice-table-body') as HTMLElement;
+    const countBadgeEl = backdrop.querySelector('#ref-voice-count-badge') as HTMLElement;
+    const searchInputEl = backdrop.querySelector('#ref-voice-search-input') as HTMLInputElement;
+    const searchClearBtn = backdrop.querySelector('#ref-voice-search-clear') as HTMLButtonElement;
+    const loadMoreBtn = backdrop.querySelector('#btn-ref-voice-load-more') as HTMLButtonElement;
+    const loadMoreRow = backdrop.querySelector('#ref-voice-load-more-row') as HTMLElement;
+
+    if (catListEl) {
+      catListEl.innerHTML = VOICE_CATEGORIES.map((c) => `
+        <button type="button" class="ref-voice-cat-pill" data-cat="${c.key}" style="padding: 3px 9px; border-radius: 999px; font-size: 0.72rem; white-space: nowrap; cursor: pointer; border: 1px solid ${c.key === 'ALL' ? '#a78bfa' : 'rgba(148, 163, 184, 0.25)'}; background: ${c.key === 'ALL' ? 'rgba(139, 92, 246, 0.25)' : 'rgba(30, 41, 59, 0.6)'}; color: ${c.key === 'ALL' ? '#ddd6fe' : '#94a3b8'};">
+          ${c.icon} ${c.label}
+        </button>
+      `).join('');
+
+      catListEl.querySelectorAll('.ref-voice-cat-pill').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const cat = btn.getAttribute('data-cat') || 'ALL';
+          currentVoiceCat = cat;
+          currentVoiceLimit = 60;
+          catListEl.querySelectorAll('.ref-voice-cat-pill').forEach((b) => {
+            const isMatch = b.getAttribute('data-cat') === cat;
+            (b as HTMLElement).style.borderColor = isMatch ? '#a78bfa' : 'rgba(148, 163, 184, 0.25)';
+            (b as HTMLElement).style.background = isMatch ? 'rgba(139, 92, 246, 0.25)' : 'rgba(30, 41, 59, 0.6)';
+            (b as HTMLElement).style.color = isMatch ? '#ddd6fe' : '#94a3b8';
+          });
+          renderVoiceList();
+        });
+      });
+    }
+
+    const renderVoiceList = () => {
+      if (!tableBodyEl) return;
+      const allMatched = searchYamahaVoices(
+        currentVoiceKw.trim(),
+        currentVoiceCat === 'ALL' ? 'ALL' : (currentVoiceCat as any),
+        'ALL'
+      );
+
+      const totalCount = allMatched.length;
+      const displayVoices = allMatched.slice(0, currentVoiceLimit);
+
+      if (countBadgeEl) {
+        countBadgeEl.textContent = `共符合 ${totalCount} 種原廠音色 (顯示 ${displayVoices.length} 種)`;
+      }
+
+      if (displayVoices.length === 0) {
+        tableBodyEl.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 24px; color: #94a3b8;">
+              🔍 查無符合條件之樂器音色，請嘗試更換關鍵字或選擇「全部音色」。
+            </td>
+          </tr>
+        `;
+        if (loadMoreRow) loadMoreRow.style.display = 'none';
+        return;
+      }
+
+      tableBodyEl.innerHTML = displayVoices.map((v) => {
+        const panel1Code = `${v.msb}-${v.lsb}-${v.pc + 1}`;
+        const aliases = getLegacyAliasesForVoice(v.msb, v.lsb, v.pc, true);
+        const aliasTag = aliases.length > 0
+          ? `<div style="font-size: 0.68rem; color: #f59e0b;" title="歷史相容代碼">舊: ${aliases.join(', ')}</div>`
+          : '';
+        const typeBadge = v.type && v.type !== 'Standard'
+          ? `<span style="font-size: 0.68rem; color: #c084fc; background: rgba(192, 132, 252, 0.15); padding: 1px 4px; border-radius: 3px; margin-left: 4px;">${v.type}</span>`
+          : '';
+
+        return `
+          <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
+            <td style="padding: 6px 10px; font-family: monospace; font-weight: 700; color: #38bdf8;">
+              <code>${panel1Code}</code>
+              ${aliasTag}
+            </td>
+            <td style="padding: 6px 10px; font-weight: 600; color: #f8fafc;">
+              ${v.name}
+              ${typeBadge}
+            </td>
+            <td style="padding: 6px 10px; color: #cbd5e1;">${v.chineseName || '-'}</td>
+            <td style="padding: 6px 10px; color: #94a3b8;">${v.category}</td>
+            <td style="padding: 6px 10px; color: #94a3b8; font-size: 0.74rem;">${v.suitabilityReason || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      if (loadMoreRow) {
+        loadMoreRow.style.display = displayVoices.length < totalCount ? 'flex' : 'none';
+        if (loadMoreBtn) {
+          loadMoreBtn.textContent = `⬇ 載入更多音色 (還有 ${totalCount - displayVoices.length} 種)...`;
+        }
+      }
+    };
+
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', () => {
+        currentVoiceLimit += 60;
+        renderVoiceList();
+      });
+    }
+
+    if (searchInputEl) {
+      let debounceTimer: any = null;
+      searchInputEl.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          currentVoiceKw = searchInputEl.value;
+          currentVoiceLimit = 60;
+          renderVoiceList();
+        }, 120);
+      });
+    }
+
+    if (searchClearBtn && searchInputEl) {
+      searchClearBtn.addEventListener('click', () => {
+        searchInputEl.value = '';
+        currentVoiceKw = '';
+        currentVoiceLimit = 60;
+        renderVoiceList();
+      });
+    }
+
+    renderVoiceList();
 
     const switchTab = (tabId: string) => {
       backdrop.querySelectorAll('.ref-tab-btn').forEach((btn) => {
