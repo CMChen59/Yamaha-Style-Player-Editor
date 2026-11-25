@@ -1,6 +1,6 @@
 # 📊 Yamaha Style Player & Editor — 專案進度與待辦總表 (Single Source of Truth)
 
-> **最後更新**：2026-11-24 (完成 Multi Pad 工作台全四階段開發與全生命週期 E2E 驗收：第一階段調性剛體平移、第二階段單軌屬性工具、第三階段 CC 自動化曲線寫回與單軌編輯器網格連動、第四階段端到端 E2E 測試與 Round-Trip 零數據損失雙向驗證；全部 7 項測試 100% 通過，生產打包成功；Multi Pad 工作台全數結案封存)  
+> **最後更新**：2026-11-25 (完成 MIDI 首小節音色重複發送去重演算法、內建參考手冊擴充 8 大伴奏聲部規範與 PSR-SX920 完整 2,395 種音色 Data List 速查庫、登錄切片多餘軌道可視化與轉存 Pad 任務 2-4F、檔案資訊橫幅與播放主控制列單行化瘦身、全域垂直間隙與內距統一收斂為 8px 釋放 60~80px 垂直視野；所有單元與 UI 測試 100% 通過)  
 > **使用說明**：本檔案為跨電腦（公司 ↔ 家裡）的**唯一進度基準**。凡已列入「✅ 已完成並封存」之項目，均已通過測試與實機驗證，請勿重複確認或重做；新對話開始時請直接聚焦於「🚧 當前待處理項目」。
 
 ---
@@ -13,6 +13,7 @@
 | **【任務 1-1】** | **Phrase 1/2 與全段落走音根因徹底解決（CSEG 段落隔離 + 直通 Root 鎖定 C + 半小節正規化）** | [`casm-modifier.ts`](../src/core/writer/casm-modifier.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts) | ✅ 已完成並實機結案（取代早期 `Root Fixed / HiKey` 舊假設；以 CSEG 獨立剝離、直通 Root=0 鎖定 C、三和弦鋪底 `NTT=Chord` 與半小節正規化徹底根除走音） |
 | **【任務 1-2】** | **PSR-SX920 2,395 音色庫校準與別名雙向映射** | [`yamaha-voices.ts`](../src/core/data/yamaha-voices.ts) | ✅ 已完成（含 `0-113-75` 排笛修正、`104-21-1` 新舊碼對照、GM 中文譯名） |
 | **【任務 2-1】** | **MIDI 音樂檔全景透視儀表板與 16 通道檢測器** | [`midi-song-analyzer.ts`](../src/core/parser/midi-song-analyzer.ts), [`yamaha-parser.ts`](../src/core/parser/yamaha-parser.ts) | ✅ 已完成（含曲中變速積分、Big5/GBK 解碼、16 通道獨立 Solo/Mute/混音） |
+| **【任務 2-1B】** | **MIDI 首小節音色重複發送去重與假性換樂器消除** | [`midi-song-analyzer.ts`](../src/core/parser/midi-song-analyzer.ts), [`test-midi-program-change-dedup.test.ts`](../tests/test-midi-program-change-dedup.test.ts) | ✅ 已完成（實裝 `distinctTimeline` 實質音色去重，排除曲首初始化重複發送相同 MSB/LSB/PC 造成的假性曲中換樂器標籤，測試 4/4 通過） |
 | **【任務 2-2】** | **MIDI 小節區間循環試聽定位器** | [`player-app.ts`](../src/player/player-app.ts) | ✅ 已完成（支援自訂起訖小節、1~4/8/16 快速鍵、停止重設指針、防跳動獨奏鈕） |
 | **【任務 2-3】** | **智慧聲部映射、主旋律排除與小節切片裝配引擎** | [`midi-part-assign-matrix.ts`](../src/core/writer/midi-part-assign-matrix.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) | ✅ 已完成（含純伴奏試聽自動復原、曲中生效音色回溯 `getEffectiveVoiceAtBar`、多段落累積整合至同一 STY） |
 | **【任務 2-4A】** | **基準和弦三合一模式（大調 CM7 / 小調 Cm / 原曲直通）与關係大小調弱起嗅探** | [`casm-modifier.ts`](../src/core/writer/casm-modifier.ts), [`midi-song-analyzer.ts`](../src/core/parser/midi-song-analyzer.ts), [`midi-slice-assembler.ts`](../src/core/writer/midi-slice-assembler.ts), [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) | ✅ 已完成（支援 SFF2 原廠 Cm 小調基準平行位移與 CASM `chordType=8` / Minor Table、CM7 大調、原曲直通 `Bypass`；實裝 K-S 關係大小調校驗打破 Meta 0x59 偽大調盲點，弱起前奏向後嗅探 Lookahead，解決《容易受傷的女人》Am 誤判 C 大調） |
@@ -21,6 +22,7 @@
 | **【任務 4-1 基礎】** | **Multi Pad (.PAD) 二進位結構解析與全軌屬性寫入** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`yamaha-writer.ts`](../src/core/writer/yamaha-writer.ts) | ✅ 已完成（完整支援 5 軌 SMF1 結構、`CMxxxx` / `RPxxxx` / `N1~N4` 控制標記） |
 | **【任務 4-1 終極】** | **Multi Pad 和弦跟隨適用邊界、固定調性鐵律與 STY 插音分工架構實機結案** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`GEMINI.md`](../GEMINI.md), `2010_空港_Intro_Am調.PAD` | ✅ 已完成並實機結案（PSR-SX920 雙向驗收：證實長旋律開 CM 必走音，CM0000 指定調性為 100% 依譜還原唯一解；插音歸 STY Phrase 聲部） |
 | **【任務 4-1A 全四階段】** | **Multi Pad 調性平移工作台全功能 (剛體平移 / 單軌屬性 / CC 控制曲線 / 鋼琴捲軸網格 / 4 軌齊奏 / 全生命週期 E2E 驗收通過封存)** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`index.html`](../index.html), [`test-pad-key-transposition.test.ts`](../tests/test-pad-key-transposition.test.ts), [`test-pad-full-lifecycle-e2e.test.ts`](../tests/test-pad-full-lifecycle-e2e.test.ts) | ✅ 全四階段全數完工並通過端到端測試與實機驗收封存：<br>1. **第一階段（轉調核心）**：支援 24 大小調定義、4 大型態診斷、首拍強拍主音+半終止屬音雙重調性加權、原曲基準調自動估算+手動覆寫即時重算、原始音高基準快照、匯出強制校驗 UI 設定防呆；使用者於 PSR-SX920 實測大調《月亮代表我的心》C ➔ Eb 與小調樂曲皆 100% 準確發聲。<br>2. **第二階段（單軌屬性與排版）**：單軌獨立勾選移調、複製/清空軌道、獨立小節長度調整、Vol/Pan/Rev/Cho 單欄垂直自適應排版（解決破版）、Icon 修改、新建空白 `.PAD` 與匯出。<br>3. **第三階段（CC 與編輯器連動）**：實裝 `replacePadCCEvents` 支援 CC 11/1/64/74 等自動化曲線即時寫回二進位 rawChunk、單軌鋼琴捲軸小節網格依選中 Pad 自身 `barLength` 精確適配、頂部橫幅專屬色/名稱/屬性連動同步、新增「▶ 4 軌齊奏試聽 / ⏹ 停止齊奏」按鈕。<br>4. **第四階段（端到端 E2E 測試與 Round-Trip 驗收）**：從 0 建立空白專案 ➔ 4 軌音符與不同小節 ➔ CC 11/1 動態曲線 ➔ 音色混音 ➔ 剛體轉調 ➔ 匯出二進位 ➔ 反解析雙向驗證零數據損失（Track 0 控制標籤、音色、混音、音符、CC、小節長度 100% 吻合）；實體琴現成樣本 2010-1 與 2011-2 Round-Trip 轉調無損驗收全數通過（全套測試 7/7 通過，生產打包成功）。 |
+| **【任務 5-3】** | **全域 UI 緊湊化重大優化（檔案資訊橫幅與控制列單行化、全域垂直間隙收斂為 8px）** | [`index.html`](../index.html) | ✅ 已完成（檔案資訊橫幅高 75px ➔ 42px 單行流式排版、播放控制列 85px ➔ 42px 單行整合、全域模組間隙從 20~32px 統一縮小為 8px、消除 switcher margin，釋放 60~80px 垂直視野） |
 
 ---
 
@@ -205,6 +207,38 @@
      - **STY 和弦轉調測試條瘦身**：預設僅常駐顯示第一排「常用和弦快捷鍵 + 當前和弦」與進行設定列；下方的「🔄 多小節和弦進行輪播（小節卡片）」改為點擊 `[🔄 展開和弦進行卡片 ▾]` 或開啟自動輪播時才展開。
   6. **[✅ 已完成] 階段 4（UI 建議 2）：MIDI 16 通道卡片「單一按鈕 + 懸浮 Popover 快選」瘦身設計**
      - 與【任務 4-1B】同步實裝，以單一 `[📥 存入 Pad ▾]` 按鈕搭配浮動 4 格選單取代常駐下拉選單。
+
+---
+
+### 🎛️ UI 緊湊化重大優化：[✅ 已完成]【任務 5-3】專業 DAW 級單行流式橫幅、播放控制列與全域間距調諧 (2026-11-25)
+
+- **功能定位**：針對桌面版高階音樂工作站（Cubase / Logic Pro）視野需求，消除冗餘垂直空白，使伴奏 8 聲部矩陣、切片定位器與鋼琴卷軸能夠更早映入眼簾。
+- **完成成果**：
+  1. **伴奏與 MIDI 資訊橫幅（`.style-banner`）單行化**：
+     - 將原本上下兩層卡片改為單行流式排版（`display: flex; align-items: baseline; justify-content: space-between;`）。
+     - 檔名與規格（格式、小節數、BPM、拍號、發聲通道數、音符數）排在同一水平線，高度由 75px 驟降至 42px。
+  2. **播放主控制列（`.transport-bar`）單行整合**：
+     - 播放/停止/循環三顆核心按鍵、小節/拍/Tick 計時器、BPM 滑桿與全域總音量控制器整合為單一行排版，高度由 85px 驟降至 42px。
+  3. **全域模組垂直間隔與內距收斂（統一為 `8px`）**：
+     - 主容器 `.container` 的 `gap` 由原先的 `20px` 收窄為 **`8px`**，上下邊距由 `20px` 減至 `12px`。
+     - 移除 `.workspace-switcher` 原先疊加的 `margin-bottom: 12px`（原先與容器 gap 疊加達到 32px 的過度留白），回歸 8px 緊湊規格。
+     - `.output-panel` 內距收斂為 `8px 16px`，在單行精簡狀態下與橫幅、控制列視覺高度完全統一。
+     - `.drop-zone` 內距適度微調為 `12px 18px`。
+     - **總成果**：頂部 5 處空隙全面收緊，累積釋放 **約 60px ~ 80px 的垂直畫面空間**，大幅強化軟體專業度與操作流暢度。
+
+---
+
+### 🎧 音樂樂理與聲音工程原理解析：MIDI 立體聲環繞與左右耳遊走 (CC 10 Pan & Ping-Pong Delay)
+
+- **現象描述**：使用者詢問在耳機中聽到特定樂句（如合成器琶音、木吉他裝飾音或迴音）聲音由右耳流暢游移至左耳的背後原理與系統實作方式。
+- **底層核心原理**：
+  1. **MIDI CC 10（Pan 聲像控制器）連續自動化曲線（Automation Curve）**：
+     - MIDI 規範中，`CC 10` 控制立體聲全景位置（數值 `0 = 極左 Left`、`64 = 正中 Center`、`127 = 極右 Right`）。
+     - 當 MIDI 檔中對特定聲部寫入隨時間變化的 CC 10 數值序列（例如從第 1 拍的 `127` 連續漸變至第 4 拍的 `0`），耳機與立體聲喇叭即會產生平滑由右向左飄移的物理聽感。
+     - 系統現已內建 CC 自動化曲線檢視與編輯器（含漸強/漸弱、平滑濾波功能），在下拉選單切換至 `CC 10 Pan` 即可視覺化檢視或即時繪製曲線，並寫回二進位音軌中。
+  2. **Yamaha 琴端 DSP 效果器：Ping-Pong Delay（乒乓延遲）與 Auto Pan（自動左右聲像）**：
+     - 部分 MIDI 檔案自身 CC 10 數值為固定值，但透過 Yamaha XG SysEx 開啟了內建的乒乓延遲（`Ping-Pong Delay`）效果器：每次 Echo 迴音會自動在左右聲道交替彈跳，產生立體聲空間包圍感。
+     - 本系統不論透過 Web Audio 軟音源或 PSR-SX920 實體琴輸出，均 100% 忠實傳輸並支援 CC 10 聲像與立體聲效果。
 
 ---
 
