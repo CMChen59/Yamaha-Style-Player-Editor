@@ -1247,10 +1247,11 @@ export class PlayerApp {
         </div>
 
         <div class="midi-ch-footer">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <button type="button" id="btn-mute-${chInfo.channel}" class="mixer-btn btn-mute ${isMuted ? 'muted' : ''}" style="flex: 1;">Mute</button>
-            <button type="button" id="btn-solo-${chInfo.channel}" class="mixer-btn btn-solo ${isSolo ? 'soloed' : ''}" style="flex: 1;">Solo</button>
-            <button type="button" class="mixer-btn" data-focus-ch="${chInfo.channel}" style="flex: 1.4; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; white-space: nowrap;" title="在下方單軌編輯器展開此通道音符捲軸">🎹 展開音符</button>
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <button type="button" id="btn-mute-${chInfo.channel}" class="mixer-btn btn-mute ${isMuted ? 'muted' : ''}" style="flex: 0.85;">Mute</button>
+            <button type="button" id="btn-solo-${chInfo.channel}" class="mixer-btn btn-solo ${isSolo ? 'soloed' : ''}" style="flex: 0.85;">Solo</button>
+            <button type="button" class="mixer-btn" data-focus-ch="${chInfo.channel}" style="flex: 1.2; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; white-space: nowrap;" title="在下方單軌編輯器展開此通道音符捲軸">🎹 展開</button>
+            <button type="button" class="mixer-btn btn-open-pad-popover" data-pad-ch="${chInfo.channel}" style="flex: 1.35; background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; white-space: nowrap;" title="將目前選取小節區間的此通道音符與音色，一鍵擷取存入 Multi Pad (Pad 1~4)">📥 存入 Pad ▾</button>
           </div>
 
           <div class="midi-ch-sliders">
@@ -1307,6 +1308,14 @@ export class PlayerApp {
         document.getElementById('focused-track-banner')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
 
+      const btnPadPop = card.querySelector(`[data-pad-ch="${chInfo.channel}"]`) as HTMLButtonElement | null;
+      btnPadPop?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (btnPadPop) {
+          this.openMidiToPadPopover(btnPadPop, chInfo.channel);
+        }
+      });
+
       const sliderVol = card.querySelector(`#vol-${chInfo.channel}`) as HTMLInputElement | null;
       sliderVol?.addEventListener('click', (e) => e.stopPropagation());
       sliderVol?.addEventListener('input', (e) => {
@@ -1333,6 +1342,229 @@ export class PlayerApp {
     // 5. 若伴奏映射總表處於開啟狀態，同步重新渲染總表
     if (this.isPartMatrixVisible) {
       this.renderPartAssignMatrix(analysis);
+    }
+  }
+
+  /**
+   * 【任務 4-1B & 階段 4】開啟 MIDI 通道卡片「📥 存入 Pad ▾」懸浮 4 格快選選單 (Popover)
+   */
+  private openMidiToPadPopover(anchorBtn: HTMLElement, channel: number) {
+    const existing = document.getElementById('midi-to-pad-popover');
+    if (existing) {
+      const prevCh = existing.getAttribute('data-channel');
+      existing.remove();
+      if (prevCh === String(channel)) return;
+    }
+
+    const srcParsed = this.sourceSongParsed || this.currentParsed;
+    const analysis = this.sourceSongAnalysis || this.currentSongAnalysis;
+    if (!srcParsed || !analysis) return;
+
+    const totalBars = analysis.totalBars || 1;
+    const curStart = Math.max(1, parseInt(this.inputMidiStartBar?.value || '1', 10) || 1);
+    const curEndRaw = Math.max(curStart, parseInt(this.inputMidiEndBar?.value || String(totalBars), 10) || totalBars);
+    // 若使用者尚未縮小定位器範圍 (仍為 1 ~ 全曲且全曲 > 8 小節)，預設建議先取前 4 小節或該軌首次發聲的 4 小節，使用者亦可在選單內自由修改
+    const chInfo = analysis.activeChannels.find((c) => c.channel === channel);
+    let defaultStart = curStart;
+    let defaultEnd = curEndRaw;
+    if (curStart === 1 && curEndRaw === totalBars && totalBars > 8) {
+      defaultStart = chInfo?.firstBar || 1;
+      defaultEnd = Math.min(totalBars, defaultStart + 3);
+    }
+
+    const effVoice = MidiSongAnalyzer.getEffectiveVoiceAtBar(srcParsed, channel, defaultStart);
+    const padDiag = this.savedPadParsed ? YamahaPadModifier.analyzePadProject(this.savedPadParsed) : null;
+    const padColors = ['#38bdf8', '#f59e0b', '#10b981', '#a855f7'];
+
+    const popover = document.createElement('div');
+    popover.id = 'midi-to-pad-popover';
+    popover.setAttribute('data-channel', String(channel));
+    popover.style.cssText = `
+      position: fixed;
+      z-index: 9999;
+      width: 310px;
+      background: rgba(15, 23, 42, 0.98);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      border-radius: 10px;
+      padding: 10px 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65);
+      color: #f8fafc;
+      font-size: 0.78rem;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    `;
+
+    const slotsHtml = [1, 2, 3, 4].map((padNum) => {
+      const t = padDiag?.tracks[padNum - 1];
+      const hasNotes = t && t.noteCount > 0;
+      const statusText = hasNotes
+        ? `覆寫: ${t!.name} (${t!.noteCount}音 · ${t!.barLength}節)`
+        : '空軌 (直接存入)';
+      const badgeColor = padColors[padNum - 1];
+      return `
+        <button type="button" class="btn-popover-select-pad" data-pad-num="${padNum}"
+                style="display: flex; align-items: center; justify-content: space-between; width: 100%; background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 6px; padding: 6px 9px; color: #e2e8f0; font-size: 0.76rem; cursor: pointer; transition: all 0.15s; text-align: left;">
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span style="background: ${badgeColor}; color: #090d16; font-weight: 800; font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;">PAD ${padNum}</span>
+            <span style="font-weight: 600;">存入 Pad ${padNum}</span>
+          </span>
+          <span style="font-size: 0.7rem; color: ${hasNotes ? '#fcd34d' : '#94a3b8'};">${statusText}</span>
+        </button>
+      `;
+    }).join('');
+
+    popover.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+        <span style="font-weight: 700; color: #fcd34d;">📥 擷取 CH ${channel + 1} 存入 Multi Pad</span>
+        <button type="button" id="btn-close-pad-popover" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 0.9rem; padding: 0 4px;">✕</button>
+      </div>
+      <div style="font-size: 0.72rem; color: #cbd5e1; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+        <span>🎹 音色: <strong style="color: #7dd3fc;">${effVoice.voiceName}</strong></span>
+        <span style="color: #94a3b8;">[${effVoice.panelCode}]</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; background: rgba(9, 13, 22, 0.65); padding: 5px 8px; border-radius: 6px;">
+        <span style="font-size: 0.73rem; color: #94a3b8;">📏 擷取小節:</span>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <input type="number" id="pop-pad-start-bar" min="1" max="${totalBars}" value="${defaultStart}"
+                 style="width: 46px; background: #0f172a; border: 1px solid rgba(255,255,255,0.2); color: #f8fafc; font-size: 0.75rem; padding: 2px 4px; border-radius: 4px; text-align: center;" />
+          <span style="color: #64748b;">~</span>
+          <input type="number" id="pop-pad-end-bar" min="1" max="${totalBars}" value="${defaultEnd}"
+                 style="width: 46px; background: #0f172a; border: 1px solid rgba(255,255,255,0.2); color: #f8fafc; font-size: 0.75rem; padding: 2px 4px; border-radius: 4px; text-align: center;" />
+          <span style="font-size: 0.7rem; color: #64748b;">節</span>
+        </div>
+      </div>
+      <div id="pop-pad-slots-body" style="display: flex; flex-direction: column; gap: 5px;">
+        ${slotsHtml}
+      </div>
+    `;
+
+    document.body.appendChild(popover);
+
+    // 計算懸浮位置 (確保不超出視窗邊界)
+    const rect = anchorBtn.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+    let left = Math.min(window.innerWidth - popRect.width - 12, Math.max(12, rect.right - popRect.width));
+    let top = rect.bottom + 6;
+    if (top + popRect.height > window.innerHeight - 12) {
+      top = Math.max(12, rect.top - popRect.height - 6);
+    }
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+
+    popover.addEventListener('click', (e) => e.stopPropagation());
+    popover.querySelector('#btn-close-pad-popover')?.addEventListener('click', () => {
+      popover.remove();
+    });
+
+    // 點擊外部關閉
+    const onDocClick = (e: MouseEvent) => {
+      if (!popover.contains(e.target as Node) && e.target !== anchorBtn) {
+        popover.remove();
+        document.removeEventListener('click', onDocClick);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', onDocClick), 0);
+
+    // 綁定 Pad 1~4 槽位點擊寫入
+    popover.querySelectorAll('.btn-popover-select-pad').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const padNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        const sInput = popover.querySelector('#pop-pad-start-bar') as HTMLInputElement | null;
+        const eInput = popover.querySelector('#pop-pad-end-bar') as HTMLInputElement | null;
+        const sBar = Math.max(1, parseInt(sInput?.value || String(defaultStart), 10) || defaultStart);
+        const eBar = Math.max(sBar, parseInt(eInput?.value || String(defaultEnd), 10) || defaultEnd);
+        this.executeImportMidiChannelToPad(channel, padNum, sBar, eBar, popover);
+      });
+    });
+  }
+
+  /**
+   * 執行將 MIDI 指定通道與小節區間塞入 Multi Pad 槽位，並更新快照與工作台徽章
+   */
+  private executeImportMidiChannelToPad(
+    channel: number,
+    padNum: number,
+    startBar: number,
+    endBar: number,
+    popoverEl?: HTMLElement
+  ) {
+    const srcParsed = this.sourceSongParsed || this.currentParsed;
+    const analysis = this.sourceSongAnalysis || this.currentSongAnalysis;
+    if (!srcParsed || !analysis) return;
+
+    // 1. 若尚未建立 Multi Pad 專案，自動以原曲 BPM 與拍號初始化一份 4 軌空白專案
+    if (!this.savedPadParsed) {
+      const baseName = (this.sourceSongFileName || this.currentFileName || 'Song').replace(/\.[^/.]+$/, '');
+      const blank = YamahaPadSynthesizer.createBlankProject({
+        projectName: `${baseName}_Pad`,
+        bpm: analysis.initialBpm || srcParsed.bpm || 120,
+        bars: Math.max(1, endBar - startBar + 1),
+        division: 480,
+      });
+      YamahaPadModifier.syncControlTagsToTrack0(blank);
+      this.savedPadParsed = blank;
+      this.savedPadFileName = `${baseName}_MultiPad.PAD`;
+    }
+
+    // 2. 執行底層擷取與寫入
+    const res = YamahaPadModifier.importMidiChannelRangeToPad({
+      sourceParsed: srcParsed,
+      targetPadParsed: this.savedPadParsed,
+      sourceChannel: channel,
+      targetPadNum: padNum,
+      startBar,
+      endBar,
+    });
+
+    // 3. 同步更新原始音高快照 (originalPadTrackNotes) 與診斷狀態，確保切過去即可無損移調與還原
+    const freshNotes = YamahaPadModifier.extractTrackNotes(this.savedPadParsed.tracks[padNum]);
+    this.originalPadTrackNotes.set(padNum, freshNotes.map((n) => ({ ...n })));
+    if (res.extractedNoteCount > 0 && res.musicalType !== 'DRUM_SFX') {
+      this.selectedPadNumsForTranspose.add(padNum);
+    } else if (res.musicalType === 'DRUM_SFX') {
+      this.selectedPadNumsForTranspose.delete(padNum);
+    }
+
+    const newDiag = YamahaPadModifier.analyzePadProject(this.savedPadParsed);
+    this.currentPadDiagnosis = newDiag;
+    this.initialPadDiagnosis = newDiag;
+
+    // 4. 更新頂部三大工作台切換列徽章 (即時反映 1/4 軌、2/4 軌)
+    this.syncWorkspaceSwitcherUI();
+
+    // 5. 在 Popover 內顯示成功回饋與一鍵前往 Pad 工作台按鈕
+    if (popoverEl) {
+      const bodyEl = popoverEl.querySelector('#pop-pad-slots-body');
+      if (bodyEl) {
+        bodyEl.innerHTML = `
+          <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.45); border-radius: 7px; padding: 8px 10px; color: #d1fae5; font-size: 0.75rem; line-height: 1.45;">
+            ✅ <strong>成功存入 Pad ${padNum} [${res.padName}]</strong><br/>
+            • 擷取區間：第 ${startBar} ~ ${endBar} 小節 (${res.barLength} 小節)<br/>
+            • 擷取內容：<strong>${res.extractedNoteCount}</strong> 顆音符 · 音色 <strong>${res.voiceInfo.voiceName}</strong><br/>
+            • 智慧型態：${res.musicalTypeLabelZh} (${res.chordMatch ? 'CM=ON' : 'CM=OFF'})
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+            <button type="button" id="btn-pop-stay-midi"
+                    style="flex: 1; background: rgba(51, 65, 85, 0.85); border: 1px solid rgba(148, 163, 184, 0.35); color: #e2e8f0; border-radius: 6px; padding: 6px 8px; font-size: 0.74rem; font-weight: 600; cursor: pointer;">
+              👌 繼續挑其他軌
+            </button>
+            <button type="button" id="btn-pop-goto-pad"
+                    style="flex: 1.35; background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fcd34d; border-radius: 6px; padding: 6px 8px; font-size: 0.74rem; font-weight: 700; cursor: pointer;">
+              🎹 前往 Pad 工作台 ➔
+            </button>
+          </div>
+        `;
+        bodyEl.querySelector('#btn-pop-stay-midi')?.addEventListener('click', () => {
+          popoverEl.remove();
+        });
+        bodyEl.querySelector('#btn-pop-goto-pad')?.addEventListener('click', () => {
+          popoverEl.remove();
+          this.focusedChannel = padNum - 1;
+          this.switchToPadStudioMode();
+        });
+      }
     }
   }
 

@@ -2,6 +2,7 @@ import { BinaryWriter } from './binary-writer';
 import type { YamahaFileParsed, MidiEvent, MidiTrack } from '../models/types';
 import { PadRecorder, type QuantizeGrid } from './pad-recorder';
 import { resolveYamahaVoiceWithAlias } from '../data/yamaha-voices';
+import { MidiSongAnalyzer } from '../parser/midi-song-analyzer';
 
 /**
  * Multi Pad 24 大小調標準定義 (12 小調 + 12 大調)
@@ -168,6 +169,55 @@ export interface PadKeyTransposeResult {
     oldPitchRange: [number, number] | null;
     newPitchRange: [number, number] | null;
   }>;
+}
+
+/**
+ * 【任務 4-1B】MIDI 單軌小節區間擷取至 Multi Pad 槽位 (Pad 1~4) 參數
+ */
+export interface MidiChannelToPadImportOptions {
+  /** 來源 MIDI 音樂檔 */
+  sourceParsed: YamahaFileParsed;
+  /** 目標 Multi Pad 專案 */
+  targetPadParsed: YamahaFileParsed;
+  /** 來源 MIDI 通道 (0 ~ 15) */
+  sourceChannel: number;
+  /** 目標 Pad 編號 (1 ~ 4) */
+  targetPadNum: number;
+  /** 起始小節 (1-based) */
+  startBar: number;
+  /** 結束小節 (1-based, inclusive) */
+  endBar: number;
+  /** 起始拍偏移 (1-based, default 1) */
+  startBeat?: number;
+  /** 結束拍偏移 (1-based, default 1) */
+  endBeat?: number;
+  /** 自訂 Pad 名稱 (未提供則自動以音色簡稱 + 小節命名，如 'Sax B1-4') */
+  customPadName?: string;
+}
+
+/**
+ * 【任務 4-1B】MIDI 單軌區間擷取至 Multi Pad 執行結果
+ */
+export interface MidiChannelToPadImportResult {
+  success: boolean;
+  targetPadNum: number;
+  padName: string;
+  iconCode: string;
+  extractedNoteCount: number;
+  extractedCCCount: number;
+  barLength: number;
+  voiceInfo: {
+    msb: number;
+    lsb: number;
+    pc: number;
+    voiceName: string;
+    category: string;
+    panelCode: string;
+  };
+  musicalType: PadMusicalType;
+  musicalTypeLabelZh: string;
+  chordMatch: boolean;
+  repeat: boolean;
 }
 
 /**
@@ -2629,6 +2679,226 @@ export class YamahaPadModifier {
 
     const ok = this.replacePadNotes(parsed, padNum, modifiedNotes, totalBars);
     return { success: ok, quantizedCount };
+  }
+
+  /**
+   * 【任務 4-1B】自來源 MIDI 歌曲擷取指定通道 (sourceChannel) 與小節區間 (startBar ~ endBar)，
+   * 自動完成：
+   * 1. PPQ 時間軸智慧縮放與歸零對齊 (relTick = 0)
+   * 2. 跨界殘留音過濾 (Boundary Bleed Elimination：起點前已發音之尾音直接排除，杜絕第 1 拍爆音)
+   * 3. 當下生效音色與混音回溯 (Effective Voice Lookahead：MSB/LSB/PC/Vol/Pan/Rev/Cho)
+   * 4. 真實動態控制器提取與滿表情進場保護 (CC11 表情、CC1 顫音、CC64 延音踏板 + 結尾踏板歸零)
+   * 5. 4 大音樂型態智慧診斷與 CM / Repeat / Icon / Name 自動推薦配置
+   */
+  public static importMidiChannelRangeToPad(
+    options: MidiChannelToPadImportOptions
+  ): MidiChannelToPadImportResult {
+    const {
+      sourceParsed,
+      targetPadParsed,
+      sourceChannel,
+      targetPadNum,
+      startBar,
+      endBar,
+      startBeat = 1,
+      endBeat = 1,
+      customPadName,
+    } = options;
+
+    if (targetPadNum < 1 || targetPadNum > 4) {
+      throw new Error(`無效的目標 Pad 編號: ${targetPadNum} (必須為 1 ~ 4)`);
+    }
+
+    const srcDivision = sourceParsed.division || 480;
+    const dstDivision = targetPadParsed.division || 480;
+    const scale = dstDivision / srcDivision;
+
+    const timeSig = sourceParsed.timeSignature || { numerator: 4, denominator: 4 };
+    const beatsPerBar = timeSig.numerator || 4;
+    const ticksPerBeatSrc = Math.max(1, Math.round(srcDivision * (4 / (timeSig.denominator || 4))));
+    const ticksPerBarSrc = ticksPerBeatSrc * beatsPerBar;
+
+    const sBar = Math.max(1, Math.round(startBar));
+    const eBar = Math.max(sBar, Math.round(endBar));
+    const sBeat = Math.max(1, Math.min(beatsPerBar, Math.round(startBeat)));
+    const eBeat = Math.max(1, Math.min(beatsPerBar, Math.round(endBeat)));
+
+    const startTickSrc = (sBar - 1) * ticksPerBarSrc + (sBeat - 1) * ticksPerBeatSrc;
+    const barCount = Math.max(1, eBar - sBar + 1);
+    const endTickSrc = eBeat > 1
+      ? (eBar - 1) * ticksPerBarSrc + (eBeat - 1) * ticksPerBeatSrc
+      : startTickSrc + barCount * ticksPerBarSrc;
+    const totalTicksSrc = Math.max(ticksPerBeatSrc, endTickSrc - startTickSrc);
+    const targetBars = Math.max(1, Math.ceil(totalTicksSrc / ticksPerBarSrc));
+
+    // 1. 回溯該通道在 sBar 當下生效的音色與混音
+    const effVoice = MidiSongAnalyzer.getEffectiveVoiceAtBar(sourceParsed, sourceChannel, sBar);
+    let effReverb = 40;
+    let effChorus = 0;
+
+    // 2. 掃描全軌提取該通道在 [startTickSrc, endTickSrc) 的音符與動態 CC (並回溯 Reverb/Chorus)
+    const extractedNotes: Array<{ note: number; startTick: number; durationTick: number; velocity: number }> = [];
+    const cc11List: Array<{ relTick: number; value: number }> = [];
+    const cc1List: Array<{ relTick: number; value: number }> = [];
+    const cc64List: Array<{ relTick: number; value: number }> = [];
+
+    for (const track of sourceParsed.tracks) {
+      if (!track || !track.events) continue;
+      let curTick = 0;
+      const activeNotes = new Map<number, { tick: number; velocity: number }>();
+
+      for (const ev of track.events) {
+        curTick += ev.delta;
+        if (ev.channel !== sourceChannel) continue;
+
+        if (ev.type === 'controlChange' && ev.controller !== undefined && ev.value !== undefined) {
+          if (curTick <= startTickSrc) {
+            if (ev.controller === 91) effReverb = ev.value;
+            else if (ev.controller === 93) effChorus = ev.value;
+          }
+          if (curTick >= startTickSrc && curTick < endTickSrc) {
+            const relTickDst = Math.max(0, Math.round((curTick - startTickSrc) * scale));
+            if (ev.controller === 11) cc11List.push({ relTick: relTickDst, value: ev.value });
+            else if (ev.controller === 1) cc1List.push({ relTick: relTickDst, value: ev.value });
+            else if (ev.controller === 64) cc64List.push({ relTick: relTickDst, value: ev.value });
+          }
+        } else if (ev.type === 'noteOn' && ev.noteNumber !== undefined && (ev.velocity ?? 0) > 0) {
+          activeNotes.set(ev.noteNumber, { tick: curTick, velocity: ev.velocity! });
+        } else if (
+          (ev.type === 'noteOff' || (ev.type === 'noteOn' && (ev.velocity ?? 0) === 0)) &&
+          ev.noteNumber !== undefined
+        ) {
+          const st = activeNotes.get(ev.noteNumber);
+          if (st) {
+            activeNotes.delete(ev.noteNumber);
+            // 【跨界殘留音過濾鐵律】：起點前已按下之音符 (st.tick < startTickSrc) 一律排除，絕不強塞至 rel=0
+            if (st.tick >= startTickSrc && st.tick < endTickSrc) {
+              const relStartSrc = st.tick - startTickSrc;
+              const clippedEndSrc = Math.min(curTick, endTickSrc);
+              const durSrc = Math.max(1, clippedEndSrc - st.tick);
+              const startTickDst = Math.max(0, Math.round(relStartSrc * scale));
+              const durationTickDst = Math.max(1, Math.round(durSrc * scale));
+              extractedNotes.push({
+                note: ev.noteNumber,
+                startTick: startTickDst,
+                durationTick: durationTickDst,
+                velocity: st.velocity,
+              });
+            }
+          }
+        }
+      }
+
+      // 若有在區間內按下但直到檔案結束仍未收到 NoteOff 的懸空音符，予以安全收尾截斷
+      for (const [noteNum, st] of activeNotes.entries()) {
+        if (st.tick >= startTickSrc && st.tick < endTickSrc) {
+          const relStartSrc = st.tick - startTickSrc;
+          const durSrc = Math.max(1, endTickSrc - st.tick);
+          extractedNotes.push({
+            note: noteNum,
+            startTick: Math.max(0, Math.round(relStartSrc * scale)),
+            durationTick: Math.max(1, Math.round(durSrc * scale)),
+            velocity: st.velocity,
+          });
+        }
+      }
+    }
+
+    extractedNotes.sort((a, b) => a.startTick - b.startTick || a.note - b.note);
+
+    // 3. 寫入音色與混音參數至目標 Pad 軌道
+    this.setPadMixing(targetPadParsed, targetPadNum, {
+      bankMsb: effVoice.msb,
+      bankLsb: effVoice.lsb,
+      programChange: effVoice.pc,
+      volume: effVoice.volume,
+      pan: effVoice.pan,
+      reverb: effReverb,
+      chorus: effChorus,
+    });
+
+    // 4. 寫入音符並設定小節數
+    this.replacePadNotes(targetPadParsed, targetPadNum, extractedNotes, targetBars);
+
+    // 5. 清除舊動態 CC 並寫入提取的真實動態 CC (確保開頭 CC11=127 飽滿進場，結尾 CC64=0 放開延音)
+    if (!cc11List.some((c) => c.relTick === 0)) {
+      cc11List.unshift({ relTick: 0, value: 127 });
+    }
+    this.replacePadCCEvents(targetPadParsed, targetPadNum, 11, cc11List);
+    this.replacePadCCEvents(targetPadParsed, targetPadNum, 1, cc1List);
+
+    if (cc64List.length > 0) {
+      const lastSustain = cc64List[cc64List.length - 1];
+      if (lastSustain.value >= 64) {
+        const endRelTickDst = Math.max(0, Math.round(totalTicksSrc * scale) - 1);
+        cc64List.push({ relTick: endRelTickDst, value: 0 });
+      }
+    }
+    this.replacePadCCEvents(targetPadParsed, targetPadNum, 64, cc64List);
+
+    // 6. 執行智慧型態診斷，依 4 大型態鐵律配置 CM / Repeat / Icon / Name
+    const diagAfterNotes = this.analyzePadProject(targetPadParsed);
+    const trkDiag = diagAfterNotes.tracks[targetPadNum - 1];
+
+    let autoCm = false;
+    let autoRp = false;
+    if (trkDiag.musicalType === 'CHORD_TEXTURE') {
+      autoCm = true;
+      autoRp = true;
+    } else if (trkDiag.musicalType === 'DRUM_SFX') {
+      autoCm = false;
+      autoRp = true;
+    } else {
+      // MELODY_INTRO / SHORT_MOTIF / EMPTY：遵循長旋律鐵律預設 CM=OFF, Repeat=OFF
+      autoCm = false;
+      autoRp = false;
+    }
+
+    const cat = effVoice.category || '';
+    let autoIcon = 'S809';
+    if (effVoice.isDrum) autoIcon = 'S813';
+    else if (cat.includes('Guitar')) autoIcon = 'S810';
+    else if (cat.includes('Brass') || cat.includes('Sax') || cat.includes('Woodwind')) autoIcon = 'S811';
+    else if (cat.includes('Strings') || cat.includes('Pad')) autoIcon = 'S812';
+    else if (cat.includes('Synth')) autoIcon = 'S814';
+
+    const cleanVoiceShort = (effVoice.voiceName || `CH${sourceChannel + 1}`)
+      .split(' (')[0]
+      .replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '')
+      .slice(0, 9) || `CH${sourceChannel + 1}`;
+    const barTag = sBar === eBar ? `B${sBar}` : `B${sBar}-${eBar}`;
+    const finalPadName = (customPadName && customPadName.trim())
+      ? customPadName.trim()
+      : `${cleanVoiceShort} ${barTag}`;
+
+    this.setPadChordMatch(targetPadParsed, targetPadNum, autoCm);
+    this.setPadRepeat(targetPadParsed, targetPadNum, autoRp);
+    this.setPadIcon(targetPadParsed, targetPadNum, autoIcon);
+    this.setPadName(targetPadParsed, targetPadNum, finalPadName);
+
+    const extractedCCCount = cc11List.length + cc1List.length + cc64List.length;
+
+    return {
+      success: true,
+      targetPadNum,
+      padName: finalPadName,
+      iconCode: autoIcon,
+      extractedNoteCount: extractedNotes.length,
+      extractedCCCount,
+      barLength: targetBars,
+      voiceInfo: {
+        msb: effVoice.msb,
+        lsb: effVoice.lsb,
+        pc: effVoice.pc,
+        voiceName: effVoice.voiceName,
+        category: effVoice.category,
+        panelCode: effVoice.panelCode,
+      },
+      musicalType: trkDiag.musicalType,
+      musicalTypeLabelZh: trkDiag.musicalTypeLabelZh,
+      chordMatch: autoCm,
+      repeat: autoRp,
+    };
   }
 
   /**
