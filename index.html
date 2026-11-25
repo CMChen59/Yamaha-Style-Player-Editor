@@ -185,29 +185,35 @@
       border-color: var(--accent);
     }
 
-    /* 伴奏資訊卡片 */
+    /* 伴奏資訊卡片 (單行流式緊湊排版) */
     .style-banner {
       background: var(--bg-panel);
       border: 1px solid var(--border-color);
       border-radius: 10px;
-      padding: 14px 20px;
+      padding: 8px 18px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 8px 14px;
     }
 
     .style-title {
-      font-size: 1.25rem;
+      font-size: 1.08rem;
       font-weight: 700;
       color: #fff;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
     }
 
     .style-info {
-      font-size: 0.82rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
-      margin-top: 4px;
+      margin-top: 0;
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
     .btn-export {
@@ -5529,13 +5535,13 @@
       </button>
     </nav>
 
-    <!-- 伴奏規格儀表板 -->
+    <!-- 伴奏規格儀表板 (單行緊湊排版) -->
     <section class="style-banner">
-      <div>
+      <div style="display: flex; align-items: baseline; gap: 10px 14px; flex-wrap: wrap; flex: 1; min-width: 0;">
         <div id="style-title" class="style-title">準備就緒</div>
         <div id="style-info" class="style-info">請載入 STY 檔案以開始播放</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
         <button id="btn-export-sty" class="btn-export" title="匯出當前編輯後的完整 STY 伴奏檔 (保留 SFF2 / CASM / OTS)">
           <span>💾</span>
           <span>匯出 STY 伴奏檔</span>
