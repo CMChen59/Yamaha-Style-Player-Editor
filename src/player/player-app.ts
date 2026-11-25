@@ -177,6 +177,7 @@ export class PlayerApp {
   private initialPadDiagnosis: PadProjectDiagnosis | null = null;
   private originalPadTrackNotes: Map<number, Array<{ note: number; startTick: number; durationTick: number; velocity: number }>> = new Map();
   private selectedPadNumsForTranspose: Set<number> = new Set([1, 2, 3, 4]);
+  private expandedPadAdvancedNums: Set<number> = new Set();
   private currentPadTotalSemitoneShift: number = 0;
   private lastTransposedKeySuffix: string = '';
   private userPreferredTargetKey: string | null = null;
@@ -2272,13 +2273,41 @@ export class PlayerApp {
    * 🔄 初始化多小節和弦進行輪播控制 (Chord Progression Auto-Advance)
    */
   private setupChordProgressionControls() {
+    const btnToggleDrawer = document.getElementById('btn-toggle-progression-drawer');
+    const drawerBody = document.getElementById('progression-drawer-body');
+    let isProgressionDrawerExpanded = styPlaybackEngine.getChordAutoAdvance();
+
+    const setProgressionDrawerExpanded = (expanded: boolean) => {
+      isProgressionDrawerExpanded = expanded;
+      if (drawerBody) {
+        drawerBody.style.display = expanded ? 'flex' : 'none';
+      }
+      if (btnToggleDrawer) {
+        const label = btnToggleDrawer.querySelector('span:first-child');
+        const chevron = btnToggleDrawer.querySelector('.drawer-chevron');
+        if (label) label.textContent = expanded ? '🔄 收合和弦進行卡片' : '🔄 展開和弦進行卡片';
+        if (chevron) chevron.textContent = expanded ? '▴' : '▾';
+      }
+    };
+
+    // 套用初始摺疊狀態
+    setProgressionDrawerExpanded(isProgressionDrawerExpanded);
+
+    if (btnToggleDrawer) {
+      btnToggleDrawer.addEventListener('click', () => {
+        setProgressionDrawerExpanded(!isProgressionDrawerExpanded);
+      });
+    }
+
     if (this.toggleChordAutoAdvance) {
       this.toggleChordAutoAdvance.checked = styPlaybackEngine.getChordAutoAdvance();
       this.toggleChordAutoAdvance.addEventListener('change', () => {
         const enabled = this.toggleChordAutoAdvance.checked;
         styPlaybackEngine.setChordAutoAdvance(enabled);
         this.renderProgressionCards();
-        if (!enabled) {
+        if (enabled) {
+          setProgressionDrawerExpanded(true);
+        } else {
           this.updateChordAuditionUI(styPlaybackEngine.getAuditionChord());
         }
       });
@@ -3973,7 +4002,7 @@ export class PlayerApp {
             </span>
           </div>
 
-          <!-- 音色選擇按鈕 (點擊開啟 SX920 2,395 音色庫) + 圖示 I1~I4 選擇 -->
+          <!-- 音色選擇按鈕 (點擊開啟 SX920 2,395 音色庫) -->
           <div style="display: flex; align-items: center; gap: 6px;">
             <button type="button" class="btn-pad-card-voice" data-channel="${t.channel}"
                     style="flex: 1; min-width: 0; background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 6px 9px; color: #f8fafc; font-size: 0.79rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; text-align: left;"
@@ -3981,11 +4010,6 @@ export class PlayerApp {
               <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🎹 ${t.voiceInfo.voiceName}</span>
               <span style="font-size: 0.71rem; color: #38bdf8; flex-shrink: 0; margin-left: 4px;">[${t.voiceInfo.panelCode}] ✏️</span>
             </button>
-            <select class="select-pad-card-icon" data-pad-num="${t.padNum}"
-                    style="width: 92px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); color: #cbd5e1; font-size: 0.72rem; padding: 5px 4px; border-radius: 5px; cursor: pointer;"
-                    title="設定 Track 0 的 I${t.padNum} 琴端圖示代碼">
-              ${iconOptionsHtml}
-            </select>
           </div>
 
           <!-- Repeat (RP) 與 Chord Match (CM) 硬體旗標開關 + 獨奏/靜音 -->
@@ -4012,13 +4036,32 @@ export class PlayerApp {
             </div>
           </div>
 
-          <!-- 混音與空間效果滑桿：音量 (CC7)、相位 (Pan CC10)、殘響 (Rev CC91)、合唱 (Cho CC93) -->
-          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.73rem; color: #94a3b8; background: rgba(15, 23, 42, 0.55); padding: 6px 8px; border-radius: 6px; min-width: 0;">
-            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-              <span style="width: 56px; flex-shrink: 0;">音量 CC7:</span>
-              <input type="range" class="slider-pad-card-vol" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.volume}" style="flex: 1; width: 100%; min-width: 0; accent-color: ${color};" />
-              <span class="label-pad-card-vol" style="width: 26px; flex-shrink: 0; text-align: right; color: #e2e8f0; font-weight: 600;">${t.mixing.volume}</span>
+          <!-- 核心常駐區：音量 CC7 + 小節長度快速設定 -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.73rem; color: #94a3b8; background: rgba(15, 23, 42, 0.55); padding: 6px 8px; border-radius: 6px; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0;">
+              <span style="flex-shrink: 0;">🔊 音量:</span>
+              <input type="range" class="slider-pad-card-vol" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.volume}" style="flex: 1; width: 100%; min-width: 40px; accent-color: ${color};" />
+              <span class="label-pad-card-vol" style="width: 24px; flex-shrink: 0; text-align: right; color: #e2e8f0; font-weight: 600;">${t.mixing.volume}</span>
             </div>
+            <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 8px;">
+              <span style="font-size: 0.72rem; color: #94a3b8;">📏小節:</span>
+              <input type="number" class="input-pad-card-bars" data-pad-num="${t.padNum}" min="1" max="64" value="${t.barLength}"
+                     style="width: 40px; background: rgba(9, 13, 22, 0.9); border: 1px solid rgba(255,255,255,0.18); color: #f8fafc; font-size: 0.74rem; padding: 2px 3px; border-radius: 4px; text-align: center;"
+                     title="調整此 Pad 的總小節數 (1~64 小節)" />
+              <button type="button" class="midi-locator-btn btn-pad-card-apply-bars" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem;">套用</button>
+            </div>
+          </div>
+
+          <!-- 摺疊切換鈕：空間效果 (Pan/Rev/Cho) 與進階工具 (圖示/複製/清空) -->
+          <button type="button" class="btn-pad-card-toggle-adv" data-pad-num="${t.padNum}"
+                  style="display: flex; align-items: center; justify-content: space-between; width: 100%; background: rgba(15, 23, 42, 0.65); border: 1px dashed rgba(148, 163, 184, 0.25); border-radius: 6px; padding: 4px 8px; color: #94a3b8; font-size: 0.72rem; cursor: pointer; transition: all 0.15s;">
+            <span>${this.expandedPadAdvancedNums.has(t.padNum) ? '🎛️ 收合空間效果與進階工具 ▴' : '🎛️ 空間效果與進階工具 ▾'}</span>
+            <span style="font-size: 0.69rem; color: #64748b;">Pan ${formatYamahaPan(t.mixing.pan)} · Rev ${t.mixing.reverb} · ${t.icon}</span>
+          </button>
+
+          <!-- 次要進階折疊區 (預設收合) -->
+          <div class="pad-card-adv-drawer" data-pad-num="${t.padNum}"
+               style="display: ${this.expandedPadAdvancedNums.has(t.padNum) ? 'flex' : 'none'}; flex-direction: column; gap: 6px; font-size: 0.73rem; color: #94a3b8; background: rgba(9, 13, 22, 0.55); padding: 8px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.15); min-width: 0;">
             <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
               <span style="width: 56px; flex-shrink: 0;">相位 Pan:</span>
               <input type="range" class="slider-pad-card-pan" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.pan}" style="flex: 1; width: 100%; min-width: 0; accent-color: ${color};" />
@@ -4034,24 +4077,23 @@ export class PlayerApp {
               <input type="range" class="slider-pad-card-cho" data-pad-num="${t.padNum}" data-channel="${t.channel}" min="0" max="127" value="${t.mixing.chorus}" style="flex: 1; width: 100%; min-width: 0; accent-color: #a855f7;" />
               <span class="label-pad-card-cho" style="width: 26px; flex-shrink: 0; text-align: right; color: #e2e8f0; font-weight: 600;">${t.mixing.chorus}</span>
             </div>
-          </div>
-
-          <!-- 軌道管理工具列：小節長度設定 + 複製至其他 Pad + 清空此 Pad -->
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 6px;">
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span style="font-size: 0.72rem; color: #94a3b8;">📏小節:</span>
-              <input type="number" class="input-pad-card-bars" data-pad-num="${t.padNum}" min="1" max="64" value="${t.barLength}"
-                     style="width: 44px; background: rgba(9, 13, 22, 0.9); border: 1px solid rgba(255,255,255,0.18); color: #f8fafc; font-size: 0.75rem; padding: 2px 4px; border-radius: 4px; text-align: center;"
-                     title="調整此 Pad 的總小節數 (1~64 小節)" />
-              <button type="button" class="midi-locator-btn btn-pad-card-apply-bars" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem;">套用</button>
-            </div>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <select class="select-pad-card-clone-target" data-pad-num="${t.padNum}"
-                      style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); color: #cbd5e1; font-size: 0.71rem; padding: 2px 4px; border-radius: 4px;">
-                ${cloneTargetOptionsHtml}
-              </select>
-              <button type="button" class="midi-locator-btn btn-pad-card-clone" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem; color: #7dd3fc;" title="將此 Pad 的音符、音色與混音複製到選定的目標 Pad">📋複製</button>
-              <button type="button" class="midi-locator-btn btn-pad-card-clear" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem; color: #fda4af; border-color: rgba(244,63,94,0.35);" title="一鍵清空此 Pad 的所有音符">🗑️清空</button>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 6px; margin-top: 2px;">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="font-size: 0.71rem; color: #94a3b8;">圖示:</span>
+                <select class="select-pad-card-icon" data-pad-num="${t.padNum}"
+                        style="width: 86px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); color: #cbd5e1; font-size: 0.71rem; padding: 3px 4px; border-radius: 4px; cursor: pointer;"
+                        title="設定 Track 0 的 I${t.padNum} 琴端圖示代碼">
+                  ${iconOptionsHtml}
+                </select>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <select class="select-pad-card-clone-target" data-pad-num="${t.padNum}"
+                        style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); color: #cbd5e1; font-size: 0.71rem; padding: 2px 4px; border-radius: 4px;">
+                  ${cloneTargetOptionsHtml}
+                </select>
+                <button type="button" class="midi-locator-btn btn-pad-card-clone" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem; color: #7dd3fc;" title="將此 Pad 的音符、音色與混音複製到選定的目標 Pad">📋複製</button>
+                <button type="button" class="midi-locator-btn btn-pad-card-clear" data-pad-num="${t.padNum}" style="padding: 2px 6px; font-size: 0.71rem; color: #fda4af; border-color: rgba(244,63,94,0.35);" title="一鍵清空此 Pad 的所有音符">🗑️清空</button>
+              </div>
             </div>
           </div>
 
@@ -4077,6 +4119,27 @@ export class PlayerApp {
         const ch = parseInt((cardEl as HTMLElement).getAttribute('data-channel') || '0', 10);
         this.setFocusedChannel(ch);
         this.renderPadStudioDashboard();
+      });
+    });
+
+    // 進階空間效果抽屜展開/收合切換
+    this.padCardsGrid.querySelectorAll('.btn-pad-card-toggle-adv').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const padNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        const isExpanded = this.expandedPadAdvancedNums.has(padNum);
+        const card = btn.closest('.pad-studio-card');
+        const drawer = card?.querySelector('.pad-card-adv-drawer') as HTMLElement | null;
+        const labelSpan = btn.querySelector('span:first-child');
+        if (isExpanded) {
+          this.expandedPadAdvancedNums.delete(padNum);
+          if (drawer) drawer.style.display = 'none';
+          if (labelSpan) labelSpan.textContent = '🎛️ 空間效果與進階工具 ▾';
+        } else {
+          this.expandedPadAdvancedNums.add(padNum);
+          if (drawer) drawer.style.display = 'flex';
+          if (labelSpan) labelSpan.textContent = '🎛️ 收合空間效果與進階工具 ▴';
+        }
       });
     });
 

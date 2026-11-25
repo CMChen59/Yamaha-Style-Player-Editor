@@ -771,6 +771,25 @@
       box-shadow: 0 0 8px rgba(167, 139, 250, 0.3);
     }
 
+    .btn-progression-drawer-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(167, 139, 250, 0.14);
+      border: 1px solid rgba(167, 139, 250, 0.4);
+      color: #ddd6fe;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .btn-progression-drawer-toggle:hover {
+      background: rgba(167, 139, 250, 0.25);
+    }
+
     .progression-cards-scroll {
       overflow-x: auto;
       padding-top: 14px;
@@ -5716,18 +5735,24 @@
                 <option value="all-c">基準原調 (全部 C)</option>
                 <option value="custom">自訂進行 (Custom)</option>
               </select>
+              <button type="button" id="btn-toggle-progression-drawer" class="btn-progression-drawer-toggle">
+                <span>🔄 展開和弦進行卡片</span>
+                <span class="drawer-chevron">▾</span>
+              </button>
             </div>
           </div>
 
-          <div class="progression-cards-scroll">
-            <div class="progression-cards-container" id="progression-cards-container">
-              <!-- 動態生成小節和弦卡片 -->
+          <div id="progression-drawer-body" style="display: none; flex-direction: column; gap: 10px;">
+            <div class="progression-cards-scroll">
+              <div class="progression-cards-container" id="progression-cards-container">
+                <!-- 動態生成小節和弦卡片 -->
+              </div>
             </div>
-          </div>
 
-          <div class="progression-footer-hint">
-            <span id="progression-hint-text">💡 點選上方小節卡片，直接在卡片上選取或點擊上方和弦快捷鍵即可指派該小節和弦！</span>
-            <button id="btn-reset-progression" class="btn-progression-reset">🔄 還原預設進行</button>
+            <div class="progression-footer-hint">
+              <span id="progression-hint-text">💡 點選上方小節卡片，直接在卡片上選取或點擊上方和弦快捷鍵即可指派該小節和弦！</span>
+              <button id="btn-reset-progression" class="btn-progression-reset">🔄 還原預設進行</button>
+            </div>
           </div>
         </div>
       </div>
