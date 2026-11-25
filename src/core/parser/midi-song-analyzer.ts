@@ -153,15 +153,15 @@ export class MidiSongAnalyzer {
     if (parsed.hasCasm || parsed.hasOts) {
       return true;
     }
-    const hasYamahaMarker = parsed.sections.some((s) =>
+    const hasYamahaMarker = parsed.sections?.some((s) =>
       YAMAHA_STANDARD_SECTION_NAMES.has(s.name.trim().toLowerCase())
-    );
+    ) ?? false;
     if (hasYamahaMarker) {
       return true;
     }
     const lowerName = fileName.trim().toLowerCase();
     if (lowerName.endsWith('.sty') || lowerName.endsWith('.prs') || lowerName.endsWith('.sst') || lowerName.endsWith('.bcs')) {
-      return parsed.sections.length > 0;
+      return (parsed.sections?.length ?? 0) > 0;
     }
     return false;
   }
@@ -326,7 +326,6 @@ export class MidiSongAnalyzer {
           else if (ev.controller === 93 && acc.chorus === undefined) acc.chorus = ev.value;
         } else if (ev.type === 'programChange' && (ev.program !== undefined || (ev as any).programChange !== undefined)) {
           const pc = ev.program !== undefined ? ev.program : (ev as any).programChange;
-          acc.programChangesCount++;
           if (acc.pc === undefined) {
             acc.pc = pc;
           }
@@ -398,14 +397,20 @@ export class MidiSongAnalyzer {
       const firstBar = acc.firstTick !== null ? Math.floor(acc.firstTick / ticksPerBar) + 1 : null;
       const lastBar = acc.lastTick !== null ? Math.min(totalBars, Math.max(firstBar || 1, Math.ceil(Math.max(1, acc.lastTick) / ticksPerBar))) : null;
 
-      const programChangeTimeline: MidiProgramChangePoint[] = acc.rawProgramChanges.map((rpc) => {
+      // 1. 依 tick 升冪排序 Program Change 事件 (確保跨軌道還原絕對時序)
+      acc.rawProgramChanges.sort((a, b) => a.tick - b.tick);
+
+      // 2. 實質音色去重過濾 (Distinct Effective Voice Filter)
+      // 杜絕商業 MIDI 於第 1 小節或曲中重複發送相同音色導致的「假性換樂器」現象
+      const distinctTimeline: MidiProgramChangePoint[] = [];
+      for (const rpc of acc.rawProgramChanges) {
         const rMsb = rpc.msb ?? (ch === 9 ? 127 : 0);
         const rLsb = rpc.lsb ?? 0;
         const effLookupMsb = ch === 9 && rMsb === 0 ? 127 : rMsb;
         const rResolved = resolveYamahaVoiceWithAlias(effLookupMsb, rLsb, rpc.pc);
         const isD = ch === 9 || effLookupMsb === 127 || effLookupMsb === 126 || rResolved.voice?.category === 'Drums';
         const cat = isD ? 'Drums' : (rResolved.voice?.category || 'Piano');
-        return {
+        const point: MidiProgramChangePoint = {
           tick: rpc.tick,
           bar: rpc.bar,
           channel: ch,
@@ -416,7 +421,40 @@ export class MidiSongAnalyzer {
           category: cat,
           panelCode: rResolved.panelCode,
         };
-      });
+
+        if (distinctTimeline.length > 0) {
+          const prev = distinctTimeline[distinctTimeline.length - 1];
+          // 判斷是否為實質相同樂器 (面板代碼相同或 MSB/LSB/PC 相同)
+          const isSameVoice =
+            (prev.panelCode && point.panelCode && prev.panelCode === point.panelCode) ||
+            (prev.msb === point.msb && prev.lsb === point.lsb && prev.pc === point.pc);
+
+          if (isSameVoice) {
+            // 同一樂器重複發送 (如第 1 小節 redundant reset)，視為重複事件予以跳過
+            continue;
+          }
+        }
+        distinctTimeline.push(point);
+      }
+
+      // 若未包含任何 Program Change 事件但該通道有音符或事件，則以初始音色補全一個節點
+      if (distinctTimeline.length === 0 && (acc.hasAnyEvent || acc.noteCount > 0)) {
+        distinctTimeline.push({
+          tick: 0,
+          bar: 1,
+          channel: ch,
+          msb: resolved.msb,
+          lsb: resolved.lsb,
+          pc: resolved.pc,
+          voiceName: resolved.voiceName,
+          category,
+          panelCode: resolved.panelCode,
+        });
+      }
+
+      // 真正換樂器次數即為去重後的音色數量 (若 <= 1 則代表全曲自始至終皆為單一樂器)
+      const programChangesCount = distinctTimeline.length;
+      const programChangeTimeline = distinctTimeline;
 
       activeChannels.push({
         channel: ch,
@@ -444,7 +482,7 @@ export class MidiSongAnalyzer {
         pan: acc.pan ?? 64,
         reverb: acc.reverb ?? 40,
         chorus: acc.chorus ?? 0,
-        programChangesCount: acc.programChangesCount,
+        programChangesCount,
         programChangeTimeline,
       });
     }
