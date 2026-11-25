@@ -2530,7 +2530,7 @@ export class PlayerApp {
         <div style="display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: rgba(9, 13, 22, 0.75); border-bottom: 1px solid rgba(148, 163, 184, 0.15); flex-wrap: wrap;">
           <button type="button" class="ref-tab-btn" data-ref-tab="casm" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(167, 139, 250, 0.4); background: rgba(139, 92, 246, 0.22); color: #ddd6fe; font-size: 0.8rem; font-weight: 700; cursor: pointer;">📐 1. CASM 轉調秘笈 (NTR / NTT)</button>
           <button type="button" class="ref-tab-btn" data-ref-tab="pad" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">🎹 2. Multi Pad 4 大型態與調性指南</button>
-          <button type="button" class="ref-tab-btn" data-ref-tab="slice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">✂️ 3. STY 切片與和弦基準三模式</button>
+          <button type="button" class="ref-tab-btn" data-ref-tab="slice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">✂️ 3. STY 8 大聲部與切片三模式</button>
           <button type="button" class="ref-tab-btn" data-ref-tab="voice" style="padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(30, 41, 59, 0.7); color: #cbd5e1; font-size: 0.8rem; font-weight: 700; cursor: pointer;">🎼 4. SX920 音色三聯號與別名速查</button>
         </div>
 
@@ -2641,9 +2641,75 @@ export class PlayerApp {
             </table>
           </div>
 
-          <!-- Tab 3: STY 切片三模式 -->
+          <!-- Tab 3: STY 8 大聲部與切片三模式 -->
           <div class="ref-tab-pane" data-pane="slice" style="display: none; flex-direction: column; gap: 14px;">
-            <div style="font-weight: 800; color: #34d399; font-size: 0.9rem;">✂️ STY 切片三合一基準和弦與段落分流鐵律</div>
+            <div style="font-weight: 800; color: #38bdf8; font-size: 0.92rem;">🎹 Yamaha 伴奏檔（.STY）8 大標準聲部（Channel 9 ~ 16）規格架構</div>
+            <div style="color: #cbd5e1; font-size: 0.8rem;">
+              Yamaha PSR-SX920 / SX900 / Genos 全系列電子琴之伴奏檔（.STY / .PRS / .SST），琴端音源硬體固定分配於 <strong>Channel 9 至 Channel 16（固定 8 個伴奏席位）</strong>。若來源 MIDI 通道超過 8 軌，系統將自動優先保留精華聲部，其餘軌道可手動替換或一鍵轉移至 Multi Pad：
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; background: rgba(15, 23, 42, 0.6);">
+              <thead>
+                <tr style="background: rgba(30, 41, 59, 0.9); color: #94a3b8; text-align: left;">
+                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">伴奏聲部 (Part)</th>
+                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2); width: 68px;">琴端通道</th>
+                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">聲部職責與音樂角色</th>
+                  <th style="padding: 7px 10px; border: 1px solid rgba(148,163,184,0.2);">常見配置樂器與 CASM 屬性</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #f87171;">🥁 Rhythm 1</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 9</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fca5a5;">打擊鼓組 (Main Drums)</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">標準爵士鼓套件 (大鼓、小鼓、Hi-Hat) · NTR=Fixed, NTT=Bypass</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fb923c;">🪘 Rhythm 2</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 10</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fdba74;">打擊節奏 / 敲擊樂器 (Percussion)</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">康加鼓、沙錘、手搖鈴、拉丁第二打擊聲部 · NTR=Fixed, NTT=Bypass</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #facc15;">🎸 Bass</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 11</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fef08a;">貝斯低音 (Bassline)</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">電貝斯、木貝斯、合成低音 (C1~E2) · NTR=Trans, NTT=Bass</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #4ade80;">🎹 Chord 1</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 12</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #86efac;">主要和弦織體 (Main Chord)</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">鋼琴伴奏、木吉他分解和弦、主要和聲骨架 · NTR=Trans, NTT=Chord</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #2dd4bf;">🎸 Chord 2</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 13</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #5eead4;">輔助和弦織體 (Sub Chord)</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">電吉他刷弦、電鋼琴 (EP)、第二和聲節奏織體 · NTR=Trans, NTT=Chord</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #60a5fa;">🎻 Pad</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 14</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #93c5fd;">長音鋪底 (Soundbed)</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">弦樂合奏 (Strings)、合成溫暖鋪底 (Warm Pad) · NTR=Trans, NTT=Chord</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #a78bfa;">🎷 Phrase 1</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 15</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #c4b5fd;">副旋律插音 1 / 裝飾樂句</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">薩克斯風、長笛、電吉他過門插音 · NTR=Trans, NTT=Melody / Bypass</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #f472b6;">🎺 Phrase 2</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); color: #cbd5e1;">Ch 16</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2); font-weight: 700; color: #fbcfe8;">副旋律插音 2 / 對位樂句</td>
+                  <td style="padding: 6px 10px; border: 1px solid rgba(148,163,184,0.2);">銅管齊奏、提琴對位、前奏/間奏主奏吉他 · NTR=Trans, NTT=Melody / Bypass</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="font-weight: 800; color: #34d399; font-size: 0.9rem; margin-top: 4px;">✂️ STY 切片三合一基準和弦與段落分流鐵律</div>
             <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.8rem;">
               <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 10px 12px;">
                 <strong style="color: #6ee7b7;">1. 【原曲和弦直通 (ORIGINAL_PASS_THROUGH · NTT = Bypass)】— Intro / Ending 預設推薦</strong><br/>
