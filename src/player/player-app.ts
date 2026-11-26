@@ -9,6 +9,7 @@ import { YamahaWriter } from '../core/writer/yamaha-writer';
 import { YamahaStyleModifier } from '../core/writer/style-modifier';
 import { CasmModifier, type CasmChannelTranspositionMode } from '../core/writer/casm-modifier';
 import { YamahaPadModifier, PAD_KEY_LIST, PAD_ICON_LIST, type PadProjectDiagnosis } from '../core/writer/pad-modifier';
+import { getSweetSpotProfile } from '../core/data/instrument-sweet-spot';
 import { YamahaPadSynthesizer } from '../core/writer/pad-synthesizer';
 import type { PlaybackNoteEvent, PlaybackCCEvent, PlaybackOutputMode } from './sty-playback-engine';
 import { VoicePickerModal } from './voice-picker-modal';
@@ -4758,6 +4759,16 @@ export class PlayerApp {
         ? `<span style="font-size: 0.68rem; padding: 1px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.22); border: 1px solid rgba(167, 139, 250, 0.45); color: #ddd6fe; white-space: nowrap;" title="此軌與其他 Pad 存在交錯接力或合奏關係，移調時全體同升同降以防旋律斷層">${relationBadge}</span>`
         : '';
 
+      const sweetProfile = getSweetSpotProfile(t.voiceInfo.category);
+      const isPitchOverflow = t.pitchMax !== null && sweetProfile !== null && t.pitchMax > sweetProfile.sweetMax;
+      const overflowSemitones = isPitchOverflow ? t.pitchMax! - sweetProfile!.sweetMax : 0;
+      const sweetWarningHtml = isPitchOverflow
+        ? `<div class="pad-sweetspot-warning-box" style="font-size: 0.71rem; color: #fca5a5; background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 5px; padding: 4px 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+             <span>⚠️ <strong>音域偏高</strong> (超標 ${overflowSemitones}st，甜區上限 ${sweetProfile!.sweetMax})</span>
+             <button type="button" class="midi-locator-btn btn-pad-quick-drop-oct" data-pad-num="${t.padNum}" style="background: rgba(239, 68, 68, 0.35); border: 1px solid #ef4444; color: #ffffff; border-radius: 4px; padding: 1px 7px; font-size: 0.69rem; cursor: pointer; white-space: nowrap;" title="一鍵將此 Pad 降一個八度 (-12 半音) 回到黃金甜區">降八度 ▾</button>
+           </div>`
+        : '';
+
       return `
         <div class="pad-studio-card" data-pad-num="${t.padNum}" data-channel="${t.channel}"
              style="background: rgba(19, 27, 46, 0.92); border: 2px solid ${isFocused ? color : 'rgba(255,255,255,0.1)'}; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.15s; box-shadow: ${isFocused ? `0 0 14px ${color}33` : 'none'}; min-width: 0; overflow: hidden;">
@@ -4786,7 +4797,7 @@ export class PlayerApp {
             </span>
           </div>
 
-          <!-- 音色選擇按鈕 (點擊開啟 SX920 2,395 音色庫) -->
+          <!-- 音色選擇按鈕 (點擊開啟 SX920 2,395 音色庫) + 單軌八度微調按鈕組 -->
           <div style="display: flex; align-items: center; gap: 6px;">
             <button type="button" class="btn-pad-card-voice" data-channel="${t.channel}"
                     style="flex: 1; min-width: 0; background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 6px 9px; color: #f8fafc; font-size: 0.79rem; font-weight: 600; display: flex; align-items: center; justify-content: space-between; cursor: pointer; text-align: left;"
@@ -4794,7 +4805,13 @@ export class PlayerApp {
               <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🎹 ${t.voiceInfo.voiceName}</span>
               <span style="font-size: 0.71rem; color: #38bdf8; flex-shrink: 0; margin-left: 4px;">[${t.voiceInfo.panelCode}] ✏️</span>
             </button>
+            <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;" title="單軌八度微調 (若為接力旋律則提示同步連動)">
+              <button type="button" class="midi-locator-btn btn-pad-card-oct-minus" data-pad-num="${t.padNum}" style="padding: 4px 6px; font-size: 0.71rem; font-weight: 700; color: #ddd6fe; background: rgba(139, 92, 246, 0.16); border-color: rgba(167, 139, 250, 0.4);" title="將此 Pad 單軌往下降一個八度 (-12 半音)">▼ -8度</button>
+              <button type="button" class="midi-locator-btn btn-pad-card-oct-plus" data-pad-num="${t.padNum}" style="padding: 4px 6px; font-size: 0.71rem; font-weight: 700; color: #ddd6fe; background: rgba(139, 92, 246, 0.16); border-color: rgba(167, 139, 250, 0.4);" title="將此 Pad 單軌往上升一個八度 (+12 半音)">▲ +8度</button>
+            </div>
           </div>
+
+          ${sweetWarningHtml}
 
           <!-- Repeat (RP) 與 Chord Match (CM) 硬體旗標開關 + 獨奏/靜音 -->
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; background: rgba(9, 13, 22, 0.55); padding: 6px 8px; border-radius: 6px;">
@@ -5131,6 +5148,84 @@ export class PlayerApp {
         this.refreshPadStudioEngineAndSnapshots(`🗑️ 已清空 Pad ${padNum} 的所有音符 (成為 0 音符空軌)`);
       });
     });
+
+    // 【任務 4-1C 模組三】單軌升降八度按鈕 (▼ -8度 / ▲ +8度) 與一鍵降八度 (btn-pad-quick-drop-oct)
+    this.padCardsGrid.querySelectorAll('.btn-pad-card-oct-minus').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const padNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        this.handlePadTrackOctaveShift(padNum, -1);
+      });
+    });
+
+    this.padCardsGrid.querySelectorAll('.btn-pad-card-oct-plus').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const padNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        this.handlePadTrackOctaveShift(padNum, 1);
+      });
+    });
+
+    this.padCardsGrid.querySelectorAll('.btn-pad-quick-drop-oct').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const padNum = parseInt((btn as HTMLElement).getAttribute('data-pad-num') || '1', 10);
+        this.handlePadTrackOctaveShift(padNum, -1);
+      });
+    });
+  }
+
+  /**
+   * 【任務 4-1C 模組三】對指定 Pad 執行單軌或連動升降八度 (-1 或 +1)，並檢查多軌接力連動防呆
+   */
+  private handlePadTrackOctaveShift(padNum: number, octaveDelta: -1 | 1) {
+    if (!this.currentParsed || this.currentParsed.format !== 'PAD') return;
+
+    const diag = this.currentPadDiagnosis || YamahaPadModifier.analyzePadProject(this.currentParsed);
+    const hocketRel = diag.trackRelations?.find(r => r.type === 'HOCKET' && r.padNums.includes(padNum));
+
+    let targetPadNums = [padNum];
+    if (hocketRel && hocketRel.padNums.length > 1) {
+      const partnerNums = hocketRel.padNums.filter(n => n !== padNum);
+      const partnerLabels = partnerNums.map(n => `Pad ${n}`).join('、');
+      const actionLabel = octaveDelta === -1 ? '降一個八度 (-12 半音)' : '升一個八度 (+12 半音)';
+      const syncWithPartner = confirm(
+        `Pad ${padNum} 與 ${partnerLabels} 為【交錯接力主旋律】。\n\n是否同步為接力夥伴執行 ${actionLabel}，以防止多軌接力旋律出現斷層？\n\n【確定】：同步連動調整（推薦，保持旋律完整不斷裂）\n【取消】：僅單獨調整 Pad ${padNum}`
+      );
+      if (syncWithPartner) {
+        targetPadNums = hocketRel.padNums;
+      }
+    }
+
+    const wasPlaying = styPlaybackEngine.getIsPlaying();
+    styPlaybackEngine.stop();
+
+    const res = YamahaPadModifier.shiftPadTrackOctave(this.currentParsed, targetPadNums, octaveDelta);
+    if (!res.success) return;
+
+    // 同步更新原始音符快照中對應 Pad 的音高，確保後續調性平移依然精準
+    for (const pNum of res.modifiedPadNums) {
+      const origNotes = this.originalPadTrackNotes.get(pNum);
+      if (origNotes) {
+        this.originalPadTrackNotes.set(
+          pNum,
+          origNotes.map(n => ({
+            ...n,
+            note: Math.max(0, Math.min(127, n.note + res.appliedSemitones)),
+          }))
+        );
+      }
+    }
+
+    const padLabels = res.modifiedPadNums.map(n => `Pad ${n}`).join('、');
+    const sign = res.appliedSemitones > 0 ? `+${res.appliedSemitones}` : `${res.appliedSemitones}`;
+    this.refreshPadStudioEngineAndSnapshots(
+      `✅ 已將【${padLabels}】微調 ${sign} 半音 (${octaveDelta > 0 ? '升八度' : '降八度'})！`
+    );
+
+    if (wasPlaying) {
+      styPlaybackEngine.play();
+    }
   }
 
   /**

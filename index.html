@@ -5872,12 +5872,13 @@
             <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="F">F 大調</button>
             <button type="button" class="midi-locator-btn pad-quick-key-btn" data-target-key="G">G 大調</button>
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 0.76rem; color: #94a3b8;">微調：</span>
-            <button type="button" class="midi-locator-btn" id="btn-pad-semi-minus" title="全軌降 1 半音">-1 半音</button>
-            <button type="button" class="midi-locator-btn" id="btn-pad-semi-plus" title="全軌升 1 半音">+1 半音</button>
-            <button type="button" class="midi-locator-btn" id="btn-pad-oct-minus" title="全軌降 1 八度 (-12 半音)">-12 八度</button>
-            <button type="button" class="midi-locator-btn" id="btn-pad-oct-plus" title="全軌升 1 八度 (+12 半音)">+12 八度</button>
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="font-size: 0.76rem; color: #94a3b8;">八度/半音微調：</span>
+            <button type="button" class="midi-locator-btn" id="btn-pad-oct-minus" style="background: rgba(139, 92, 246, 0.18); border-color: rgba(167, 139, 250, 0.45); color: #ddd6fe; font-weight: 700; padding: 4px 10px;" title="不改變目標調性，將所有勾選之 Pad 旋律同步往下降一個八度 (-12 半音)，保持多軌接力旋律不斷層">🔽 全軌同步 -1 八度 (-12)</button>
+            <button type="button" class="midi-locator-btn" id="btn-pad-oct-plus" style="background: rgba(139, 92, 246, 0.18); border-color: rgba(167, 139, 250, 0.45); color: #ddd6fe; font-weight: 700; padding: 4px 10px;" title="不改變目標調性，將所有勾選之 Pad 旋律同步往上升一個八度 (+12 半音)，保持多軌接力旋律不斷層">🔼 全軌同步 +1 八度 (+12)</button>
+            <span style="color: rgba(255,255,255,0.15); margin: 0 2px;">|</span>
+            <button type="button" class="midi-locator-btn" id="btn-pad-semi-minus" title="全軌降 1 半音">-1st</button>
+            <button type="button" class="midi-locator-btn" id="btn-pad-semi-plus" title="全軌升 1 半音">+1st</button>
           </div>
         </div>
       </div>

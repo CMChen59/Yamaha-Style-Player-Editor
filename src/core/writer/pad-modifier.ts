@@ -1190,6 +1190,71 @@ export class YamahaPadModifier {
   }
 
   /**
+   * 【任務 4-1C 模組三】單軌或多軌一鍵升降八度 (±12 半音)
+   * 在不改變既有調性定義的前提下，直接將指定 Pad 音符升/降 12 半音 (限制於 0~127 內)，保留所有控制器與混音設定
+   */
+  public static shiftPadTrackOctave(
+    parsed: YamahaFileParsed,
+    padNums: number | number[],
+    octaveDelta: number
+  ): {
+    success: boolean;
+    modifiedPadNums: number[];
+    appliedSemitones: number;
+    results: Array<{ padNum: number; noteCount: number; oldRange: [number, number] | null; newRange: [number, number] | null }>;
+  } {
+    const semitones = octaveDelta * 12;
+    const targetPads = (Array.isArray(padNums) ? padNums : [padNums]).filter(n => n >= 1 && n <= 4);
+    const modifiedPadNums: number[] = [];
+    const results: Array<{ padNum: number; noteCount: number; oldRange: [number, number] | null; newRange: [number, number] | null }> = [];
+
+    for (const padNum of targetPads) {
+      const track = parsed.tracks[padNum];
+      if (!track || !track.events) continue;
+
+      let oldMin = 127;
+      let oldMax = 0;
+      let newMin = 127;
+      let newMax = 0;
+      let noteCount = 0;
+
+      for (const ev of track.events) {
+        if ((ev.type === 'noteOn' || ev.type === 'noteOff') && ev.noteNumber !== undefined) {
+          if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0) {
+            noteCount++;
+            if (ev.noteNumber < oldMin) oldMin = ev.noteNumber;
+            if (ev.noteNumber > oldMax) oldMax = ev.noteNumber;
+          }
+          const shifted = Math.max(0, Math.min(127, ev.noteNumber + semitones));
+          ev.noteNumber = shifted;
+          if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0) {
+            if (shifted < newMin) newMin = shifted;
+            if (shifted > newMax) newMax = shifted;
+          }
+        }
+      }
+
+      if (noteCount > 0) {
+        this.rebuildTrackRawChunk(track);
+        modifiedPadNums.push(padNum);
+        results.push({
+          padNum,
+          noteCount,
+          oldRange: [oldMin, oldMax],
+          newRange: [newMin, newMax],
+        });
+      }
+    }
+
+    return {
+      success: modifiedPadNums.length > 0,
+      modifiedPadNums,
+      appliedSemitones: semitones,
+      results,
+    };
+  }
+
+  /**
    * 一鍵清空指定 Pad (1~4) 的所有音符事件，保留該軌的音色與混音設定 (成為 0 音符空軌)
    */
   public static clearPadTrackNotes(parsed: YamahaFileParsed, padNum: number): boolean {

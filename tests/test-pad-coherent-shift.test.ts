@@ -120,4 +120,89 @@ describe('任務 4-1C 模組二：多軌接力全域同進退八度連動與關�
     expect(finalPad2.map(n => n.note)).toEqual([74, 88]);
     expect(finalPad2[0].note - finalPad1[1].note).toBe(3);
   });
+
+  it('4. shiftPadTrackOctave 單軌降八度 (-1) 與升八度 (+1) 正確位移 12 半音並重建 RawChunk', () => {
+    const mockParsed: YamahaFileParsed = {
+      header: { format: 1, trackCount: 2, division: 480 },
+      format: 'PAD',
+      division: 480,
+      tracks: [
+        { events: [{ type: 'endOfTrack', delta: 0 }] },
+        {
+          events: [
+            { type: 'noteOn', noteNumber: 60, velocity: 100, delta: 0 },
+            { type: 'noteOff', noteNumber: 60, velocity: 0, delta: 480 },
+            { type: 'endOfTrack', delta: 0 },
+          ],
+        },
+      ],
+      padConfig: {
+        names: ['Pad 1', 'Pad 2', 'Pad 3', 'Pad 4'],
+        icons: ['S809', 'S809', 'S809', 'S809'],
+        repeatFlags: [false, false, false, false],
+        chordMatchFlags: [false, false, false, false],
+      },
+    };
+
+    // 測試降八度 (-1)
+    const downRes = YamahaPadModifier.shiftPadTrackOctave(mockParsed, 1, -1);
+    expect(downRes.success).toBe(true);
+    expect(downRes.appliedSemitones).toBe(-12);
+    expect(downRes.results[0].newRange).toEqual([48, 48]);
+    const afterDown = YamahaPadModifier.extractTrackNotes(mockParsed.tracks[1]);
+    expect(afterDown[0].note).toBe(48);
+
+    // 測試升八度 (+1)
+    const upRes = YamahaPadModifier.shiftPadTrackOctave(mockParsed, 1, 1);
+    expect(upRes.success).toBe(true);
+    expect(upRes.appliedSemitones).toBe(12);
+    expect(upRes.results[0].newRange).toEqual([60, 60]);
+    const afterUp = YamahaPadModifier.extractTrackNotes(mockParsed.tracks[1]);
+    expect(afterUp[0].note).toBe(60);
+  });
+
+  it('5. shiftPadTrackOctave 支援多軌同步升降八度且邊界保護限制在 0~127 內', () => {
+    const mockParsed: YamahaFileParsed = {
+      header: { format: 1, trackCount: 3, division: 480 },
+      format: 'PAD',
+      division: 480,
+      tracks: [
+        { events: [{ type: 'endOfTrack', delta: 0 }] },
+        {
+          events: [
+            { type: 'noteOn', noteNumber: 125, velocity: 100, delta: 0 },
+            { type: 'noteOff', noteNumber: 125, velocity: 0, delta: 480 },
+            { type: 'endOfTrack', delta: 0 },
+          ],
+        },
+        {
+          events: [
+            { type: 'noteOn', noteNumber: 5, velocity: 100, delta: 0 },
+            { type: 'noteOff', noteNumber: 5, velocity: 0, delta: 480 },
+            { type: 'endOfTrack', delta: 0 },
+          ],
+        },
+      ],
+      padConfig: {
+        names: ['Pad 1', 'Pad 2', 'Pad 3', 'Pad 4'],
+        icons: ['S809', 'S809', 'S809', 'S809'],
+        repeatFlags: [false, false, false, false],
+        chordMatchFlags: [false, false, false, false],
+      },
+    };
+
+    // Pad 1 升八度: 125 + 12 = 137 -> 應夾在 127
+    const upRes = YamahaPadModifier.shiftPadTrackOctave(mockParsed, [1, 2], 1);
+    expect(upRes.success).toBe(true);
+    expect(upRes.modifiedPadNums).toEqual([1, 2]);
+    const afterUp1 = YamahaPadModifier.extractTrackNotes(mockParsed.tracks[1]);
+    const afterUp2 = YamahaPadModifier.extractTrackNotes(mockParsed.tracks[2]);
+    expect(afterUp1[0].note).toBe(127);
+    expect(afterUp2[0].note).toBe(17);
+
+    // Pad 2 降八度: 17 - 24 = -7 -> 應夾在 0
+    YamahaPadModifier.shiftPadTrackOctave(mockParsed, 2, -2);
+    const afterDown2 = YamahaPadModifier.extractTrackNotes(mockParsed.tracks[2]);
+    expect(afterDown2[0].note).toBe(0);
+  });
 });
