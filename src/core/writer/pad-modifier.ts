@@ -3,6 +3,7 @@ import type { YamahaFileParsed, MidiEvent, MidiTrack } from '../models/types';
 import { PadRecorder, type QuantizeGrid } from './pad-recorder';
 import { resolveYamahaVoiceWithAlias } from '../data/yamaha-voices';
 import { MidiSongAnalyzer } from '../parser/midi-song-analyzer';
+import { decideOctaveRoute, type SweetSpotRouteDecision, type SweetSpotTrackInput } from '../data/instrument-sweet-spot';
 
 /**
  * Multi Pad 24 大小調標準定義 (12 小調 + 12 大調)
@@ -79,6 +80,8 @@ export interface PadTrackDiagnosis {
   barLength: number;
   pitchMin: number | null;
   pitchMax: number | null;
+  /** 平均音高 (MIDI Note，供黃金音域重心判定；空軌為 null/undefined) */
+  avgPitch?: number | null;
   pitchRangeLabel: string;
   distinctPitchClasses: number[];
   distinctPitchNames: string[];
@@ -146,6 +149,8 @@ export interface PadKeyTransposeOptions {
   appendKeySuffixToNames?: boolean;
   /** 自訂名稱調性後綴文字 (例如傳入 'Em原調' 則產出 'Lead 1 (Em原調)'；未傳入則預設使用 targetKey 如 'Em') */
   keySuffixLabel?: string;
+  /** 【任務 4-1C 模組一】是否依樂器黃金音域 (Sweet Spot) 於高/低八度路線間擇優 (預設 false 以相容舊黃金範本；UI 預設開啟) */
+  useSweetSpot?: boolean;
 }
 
 /**
@@ -516,6 +521,48 @@ export class YamahaPadModifier {
   }
 
   /**
+   * 【任務 4-1C 模組一】依樂器黃金音域 (Sweet Spot) 推薦「同一目標調性」下的最佳八度路線。
+   * - 目標調性 100% 不變：僅在高八度 (+N) 與低八度 (N-12) 兩條路線間擇一。
+   * - 所有參與軌共用同一個結果 (整組同進退)，避免多軌接力旋律斷層。
+   * - direction 為 'up' / 'down' 時尊重使用者強制指定；僅 'auto' 啟用黃金音域決策。
+   */
+  public static recommendSemitoneShift(
+    diagnosis: Pick<PadProjectDiagnosis, 'tracks'>,
+    sourceKey: string,
+    targetKey: string,
+    direction: 'up' | 'down' | 'auto' = 'auto',
+    padNumbers?: number[]
+  ): SweetSpotRouteDecision & { sourceDef: PadKeyDefinition; targetDef: PadKeyDefinition } {
+    const sourceDef = this.resolvePadKeyDefinition(sourceKey);
+    const targetDef = this.resolvePadKeyDefinition(targetKey);
+    const upSemitones = (targetDef.rootPc - sourceDef.rootPc + 12) % 12;
+
+    const inputs: SweetSpotTrackInput[] = diagnosis.tracks
+      .filter(t =>
+        t.musicalType !== 'DRUM_SFX' &&
+        t.musicalType !== 'EMPTY' &&
+        t.pitchMin !== null && t.pitchMax !== null &&
+        (!padNumbers || padNumbers.includes(t.padNum))
+      )
+      .map(t => ({
+        padNum: t.padNum,
+        category: t.voiceInfo.category,
+        pitchMin: t.pitchMin!,
+        pitchMax: t.pitchMax!,
+        avgPitch: t.avgPitch ?? (t.pitchMin! + t.pitchMax!) / 2,
+      }));
+
+    const decision = decideOctaveRoute(inputs, upSemitones);
+    if (direction === 'up' && decision.chosen !== 'up') {
+      return { ...decision, semitones: decision.upSemitones, chosen: 'up', reasonZh: '使用者指定向上平移', sourceDef, targetDef };
+    }
+    if (direction === 'down' && decision.chosen !== 'down' && upSemitones !== 0) {
+      return { ...decision, semitones: decision.downSemitones, chosen: 'down', reasonZh: '使用者指定向下平移', sourceDef, targetDef };
+    }
+    return { ...decision, sourceDef, targetDef };
+  }
+
+  /**
    * 全面診斷 Multi Pad (.PAD) 專案：
    * 1. 自動診斷 Pad 1 ~ Pad 4 各軌樂器音色、混音、音符音域、音級與「4 大經典音樂型態」
    * 2. 自動估算全檔「原曲基準調 (Estimated Source Key)」(供 UI 預填，使用者亦可隨時手動覆寫)
@@ -721,6 +768,7 @@ export class YamahaPadModifier {
         barLength,
         pitchMin,
         pitchMax,
+        avgPitch: pitches.reduce((a, b) => a + b, 0) / pitches.length,
         pitchRangeLabel,
         distinctPitchClasses: distinctPcs,
         distinctPitchNames,
@@ -920,25 +968,35 @@ export class YamahaPadModifier {
     const enforceFixedKeyCM0000 = options.enforceFixedKeyCM0000 ?? true;
     const appendKeySuffixToNames = options.appendKeySuffixToNames ?? true;
 
-    // 找出所有非鼓組軌的當前最高音，供 'auto' 方向判斷
-    const melodyMaxPitches = diagnosis.tracks
-      .filter(t => t.musicalType !== 'DRUM_SFX' && t.musicalType !== 'EMPTY' && t.pitchMax !== null)
-      .map(t => t.pitchMax!);
-    const globalHighestPitch = melodyMaxPitches.length > 0 ? Math.max(...melodyMaxPitches) : 84;
-
     // 2. 計算基準半音差
     let baseSemitoneShift = 0;
     if (options.customSemitones !== undefined) {
       baseSemitoneShift = Math.round(options.customSemitones);
     } else {
-      const shiftInfo = this.calculateSemitoneShift(
-        effectiveSourceKey,
-        effectiveTargetKey,
-        options.direction ?? 'auto',
-        globalHighestPitch,
-        maxPitchLimit
-      );
-      baseSemitoneShift = shiftInfo.semitones;
+      if (options.useSweetSpot) {
+        // 【任務 4-1C 模組一】以樂器黃金音域決策最佳八度路線 (目標調性不變，整組軌道同進退)
+        const routeInfo = this.recommendSemitoneShift(
+          diagnosis,
+          effectiveSourceKey,
+          effectiveTargetKey,
+          options.direction ?? 'auto',
+          options.padNumbers
+        );
+        baseSemitoneShift = routeInfo.semitones;
+      } else {
+        // 相容舊行為 (《空港》實機驗收黃金範本)：僅以全域 maxPitchLimit 判斷
+        const melodyMaxPitches = diagnosis.tracks
+          .filter(t => t.musicalType !== 'DRUM_SFX' && t.musicalType !== 'EMPTY' && t.pitchMax !== null)
+          .map(t => t.pitchMax!);
+        const globalHighestPitch = melodyMaxPitches.length > 0 ? Math.max(...melodyMaxPitches) : 84;
+        baseSemitoneShift = this.calculateSemitoneShift(
+          effectiveSourceKey,
+          effectiveTargetKey,
+          options.direction ?? 'auto',
+          globalHighestPitch,
+          maxPitchLimit
+        ).semitones;
+      }
     }
 
     const targetPads = options.padNumbers ?? [1, 2, 3, 4];

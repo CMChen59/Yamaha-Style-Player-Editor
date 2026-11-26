@@ -195,7 +195,11 @@
   3. **從零自建 PAD 與從 MIDI 選段抽入 PAD 的源頭音域盲點**：自建看簡譜點音符時容易誤點高一個八度；從一般電腦 GM MIDI 抽選段落（或抽入後更換 SX920 樂器音色）時，常遇到原 GM 音高虛高、局部小節和弦非 C 大調（開 `CM=1` 會走音破表）、以及降八度後中頻音量被伴奏掩蓋等問題。
 
 - **四大核心執行模組（涵蓋「匯入 PAD 移調」、「自建全新 PAD」、「MIDI 選段轉 PAD」三大場景）**：
-  1. **模組一：16 大樂器分類專屬黃金音域資料庫（Instrument Sweet-Spot Profile）與重心距離決策**
+  1. **模組一：[✅ 已完成 2026-11-26] 16 大樂器分類專屬黃金音域資料庫（Instrument Sweet-Spot Profile）與重心距離決策**
+     - **實作**：新增 [`instrument-sweet-spot.ts`](../src/core/data/instrument-sweet-spot.ts)（分類黃金音域表、`evaluateShiftRoute`、`decideOctaveRoute`）與 `YamahaPadModifier.recommendSemitoneShift`；`PadTrackDiagnosis` 新增 `avgPitch`；`transposePadKey` 新增 `useSweetSpot` 選項（核心預設 `false`，以保護《空港》`+7` 實機驗收黃金範本；UI 套用/預覽/匯出前校驗一律開啟，預覽徽章 tooltip 顯示決策原因）。
+     - **決策規則**：目標調性不變，僅在高八度（`+N`）與低八度（`N-12`）擇一；① 總超出甜區半音數較少者勝 ② 違規相同時，重心距離需改善 ≥ 4 半音才改走低八度 ③ 否則優先高八度；整組勾選軌共用同一結果；使用者強制 `up/down` 方向優先。
+     - **測試**：`tests/test-instrument-sweet-spot.test.ts` (9/9) 通過，既有 Pad 轉調/E2E/MIDI 抽入測試 (9/9) 無 regression。
+     - **注意**：《空港》Am→Em 在 UI 自動模式下，因 Strings 最高音 F6(89)+7 超過 E6(88) 甜區，會推薦 `-5`；欲沿用實機驗收之 `+7` 請將方向改選「向上」。
      - 建立依 `category` 分類之黃金音域表：
        - **Guitar（吉他類）**：`SweetMax = 81 (A5)`, `SweetMin = 40 (E2)`, `IdealCenter = 68 (G#4)`
        - **Saxophone / Brass（薩克斯風 / 銅管）**：`SweetMax = 86 (D6)`, `SweetMin = 46 (Bb2)`, `IdealCenter = 74 (D5)`

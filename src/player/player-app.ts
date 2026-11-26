@@ -4579,14 +4579,12 @@ export class PlayerApp {
     const dstKey = this.selectPadTargetKey.value || 'Em';
     const dir = (this.selectPadShiftDir?.value as 'auto' | 'up' | 'down') || 'auto';
 
-    // 永遠以原始未移調之最高音計算預覽位移
+    // 永遠以原始未移調之音域計算預覽位移 (依樂器黃金音域決策高/低八度路線，與實際套用一致)
     const initDiag = this.initialPadDiagnosis || this.currentPadDiagnosis;
-    const maxPitches = initDiag
-      ? initDiag.tracks.filter(t => t.pitchMax !== null && t.musicalType !== 'DRUM_SFX').map(t => t.pitchMax!)
-      : [84];
-    const highestPitch = maxPitches.length > 0 ? Math.max(...maxPitches) : 84;
-
-    const shiftInfo = YamahaPadModifier.calculateSemitoneShift(srcKey, dstKey, dir, highestPitch, 96);
+    const shiftInfo = initDiag
+      ? YamahaPadModifier.recommendSemitoneShift(initDiag, srcKey, dstKey, dir, Array.from(this.selectedPadNumsForTranspose))
+      : YamahaPadModifier.calculateSemitoneShift(srcKey, dstKey, dir, 84, 96);
+    this.padShiftPreviewBadge.title = (shiftInfo as { reasonZh?: string }).reasonZh ?? '';
     const sign = shiftInfo.semitones > 0 ? `+${shiftInfo.semitones}` : `${shiftInfo.semitones}`;
     const isApplied = this.currentPadTotalSemitoneShift === shiftInfo.semitones && this.lastTransposedKeySuffix !== '';
     this.padShiftPreviewBadge.textContent = isApplied
@@ -4655,6 +4653,7 @@ export class PlayerApp {
       enforceFixedKeyCM0000: true,
       appendKeySuffixToNames: customTotalSemitones === undefined,
       keySuffixLabel: suffix,
+      useSweetSpot: true,
     });
 
     this.currentPadTotalSemitoneShift = res.baseSemitoneShift;
@@ -5149,11 +5148,9 @@ export class PlayerApp {
         const dir = (this.selectPadShiftDir?.value as 'auto' | 'up' | 'down') || 'auto';
 
         const initDiag = this.initialPadDiagnosis || this.currentPadDiagnosis;
-        const maxPitches = initDiag
-          ? initDiag.tracks.filter(t => t.pitchMax !== null && t.musicalType !== 'DRUM_SFX').map(t => t.pitchMax!)
-          : [84];
-        const highestPitch = maxPitches.length > 0 ? Math.max(...maxPitches) : 84;
-        const shiftInfo = YamahaPadModifier.calculateSemitoneShift(srcKey, dstKey, dir, highestPitch, 96);
+        const shiftInfo = initDiag
+          ? YamahaPadModifier.recommendSemitoneShift(initDiag, srcKey, dstKey, dir, Array.from(this.selectedPadNumsForTranspose))
+          : YamahaPadModifier.calculateSemitoneShift(srcKey, dstKey, dir, 84, 96);
         const expectedSuffix = this.inputPadKeySuffix?.value.trim() || dstKey;
 
         // 若使用者在介面上變更或指定了目標調 (且不同於基準調)，但尚未點擊套用，或位移狀態不符，在匯出前自動精準套用一次！
