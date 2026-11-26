@@ -4816,13 +4816,13 @@ export class PlayerApp {
             </label>
           </div>
 
-          <!-- 音樂型態診斷、音符統計與音域範圍 -->
+          <!-- 音樂型態診斷、發聲小節定位、音符統計與音域範圍 -->
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
             <span style="font-size: 0.71rem; padding: 2px 7px; border-radius: 4px; font-weight: 600; ${typeBadgeColor}">
               ${t.musicalTypeLabelZh}
             </span>
             <span style="font-size: 0.72rem; color: #94a3b8;">
-              <strong style="color: #cbd5e1;">${t.noteCount}</strong> 音符 · 音域: <strong style="color: #e2e8f0;">${t.pitchRangeLabel}</strong>
+              ${t.activeBarRangeLabel && t.noteCount > 0 ? `<span style="color: #38bdf8; font-weight: 700;" title="此 Pad 實際有音符發聲的小節範圍">📍${t.activeBarRangeLabel}</span> · ` : ''}<strong style="color: #cbd5e1;">${t.noteCount}</strong> 音符 · 音域: <strong style="color: #e2e8f0;">${t.pitchRangeLabel}</strong>
             </span>
           </div>
 
@@ -5209,24 +5209,46 @@ export class PlayerApp {
   }
 
   /**
-   * 【任務 4-1C 模組三】對指定 Pad 執行單軌或連動升降八度 (-1 或 +1)，並檢查多軌接力連動防呆
+   * 【任務 4-1C 模組三】對指定 Pad 執行單軌或全體參與移調軌同步升降八度 (-1 或 +1)
+   * 預設推薦「所有勾選 🔀參與移調 且不跌破最低音下限之軌道（Pad 1~4）」全體同進退，徹底避免漏調某軌主旋律造成斷層
    */
   private handlePadTrackOctaveShift(padNum: number, octaveDelta: -1 | 1) {
     if (!this.currentParsed || this.currentParsed.format !== 'PAD') return;
 
     const diag = this.currentPadDiagnosis || YamahaPadModifier.analyzePadProject(this.currentParsed);
-    const hocketRel = diag.trackRelations?.find(r => r.type === 'HOCKET' && r.padNums.includes(padNum));
+    const semitoneDelta = octaveDelta * 12;
+
+    // 蒐集所有勾選「🔀參與移調」且有音符、非鼓組之有效軌道 (全體同進退候選群組)
+    const coherentPadNums: number[] = [];
+    const skippedLowPads: number[] = [];
+    for (const trk of diag.tracks) {
+      if (trk.noteCount <= 0 || trk.musicalType === 'DRUM_SFX') continue;
+      const isSelected = trk.padNum === padNum || this.selectedPadNumsForTranspose.has(trk.padNum);
+      if (!isSelected) continue;
+
+      if (trk.padNum !== padNum && octaveDelta === -1 && trk.pitchMin !== null) {
+        const sweet = getSweetSpotProfile(trk.voiceInfo.category);
+        const minSafe = sweet ? Math.max(36, sweet.sweetMin - 4) : 36;
+        if (trk.pitchMin + semitoneDelta < minSafe) {
+          skippedLowPads.push(trk.padNum);
+          continue;
+        }
+      }
+      coherentPadNums.push(trk.padNum);
+    }
 
     let targetPadNums = [padNum];
-    if (hocketRel && hocketRel.padNums.length > 1) {
-      const partnerNums = hocketRel.padNums.filter(n => n !== padNum);
-      const partnerLabels = partnerNums.map(n => `Pad ${n}`).join('、');
+    if (coherentPadNums.length > 1) {
+      const allLabels = coherentPadNums.map(n => `Pad ${n}`).join('、');
       const actionLabel = octaveDelta === -1 ? '降一個八度 (-12 半音)' : '升一個八度 (+12 半音)';
-      const syncWithPartner = confirm(
-        `Pad ${padNum} 與 ${partnerLabels} 為【交錯接力主旋律】。\n\n是否同步為接力夥伴執行 ${actionLabel}，以防止多軌接力旋律出現斷層？\n\n【確定】：同步連動調整（推薦，保持旋律完整不斷裂）\n【取消】：僅單獨調整 Pad ${padNum}`
+      const lowSkipNote = skippedLowPads.length > 0
+        ? `\n（註：${skippedLowPads.map(n => `Pad ${n}`).join('、')} 原音域已偏低，自動保護不跟著降）`
+        : '';
+      const syncAll = confirm(
+        `您點擊了 Pad ${padNum} 的【${actionLabel}】。\n\n為保持全曲各軌相對音高與主旋律銜接不斷層，是否將所有參與移調的軌道【${allLabels}】同步執行 ${actionLabel}？${lowSkipNote}\n\n【確定】：全體同步調整（${allLabels} 一起升降，推薦，絕不漏軌斷層）\n【取消】：僅單獨調整 Pad ${padNum}`
       );
-      if (syncWithPartner) {
-        targetPadNums = hocketRel.padNums;
+      if (syncAll) {
+        targetPadNums = coherentPadNums;
       }
     }
 

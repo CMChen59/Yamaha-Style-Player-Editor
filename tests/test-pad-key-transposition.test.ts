@@ -29,9 +29,16 @@ describe('【第一階段驗收】Multi Pad 調性診斷與固定調性剛體半
     expect(diag2010.estimatedKey).toBe('Am');
     expect(diag2010.estimatedIsMinor).toBe(true);
     expect(diag2010.hasLongMelody).toBe(true);
+    expect(diag2010.tracks[0].activeBarRangeLabel).toBe('第 3~6 節');
+    expect(diag2010.tracks[1].activeBarRangeLabel).toBe('第 2~9 節');
     expect(diag2010.tracks[1].musicalType).toBe('MELODY_INTRO');
+    expect(diag2010.tracks[1].musicalTypeLabelZh).toBe('🎵 前奏 / 主旋律（含升降音 · 需關 CM）');
     expect(diag2010.tracks[1].hasLeadingOrChromaticTone).toBe(true);
     expect(diag2010.tracks[1].recommendedChordMatch).toBe(false);
+    expect(diag2010.tracks[2].activeBarRangeLabel).toBe('第 6~9 節');
+    expect(diag2010.tracks[3].activeBarRangeLabel).toBe('第 1 節');
+    expect(diag2010.tracks[3].musicalType).toBe('SHORT_MOTIF');
+    expect(diag2010.tracks[3].musicalTypeLabelZh).toBe('✨ 短插音 / 點綴短句');
 
     // 測試 2011-2_PAD.PAD
     const raw2011 = new Uint8Array(fs.readFileSync(sample2011Path));

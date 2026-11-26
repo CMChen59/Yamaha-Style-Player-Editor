@@ -85,6 +85,12 @@ export interface PadTrackDiagnosis {
   channel: number;              // 0 ~ 15
   noteCount: number;
   barLength: number;
+  /** 實際有音符發聲的起始小節 (1-based；空軌為 null) */
+  activeBarStart?: number | null;
+  /** 實際有音符發聲的結束小節 (1-based；空軌為 null) */
+  activeBarEnd?: number | null;
+  /** 實際發聲小節區間標籤 (如 '第 1 節'、'第 3~6 節'；空軌為 '無發聲') */
+  activeBarRangeLabel?: string;
   pitchMin: number | null;
   pitchMax: number | null;
   /** 平均音高 (MIDI Note，供黃金音域重心判定；空軌為 null/undefined) */
@@ -634,6 +640,9 @@ export class YamahaPadModifier {
           channel: padNum - 1,
           noteCount: 0,
           barLength: 1,
+          activeBarStart: null,
+          activeBarEnd: null,
+          activeBarRangeLabel: '無發聲',
           pitchMin: null,
           pitchMax: null,
           pitchRangeLabel: '無音符',
@@ -641,7 +650,7 @@ export class YamahaPadModifier {
           distinctPitchNames: [],
           hasLeadingOrChromaticTone: false,
           musicalType: 'EMPTY',
-          musicalTypeLabelZh: '空軌 (無音符)',
+          musicalTypeLabelZh: '⚪ 空軌（無音符）',
           recommendedChordMatch: false,
           hasChordMatchConflict: false,
           recommendationReasonZh: '此軌無音符，預設關閉 Chord Match',
@@ -691,6 +700,9 @@ export class YamahaPadModifier {
           channel,
           noteCount: 0,
           barLength,
+          activeBarStart: null,
+          activeBarEnd: null,
+          activeBarRangeLabel: '無發聲',
           pitchMin: null,
           pitchMax: null,
           pitchRangeLabel: '無音符',
@@ -698,7 +710,7 @@ export class YamahaPadModifier {
           distinctPitchNames: [],
           hasLeadingOrChromaticTone: false,
           musicalType: 'EMPTY',
-          musicalTypeLabelZh: '空軌 (無音符)',
+          musicalTypeLabelZh: '⚪ 空軌（無音符）',
           recommendedChordMatch: false,
           hasChordMatchConflict: false,
           recommendationReasonZh: '此軌無發聲音符',
@@ -707,6 +719,15 @@ export class YamahaPadModifier {
         });
         continue;
       }
+
+      const ticksPerBar = Math.max(1, (parsed.division || 480) * (parsed.timeSignature?.numerator || 4));
+      const noteBars = notes.map(n => Math.floor(n.startTick / ticksPerBar) + 1);
+      const activeBarStart = Math.min(...noteBars);
+      const activeBarEnd = Math.max(...noteBars);
+      const activeSpanBars = Math.max(1, activeBarEnd - activeBarStart + 1);
+      const activeBarRangeLabel = activeBarStart === activeBarEnd
+        ? `第 ${activeBarStart} 節`
+        : `第 ${activeBarStart}~${activeBarEnd} 節`;
 
       const pitches = notes.map(n => n.note);
       const pitchMin = Math.min(...pitches);
@@ -754,7 +775,7 @@ export class YamahaPadModifier {
 
       if (isDrumTrack) {
         musicalType = 'DRUM_SFX';
-        musicalTypeLabelZh = '打擊節奏 / 音效 (Drums / SFX)';
+        musicalTypeLabelZh = '🥁 鼓組 / 打擊節奏（需關 CM）';
         recommendedChordMatch = false;
         recommendationReasonZh = '打擊樂軌鐵律強制關閉 Chord Match (CM=0)，防止換和弦時鼓點音高錯亂';
       } else if (
@@ -764,23 +785,26 @@ export class YamahaPadModifier {
       ) {
         // 如 Balloon.S910.pad 第 3 軌 (純 1、5 音 C 與 G 脈衝)
         musicalType = 'CHORD_TEXTURE';
-        musicalTypeLabelZh = '純和弦織體 / 1、5音脈衝 (Chord Texture)';
+        musicalTypeLabelZh = '🎹 和弦伴奏律動（可開 CM 跟隨）';
         recommendedChordMatch = true;
-        recommendationReasonZh = '純 1、5 音骨幹伴奏織體，適合開啟 Chord Match (CM=1) 隨左手即時跟隨和弦';
-      } else if (barLength <= 2 && noteCount <= 8 && !hasBlackKey) {
-        // 如 2011-2_PAD.PAD 第 1 軌 (2 小節 6 音符 E-D-B 開放骨幹音短動機)
+        recommendationReasonZh = '純 1、5 音或和弦伴奏律動，適合開啟 Chord Match (CM=1) 隨左手即時跟隨和弦';
+      } else if (
+        (activeSpanBars <= 2 && noteCount <= 6) ||
+        (barLength <= 2 && noteCount <= 8 && !hasBlackKey)
+      ) {
+        // 如 2011-2_PAD.PAD 第 1 軌 (2 小節 6 音符短動機) 或 2010-1_PAD.PAD 第 4 軌 (第 1 小節 3 顆風鈴點綴音效)
         musicalType = 'SHORT_MOTIF';
-        musicalTypeLabelZh = '開放骨幹音短動機 (Short Motif)';
+        musicalTypeLabelZh = '✨ 短插音 / 點綴短句';
         recommendedChordMatch = false;
-        recommendationReasonZh = '短小骨幹音動機，建議關閉 Chord Match (CM=0) 避免被 C 大調 NTT 壓扁走音';
+        recommendationReasonZh = '簡短過門插音或開頭點綴短句，建議關閉 Chord Match (CM=0) 以保留原音程';
       } else {
-        // 跨小節長旋律 / 完整前奏 (如 2010-1 空港 Pad 2/3，或 2011-2 Pad 3/4)
+        // 跨小節長旋律 / 完整前奏 (如 2010-1 空港 Pad 1/2/3，或 2011-2 Pad 3/4)
         musicalType = 'MELODY_INTRO';
         musicalTypeLabelZh = hasLeadingOrChromaticTone
-          ? '完整前奏 / 帶導音花音長旋律 (Melody Intro with Leading Tone)'
-          : '跨小節長旋律 / 前奏對位 (Long Melodic Phrase)';
+          ? '🎵 前奏 / 主旋律（含升降音 · 需關 CM）'
+          : '🎶 長旋律 / 副旋律鋪底（需關 CM）';
         recommendedChordMatch = false;
-        recommendationReasonZh = '長旋律/前奏鐵律強制關閉 Chord Match (CM=0)，請使用「指定調性剛體平移」以 100% 保留演歌導音與音程';
+        recommendationReasonZh = '長旋律/前奏鐵律強制關閉 Chord Match (CM=0)，請使用「指定調性剛體平移」以 100% 保留升降半音與音程';
       }
 
       const hasChordMatchConflict =
@@ -795,6 +819,9 @@ export class YamahaPadModifier {
         channel,
         noteCount,
         barLength,
+        activeBarStart,
+        activeBarEnd,
+        activeBarRangeLabel,
         pitchMin,
         pitchMax,
         avgPitch: pitches.reduce((a, b) => a + b, 0) / pitches.length,
