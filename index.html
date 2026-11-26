@@ -1371,12 +1371,12 @@
       border: 1px solid var(--border-color);
       border-left: 5px solid var(--part-accent, var(--accent));
       border-radius: 12px;
-      padding: 14px 20px;
+      padding: 10px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
+      gap: 14px;
+      flex-wrap: nowrap;
       transition: all 0.25s ease;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }
@@ -1384,8 +1384,10 @@
     .focused-track-left {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 10px 14px;
       flex-wrap: wrap;
+      flex: 1;
+      min-width: 0;
     }
 
     .focused-tag {
@@ -1429,7 +1431,10 @@
     .focused-track-actions {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       gap: 10px;
+      flex-shrink: 0;
+      margin-left: auto;
     }
 
     .btn-banner-action {
@@ -6007,7 +6012,7 @@
         </div>
         <span id="focused-track-meta" class="focused-meta">音符數: 0 ｜ MIDI 通道: 9</span>
       </div>
-      <div class="focused-track-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <div class="focused-track-actions" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
         <div id="banner-casm-controls" style="display: none; align-items: center; gap: 6px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.25); padding: 4px 8px; border-radius: 8px;">
           <button type="button" id="btn-banner-fixed-bypass" class="btn-banner-action" style="padding: 4px 10px; font-size: 0.76rem; white-space: nowrap;" title="一鍵切換此聲部在當前段落的 CASM 固定音高直通鎖定 (NTR = Root Fixed + NTT = Bypass)">
             🔓 隨和弦轉調中
