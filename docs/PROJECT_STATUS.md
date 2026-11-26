@@ -1,6 +1,6 @@
 # 📊 Yamaha Style Player & Editor — 專案進度與待辦總表 (Single Source of Truth)
 
-> **最後更新**：2026-11-26 (規劃並登錄【任務 4-1C】Multi Pad 樂器黃金音域智慧守護、多軌接力全域同進退八度連動與 MIDI 選段適配系統：涵蓋「匯入現有 PAD 移調」、「從頭自建全新 PAD」與「從 MIDI 選段轉 PAD」三大場景，徹底解決主旋律移調後音域過高刺耳及單軌獨立折返造成的多軌接力旋律斷層問題)  
+> **最後更新**：2026-11-26 (全面完成並封存【任務 4-1C 全四模組】Multi Pad 樂器黃金音域智慧守護、全體參與移調軌同進退八度連動、小卡發聲小節定位與白話音樂型態標籤、自建 PAD 鋼琴捲軸黃金甜區底色與 MIDI 選段抽入音量飽滿化/CM=1 歸一化系統；全套 26/26 Pad 自動化測試通過並同步雲端)  
 > **使用說明**：本檔案為跨電腦（公司 ↔ 家裡）的**唯一進度基準**。凡已列入「✅ 已完成並封存」之項目，均已通過測試與實機驗證，請勿重複確認或重做；新對話開始時請直接聚焦於「🚧 當前待處理項目」。
 
 ---
@@ -22,6 +22,8 @@
 | **【任務 4-1 基礎】** | **Multi Pad (.PAD) 二進位結構解析與全軌屬性寫入** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`yamaha-writer.ts`](../src/core/writer/yamaha-writer.ts) | ✅ 已完成（完整支援 5 軌 SMF1 結構、`CMxxxx` / `RPxxxx` / `N1~N4` 控制標記） |
 | **【任務 4-1 終極】** | **Multi Pad 和弦跟隨適用邊界、固定調性鐵律與 STY 插音分工架構實機結案** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`GEMINI.md`](../GEMINI.md), `2010_空港_Intro_Am調.PAD` | ✅ 已完成並實機結案（PSR-SX920 雙向驗收：證實長旋律開 CM 必走音，CM0000 指定調性為 100% 依譜還原唯一解；插音歸 STY Phrase 聲部） |
 | **【任務 4-1A 全四階段】** | **Multi Pad 調性平移工作台全功能 (剛體平移 / 單軌屬性 / CC 控制曲線 / 鋼琴捲軸網格 / 4 軌齊奏 / 全生命週期 E2E 驗收通過封存)** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`index.html`](../index.html), [`test-pad-key-transposition.test.ts`](../tests/test-pad-key-transposition.test.ts), [`test-pad-full-lifecycle-e2e.test.ts`](../tests/test-pad-full-lifecycle-e2e.test.ts) | ✅ 全四階段全數完工並通過端到端測試與實機驗收封存：<br>1. **第一階段（轉調核心）**：支援 24 大小調定義、4 大型態診斷、首拍強拍主音+半終止屬音雙重調性加權、原曲基準調自動估算+手動覆寫即時重算、原始音高基準快照、匯出強制校驗 UI 設定防呆；使用者於 PSR-SX920 實測大調《月亮代表我的心》C ➔ Eb 與小調樂曲皆 100% 準確發聲。<br>2. **第二階段（單軌屬性與排版）**：單軌獨立勾選移調、複製/清空軌道、獨立小節長度調整、Vol/Pan/Rev/Cho 單欄垂直自適應排版（解決破版）、Icon 修改、新建空白 `.PAD` 與匯出。<br>3. **第三階段（CC 與編輯器連動）**：實裝 `replacePadCCEvents` 支援 CC 11/1/64/74 等自動化曲線即時寫回二進位 rawChunk、單軌鋼琴捲軸小節網格依選中 Pad 自身 `barLength` 精確適配、頂部橫幅專屬色/名稱/屬性連動同步、新增「▶ 4 軌齊奏試聽 / ⏹ 停止齊奏」按鈕。<br>4. **第四階段（端到端 E2E 測試與 Round-Trip 驗收）**：從 0 建立空白專案 ➔ 4 軌音符與不同小節 ➔ CC 11/1 動態曲線 ➔ 音色混音 ➔ 剛體轉調 ➔ 匯出二進位 ➔ 反解析雙向驗證零數據損失（Track 0 控制標籤、音色、混音、音符、CC、小節長度 100% 吻合）；實體琴現成樣本 2010-1 與 2011-2 Round-Trip 轉調無損驗收全數通過（全套測試 7/7 通過，生產打包成功）。 |
+| **【任務 4-1B】** | **MIDI 選段單軌快速塞入 Multi Pad (`Pad 1~4`) 與雙向無縫往返工作流** | [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`player-app.ts`](../src/player/player-app.ts), [`test-midi-to-pad-slice.test.ts`](../tests/test-midi-to-pad-slice.test.ts) | ✅ 已完成（1920➔480 PPQ 縮放、跨界音過濾、生效音色回溯、懸浮 4 格快選選單與工作台無縫切換） |
+| **【任務 4-1C 全四模組】** | **Multi Pad 樂器黃金音域智慧守護、全體同進退八度連動、小卡發聲小節定位與白話型態、鋼琴捲軸甜區底色與 MIDI 抽入適配** | [`instrument-sweet-spot.ts`](../src/core/data/instrument-sweet-spot.ts), [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts), [`single-track-editor.ts`](../src/player/single-track-editor.ts), [`player-app.ts`](../src/player/player-app.ts) | ✅ 全四模組全數完成（16 大樂器甜區資料庫、一人超標全體同進退八度連動、`📍第 X~Y 節` 實際發聲小節定位、直白白話音樂型態標籤、鋼琴捲軸 `🟢甜區 / 🟠超標 / 🟡CM預留` 視覺底色、MIDI 抽入音量飽滿化與 `CM=1` 自動歸一化回 C 大調中音母體，26/26 測試通過） |
 | **【任務 5-3】** | **全域 UI 緊湊化重大優化（檔案資訊橫幅與控制列單行化、全域垂直間隙收斂為 8px）** | [`index.html`](../index.html) | ✅ 已完成（檔案資訊橫幅高 75px ➔ 42px 單行流式排版、播放控制列 85px ➔ 42px 單行整合、全域模組間隙從 20~32px 統一縮小為 8px、消除 switcher margin，釋放 60~80px 垂直視野） |
 
 ---
