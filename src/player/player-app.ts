@@ -4715,13 +4715,15 @@ export class PlayerApp {
 
     const padColors = ['#38bdf8', '#f59e0b', '#10b981', '#a855f7'];
 
-    // 取得所有參與接力或疊音的 Pad 編號對應之關係標籤
+    // 取得所有參與接力或疊音的 Pad 編號對應之關係標籤 (接力主旋律 HOCKET 權重最高，優先於合奏疊音)
     const relationMap = new Map<number, string>();
     if (diag.trackRelations) {
       for (const rel of diag.trackRelations) {
         for (const num of rel.padNums) {
           const badge = rel.type === 'HOCKET' ? '🔗 接力主旋律' : '👥 同步合奏疊音';
-          relationMap.set(num, badge);
+          if (rel.type === 'HOCKET' || !relationMap.has(num)) {
+            relationMap.set(num, badge);
+          }
         }
       }
     }

@@ -243,7 +243,10 @@ export function detectPadTrackRelations(
       }
 
       const minDur = Math.min(totalDurA, totalDurB);
+      const maxDur = Math.max(totalDurA, totalDurB);
       const overlapRatio = minDur > 0 ? overlapTicks / minDur : 0;
+      // 若兩軌長度懸殊 (例如一軌只有 3 顆點綴短音效，另一軌是長旋律)，不應判定為整軌合奏疊音
+      const durationRatio = minDur / maxDur;
 
       // 檢查交錯接力切換次數 (Handoff Count)：
       // 當 A 的音符結束附近 (±240 ticks，即半拍到一拍內)，B 剛好起音；或反之
@@ -262,7 +265,7 @@ export function detectPadTrackRelations(
         }
       }
 
-      if (overlapRatio > 0.5) {
+      if (overlapRatio > 0.5 && durationRatio > 0.25) {
         relations.push({
           padNums: [padA, padB],
           type: 'HARMONY_LAYER',
