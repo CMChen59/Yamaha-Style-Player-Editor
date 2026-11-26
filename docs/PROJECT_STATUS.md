@@ -207,7 +207,12 @@
        - **Woodwind / Organ（排笛 / 長笛 / 風琴）**：`SweetMax = 91 (G6)`, `SweetMin = 60 (C4)`, `IdealCenter = 79 (G5)`
        - **Piano / Synth / Perc（鋼琴 / 合成器 / 鐘琴）**：`SweetMax = 96 (C7)`, `SweetMin = 36 (C2)`, `IdealCenter = 72 (C5)`
      - **同目標調性之最佳八度路線選擇（`+N` vs `N - 12`）**：在 100% 鎖定使用者指定目標調性（如 `Am ➔ Em`）的前提下，綜合評估「向上走（`+7` 高八度 Em）」與「向下走（`-5` 低八度 Em）」是否超出該樂器 `SweetMax`，以及哪條路線讓整軌平均音高更接近 `IdealCenter`，自動推薦最溫潤動聽的八度路線。
-  2. **模組二：多軌接力 / 合奏「全域同進退鐵律（Global Coherent Shift）」與時間軸接力偵測**
+  2. **模組二：[✅ 已完成 2026-11-26] 多軌接力 / 合奏「全域同進退鐵律（Global Coherent Shift）」與時間軸接力偵測**
+     - **實作**：
+       1. 在 [`instrument-sweet-spot.ts`](../src/core/data/instrument-sweet-spot.ts) 實裝 `detectPadTrackRelations` 智慧分析演算法：依發聲區間與切換點精確判定 `HOCKET`（交錯接力問答主旋律）與 `HARMONY_LAYER`（重疊發聲合奏/雙軌疊音）。
+       2. 在 [`pad-modifier.ts`](../src/core/writer/pad-modifier.ts) 徹底重構八度折返邏輯：全域計算 `globalAppliedSemitones`，凡參與移調之所有旋律軌一律採同一位移量（一人超標、全體同降），100% 鎖定各軌相對音高差，徹底杜絕旋律斷層！
+       3. 在 [`player-app.ts`](../src/player/player-app.ts) Pad 工作台卡片標頭加入 `🔗 接力主旋律` / `👥 同步合奏疊音` 徽章，並於診斷說明即時提示連動關係。
+     - **測試**：新增 [`tests/test-pad-coherent-shift.test.ts`](../tests/test-pad-coherent-shift.test.ts) (3/3 通過)，驗證 Pad 1 (前2拍) 與 Pad 2 (後2拍) 交錯接力時精確同降八度，且相對音程零偏差；全套 Pad 測試集 (21/21) 全數通過！
      - **全域綁定同位移**：修正 `transposePadKey` 逐軌各自折返之漏洞。凡勾選參與移調之所有旋律軌（如 Pad 1 + Pad 2），在決定採高八度（`+N`）或低八度（`N - 12`）及執行八度折返時，一律視為**同一個命運共同體（一人超標、全體同降）**，100% 鎖定各軌間的相對音高差（Relative Pitch Contour），徹底杜絕接力旋律斷層。
      - **智慧接力與同區間連動識別**：自動偵測時間軸交錯接力（如 Pad 1 奏 1~2 拍、Pad 2 奏 3~4 拍）或自 MIDI 同一小節區間抽入之多軌組合，於 UI 標示 `🔗 多軌接力/合奏連動中`。
   3. **模組三：全軌同步 / 單軌獨立「一鍵 ±1 八度（±12 半音）」快捷鈕與「音域健康度預警徽章」**

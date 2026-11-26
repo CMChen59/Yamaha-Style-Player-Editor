@@ -4702,12 +4702,28 @@ export class PlayerApp {
     }
     this.updatePadKeyBadge();
     if (this.padKeyReasonText) {
-      this.padKeyReasonText.textContent = initDiag.keyDetectionReasonZh;
+      let reasonText = initDiag.keyDetectionReasonZh;
+      if (diag.trackRelations && diag.trackRelations.length > 0) {
+        const relDetails = diag.trackRelations.map(r => `🔗 ${r.labelZh}`).join('；');
+        reasonText += ` ｜ ${relDetails}`;
+      }
+      this.padKeyReasonText.textContent = reasonText;
     }
 
     this.updatePadShiftPreview();
 
     const padColors = ['#38bdf8', '#f59e0b', '#10b981', '#a855f7'];
+
+    // 取得所有參與接力或疊音的 Pad 編號對應之關係標籤
+    const relationMap = new Map<number, string>();
+    if (diag.trackRelations) {
+      for (const rel of diag.trackRelations) {
+        for (const num of rel.padNums) {
+          const badge = rel.type === 'HOCKET' ? '🔗 接力主旋律' : '👥 同步合奏疊音';
+          relationMap.set(num, badge);
+        }
+      }
+    }
 
     this.padCardsGrid.innerHTML = diag.tracks.map((t, idx) => {
       const color = padColors[idx % padColors.length];
@@ -4715,6 +4731,7 @@ export class PlayerApp {
       const isMuted = styPlaybackEngine.isChannelMuted(t.channel);
       const isSolo = styPlaybackEngine.getChannelSolo() === t.channel;
       const isCheckedForTranspose = this.selectedPadNumsForTranspose.has(t.padNum);
+      const relationBadge = relationMap.get(t.padNum);
 
       const typeBadgeColor = t.musicalType === 'MELODY_INTRO'
         ? 'background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.45); color: #fcd34d;'
@@ -4737,6 +4754,10 @@ export class PlayerApp {
            </div>`
         : '';
 
+      const relationBadgeHtml = relationBadge
+        ? `<span style="font-size: 0.68rem; padding: 1px 6px; border-radius: 4px; background: rgba(139, 92, 246, 0.22); border: 1px solid rgba(167, 139, 250, 0.45); color: #ddd6fe; white-space: nowrap;" title="此軌與其他 Pad 存在交錯接力或合奏關係，移調時全體同升同降以防旋律斷層">${relationBadge}</span>`
+        : '';
+
       return `
         <div class="pad-studio-card" data-pad-num="${t.padNum}" data-channel="${t.channel}"
              style="background: rgba(19, 27, 46, 0.92); border: 2px solid ${isFocused ? color : 'rgba(255,255,255,0.1)'}; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.15s; box-shadow: ${isFocused ? `0 0 14px ${color}33` : 'none'}; min-width: 0; overflow: hidden;">
@@ -4744,6 +4765,7 @@ export class PlayerApp {
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
             <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;">
               <span style="background: ${color}; color: #090d16; font-weight: 800; font-size: 0.76rem; padding: 2px 7px; border-radius: 5px; flex-shrink: 0;">PAD ${t.padNum}</span>
+              ${relationBadgeHtml}
               <input type="text" class="input-pad-card-name" data-pad-num="${t.padNum}" value="${t.name}"
                      style="background: rgba(9, 13, 22, 0.8); border: 1px solid rgba(255,255,255,0.16); color: #f8fafc; font-weight: 700; font-size: 0.82rem; padding: 3px 8px; border-radius: 5px; width: 100%; min-width: 0;"
                      title="直接修改 Track 0 的 N${t.padNum} 名稱標籤" />

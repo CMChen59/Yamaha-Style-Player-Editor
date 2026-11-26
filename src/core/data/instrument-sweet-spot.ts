@@ -169,3 +169,119 @@ export function decideOctaveRoute(tracks: SweetSpotTrackInput[], upSemitones: nu
     reasonZh,
   };
 }
+
+/**
+ * 音軌音符發聲時間區間（Tick 範圍）
+ */
+export interface TrackTimeSpan {
+  startTick: number;
+  endTick: number;
+}
+
+/**
+ * 兩軌或多軌之間的旋律組織關係診斷結果
+ */
+export interface MultiPadMelodyRelation {
+  /** 涉及的 Pad 編號清單 (如 [1, 2]) */
+  padNums: number[];
+  /** 關係類型：'HOCKET' (交錯接力問答) | 'HARMONY_LAYER' (同時發聲合奏/合音疊音) | 'INDEPENDENT' (獨立無明顯關聯) */
+  type: 'HOCKET' | 'HARMONY_LAYER' | 'INDEPENDENT';
+  /** 繁中說明 */
+  labelZh: string;
+  /** 重疊發聲比例 (0.0 ~ 1.0) */
+  overlapRatio: number;
+  /** 交錯接力切換次數 */
+  handoffCount: number;
+}
+
+/**
+ * 【任務 4-1C 模組二】智慧接力（Hocket）與合奏疊音（Harmony Layer）偵測演算法
+ *
+ * 判斷邏輯：
+ * 1. 若兩軌發聲時間高度交錯（例如 Pad 1 發聲時 Pad 2 休止，Pad 2 發聲時 Pad 1 休止，且時間軸前後銜接），判定為 'HOCKET'（接力旋律）
+ * 2. 若兩軌在相同或高度重疊的時間區間內同時發聲（重疊時間佔發聲時間 > 50%），判定為 'HARMONY_LAYER'（合奏/疊音）
+ * 3. 否則為 'INDEPENDENT'
+ */
+export function detectPadTrackRelations(
+  trackNotesMap: Map<number, Array<{ startTick: number; durationTick: number }>>
+): MultiPadMelodyRelation[] {
+  const relations: MultiPadMelodyRelation[] = [];
+  const activePadNums = Array.from(trackNotesMap.keys())
+    .filter(num => (trackNotesMap.get(num)?.length ?? 0) > 0)
+    .sort((a, b) => a - b);
+
+  if (activePadNums.length < 2) {
+    return relations;
+  }
+
+  // 逐對比對活躍軌道
+  for (let i = 0; i < activePadNums.length; i++) {
+    for (let j = i + 1; j < activePadNums.length; j++) {
+      const padA = activePadNums[i];
+      const padB = activePadNums[j];
+      const notesA = trackNotesMap.get(padA)!;
+      const notesB = trackNotesMap.get(padB)!;
+
+      const spansA: TrackTimeSpan[] = notesA.map(n => ({ startTick: n.startTick, endTick: n.startTick + n.durationTick }));
+      const spansB: TrackTimeSpan[] = notesB.map(n => ({ startTick: n.startTick, endTick: n.startTick + n.durationTick }));
+
+      // 計算各自總發聲時長
+      const totalDurA = spansA.reduce((acc, s) => acc + (s.endTick - s.startTick), 0);
+      const totalDurB = spansB.reduce((acc, s) => acc + (s.endTick - s.startTick), 0);
+      if (totalDurA === 0 || totalDurB === 0) continue;
+
+      // 計算重疊發聲時長 (Overlap Duration)
+      let overlapTicks = 0;
+      for (const sa of spansA) {
+        for (const sb of spansB) {
+          const overlapStart = Math.max(sa.startTick, sb.startTick);
+          const overlapEnd = Math.min(sa.endTick, sb.endTick);
+          if (overlapEnd > overlapStart) {
+            overlapTicks += (overlapEnd - overlapStart);
+          }
+        }
+      }
+
+      const minDur = Math.min(totalDurA, totalDurB);
+      const overlapRatio = minDur > 0 ? overlapTicks / minDur : 0;
+
+      // 檢查交錯接力切換次數 (Handoff Count)：
+      // 當 A 的音符結束附近 (±240 ticks，即半拍到一拍內)，B 剛好起音；或反之
+      let handoffCount = 0;
+      const HANDOFF_TOLERANCE = 240; // 允許微幅重疊或微幅呼吸休止
+      for (const sa of spansA) {
+        for (const sb of spansB) {
+          // A 結束 -> B 開始
+          if (Math.abs(sb.startTick - sa.endTick) <= HANDOFF_TOLERANCE) {
+            handoffCount++;
+          }
+          // B 結束 -> A 開始
+          if (Math.abs(sa.startTick - sb.endTick) <= HANDOFF_TOLERANCE) {
+            handoffCount++;
+          }
+        }
+      }
+
+      if (overlapRatio > 0.5) {
+        relations.push({
+          padNums: [padA, padB],
+          type: 'HARMONY_LAYER',
+          labelZh: `Pad ${padA} 與 Pad ${padB} 為同步合奏 / 雙軌疊音 (重疊率 ${Math.round(overlapRatio * 100)}%)`,
+          overlapRatio,
+          handoffCount,
+        });
+      } else if (handoffCount >= 2 || (handoffCount >= 1 && overlapRatio < 0.25)) {
+        relations.push({
+          padNums: [padA, padB],
+          type: 'HOCKET',
+          labelZh: `Pad ${padA} 與 Pad ${padB} 為交錯接力主旋律 (銜接 ${handoffCount} 次)`,
+          overlapRatio,
+          handoffCount,
+        });
+      }
+    }
+  }
+
+  return relations;
+}
+

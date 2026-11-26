@@ -3,7 +3,13 @@ import type { YamahaFileParsed, MidiEvent, MidiTrack } from '../models/types';
 import { PadRecorder, type QuantizeGrid } from './pad-recorder';
 import { resolveYamahaVoiceWithAlias } from '../data/yamaha-voices';
 import { MidiSongAnalyzer } from '../parser/midi-song-analyzer';
-import { decideOctaveRoute, type SweetSpotRouteDecision, type SweetSpotTrackInput } from '../data/instrument-sweet-spot';
+import {
+  decideOctaveRoute,
+  detectPadTrackRelations,
+  type MultiPadMelodyRelation,
+  type SweetSpotRouteDecision,
+  type SweetSpotTrackInput
+} from '../data/instrument-sweet-spot';
 
 /**
  * Multi Pad 24 大小調標準定義 (12 小調 + 12 大調)
@@ -121,6 +127,8 @@ export interface PadProjectDiagnosis {
   tracks: PadTrackDiagnosis[];   // Pad 1 ~ Pad 4
   hasLongMelody: boolean;
   enforcedRuleSummaryZh: string;
+  /** 【任務 4-1C 模組二】多軌接力旋律 (Hocket) 或合奏疊音 (Harmony Layer) 關係清單 */
+  trackRelations?: MultiPadMelodyRelation[];
 }
 
 /**
@@ -786,9 +794,28 @@ export class YamahaPadModifier {
     // 2. 自動估算全檔原曲基準調 (Estimated Source Key)
     const keyEst = this.estimatePadSourceKey(globalPcWeights, trackFirstPcs, trackFinalPcs, bar1DownbeatPcs);
     const hasLongMelody = tracksDiagnosis.some(t => t.musicalType === 'MELODY_INTRO');
-    const enforcedRuleSummaryZh = hasLongMelody
+
+    // 3. 【任務 4-1C 模組二】智慧偵測多軌接力 (Hocket) 與合奏疊音 (Harmony Layer)
+    const trackNotesMap = new Map<number, Array<{ startTick: number; durationTick: number }>>();
+    for (let padNum = 1; padNum <= 4; padNum++) {
+      const trk = parsed.tracks[padNum];
+      if (trk) {
+        const notes = this.extractTrackNotes(trk);
+        if (notes.length > 0) {
+          trackNotesMap.set(padNum, notes);
+        }
+      }
+    }
+    const trackRelations = detectPadTrackRelations(trackNotesMap);
+
+    let enforcedRuleSummaryZh = hasLongMelody
       ? '偵測到跨小節完整前奏/長旋律軌：遵循實機鐵律，轉調時將自動鎖定 CM0000 並執行全軌純剛體半音平移，100% 保護和聲導音與旋律花音零失真。'
       : '各軌均為短動機或伴奏織體，可依需求切換固定調性平移或和弦跟隨。';
+
+    if (trackRelations.length > 0) {
+      const relNotes = trackRelations.map(r => r.labelZh).join('；');
+      enforcedRuleSummaryZh += `【連動保護】：${relNotes}，轉調時全體同升同降以防旋律斷層。`;
+    }
 
     return {
       estimatedKey: keyEst.key,
@@ -800,6 +827,7 @@ export class YamahaPadModifier {
       tracks: tracksDiagnosis,
       hasLongMelody,
       enforcedRuleSummaryZh,
+      trackRelations,
     };
   }
 
@@ -970,6 +998,7 @@ export class YamahaPadModifier {
 
     // 2. 計算基準半音差
     let baseSemitoneShift = 0;
+    let baseOctaveWrapped = false;
     if (options.customSemitones !== undefined) {
       baseSemitoneShift = Math.round(options.customSemitones);
     } else {
@@ -983,24 +1012,53 @@ export class YamahaPadModifier {
           options.padNumbers
         );
         baseSemitoneShift = routeInfo.semitones;
+        baseOctaveWrapped = routeInfo.chosen === 'down' && routeInfo.upSemitones !== 0;
       } else {
         // 相容舊行為 (《空港》實機驗收黃金範本)：僅以全域 maxPitchLimit 判斷
         const melodyMaxPitches = diagnosis.tracks
           .filter(t => t.musicalType !== 'DRUM_SFX' && t.musicalType !== 'EMPTY' && t.pitchMax !== null)
           .map(t => t.pitchMax!);
         const globalHighestPitch = melodyMaxPitches.length > 0 ? Math.max(...melodyMaxPitches) : 84;
-        baseSemitoneShift = this.calculateSemitoneShift(
+        const calcRes = this.calculateSemitoneShift(
           effectiveSourceKey,
           effectiveTargetKey,
           options.direction ?? 'auto',
           globalHighestPitch,
           maxPitchLimit
-        ).semitones;
+        );
+        baseSemitoneShift = calcRes.semitones;
+        baseOctaveWrapped = (calcRes.semitones !== calcRes.upSemitones) && (calcRes.upSemitones !== 0);
       }
     }
 
     const targetPads = options.padNumbers ?? [1, 2, 3, 4];
     const trackResults: PadKeyTransposeResult['trackResults'] = [];
+
+    // 【任務 4-1C 模組二 全域同進退鐵律】：
+    // 參與移調之所有旋律軌，在 'track' 整軌折返模式下一律採「同一個全域八度位移 (Global Coherent Shift)」。
+    // 任一軌（例如接力的後半句 Pad 2）超出上限，則所有參與軌同步降八度，徹底杜絕多軌接力旋律斷層！
+    let globalAppliedSemitones = baseSemitoneShift;
+    let globalOctaveWrapped = baseOctaveWrapped;
+
+    if (octaveWrapMode === 'track') {
+      const activeMelodyTracks = targetPads
+        .map(padNum => ({ padNum, diag: diagnosis.tracks[padNum - 1] }))
+        .filter(t => t.diag && t.diag.musicalType !== 'DRUM_SFX' && t.diag.musicalType !== 'EMPTY' && t.diag.pitchMax !== null);
+
+      if (activeMelodyTracks.length > 0) {
+        const globalMax = Math.max(...activeMelodyTracks.map(t => t.diag.pitchMax!));
+        const globalMin = Math.min(...activeMelodyTracks.map(t => t.diag.pitchMin!));
+
+        while (globalMax + globalAppliedSemitones > maxPitchLimit && globalAppliedSemitones > -24) {
+          globalAppliedSemitones -= 12;
+          globalOctaveWrapped = true;
+        }
+        while (globalMin + globalAppliedSemitones < minPitchLimit && globalAppliedSemitones < 24) {
+          globalAppliedSemitones += 12;
+          globalOctaveWrapped = true;
+        }
+      }
+    }
 
     // 3. 逐軌執行純剛體半音平移
     for (let padNum = 1; padNum <= 4; padNum++) {
@@ -1051,20 +1109,8 @@ export class YamahaPadModifier {
 
       const oldMin = trkDiag.pitchMin!;
       const oldMax = trkDiag.pitchMax!;
-      let appliedSemitones = baseSemitoneShift;
-      let octaveWrapped = false;
-
-      // 整軌八度折返防呆保護 (保持整軌旋律線條連續不斷裂)
-      if (octaveWrapMode === 'track') {
-        while (oldMax + appliedSemitones > maxPitchLimit && appliedSemitones > -24) {
-          appliedSemitones -= 12;
-          octaveWrapped = true;
-        }
-        while (oldMin + appliedSemitones < minPitchLimit && appliedSemitones < 24) {
-          appliedSemitones += 12;
-          octaveWrapped = true;
-        }
-      }
+      let appliedSemitones = (octaveWrapMode === 'track') ? globalAppliedSemitones : baseSemitoneShift;
+      let octaveWrapped = (octaveWrapMode === 'track') ? globalOctaveWrapped : false;
 
       let newMin = 127;
       let newMax = 0;
