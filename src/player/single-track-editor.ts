@@ -24,6 +24,7 @@ import { PitchTransposer } from '../core/writer/pitch-transposer';
 import { YAMAHA_DRUM_VOICES } from '../creator/drum-step-grid';
 import { StepRecorder, type StepResolution, type StepRecordEntry } from '../core/writer/step-recorder';
 import { midiManager } from '../core/audio/midi-manager';
+import { getSweetSpotProfile, type InstrumentSweetSpot } from '../core/data/instrument-sweet-spot';
 
 export interface HistoryRecord {
   channel: number;
@@ -55,6 +56,7 @@ export class SingleTrackEditor {
   private voiceInfo: PartVoiceInfo | null = null;
   private partAccentColor: string = '#f59e0b';
   private partLabel: string = 'Rhythm 1';
+  private chordMatchEnabled: boolean = false;
 
   // 縮放與網格維度
   private pixelsPerBar: number = 240;
@@ -234,15 +236,66 @@ export class SingleTrackEditor {
   }
 
   /**
-   * 即時更新頂部工具列音色資訊
+   * 即時更新頂部工具列音色資訊 (並同步重繪鋼琴捲軸黃金甜區底色)
    */
   public updateVoiceInfo(voiceInfo: PartVoiceInfo | null) {
     this.voiceInfo = voiceInfo;
+    if (this.rows.length > 0) {
+      this.calculateRows();
+      this.render();
+      return;
+    }
     const voiceTag = this.container.querySelector('.editor-voice-tag');
     if (voiceTag) {
       voiceTag.textContent = voiceInfo ? `${voiceInfo.voiceName} ✏️` : '預設音色 ✏️';
       voiceTag.setAttribute('title', voiceInfo ? `${voiceInfo.voiceName} (點擊更換音色)` : '點擊更換音色');
     }
+  }
+
+  /**
+   * 【任務 4-1C 模組四】設定當前軌道是否開啟 Chord Match (CM=1)
+   * 當開啟 CM=1 時，鋼琴捲軸將在甜區上限下方預留 6 半音標示「🟡 CM=1 轉調預留區」
+   */
+  public setChordMatchContext(enabled: boolean) {
+    const changed = this.chordMatchEnabled !== enabled;
+    this.chordMatchEnabled = enabled;
+    if (changed && this.rows.length > 0) {
+      this.render();
+    }
+  }
+
+  /**
+   * 【任務 4-1C 模組四】取得當前軌道對應之樂器黃金音域設定 (鼓組回傳 null)
+   */
+  public getActiveSweetSpotProfile(): InstrumentSweetSpot | null {
+    if (styPlaybackEngine.isChannelDrum(this.channel)) return null;
+    const category = this.voiceInfo?.category || (this.channel === 10 ? 'Bass' : 'Piano');
+    return getSweetSpotProfile(category);
+  }
+
+  /**
+   * 【任務 4-1C 模組四】判定指定 MIDI 音高在當前樂器中的音域分區：
+   * - 'good': 🟢 黃金甜區
+   * - 'cm-headroom': 🟡 CM=1 轉調預留警戒區 (甜區上限下方 6 半音內，提醒預留左手換和弦空間)
+   * - 'overflow-high': 🟠 超出甜區上限警示區 (易尖銳刺耳)
+   * - 'overflow-low': 🔵 低於甜區下限區 (易混濁)
+   * - 'neutral': 鼓組或無甜區限制
+   */
+  public getNoteSweetSpotZone(midiNote: number): 'good' | 'cm-headroom' | 'overflow-high' | 'overflow-low' | 'neutral' {
+    const profile = this.getActiveSweetSpotProfile();
+    if (!profile) return 'neutral';
+    if (midiNote > profile.sweetMax) return 'overflow-high';
+    if (midiNote < profile.sweetMin) return 'overflow-low';
+    if (this.chordMatchEnabled && midiNote > profile.sweetMax - 6) {
+      return 'cm-headroom';
+    }
+    return 'good';
+  }
+
+  private formatMidiPitchLabel(midi: number): string {
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const clamped = Math.max(0, Math.min(127, Math.round(midi)));
+    return `${noteNames[clamped % 12]}${Math.floor(clamped / 12) - 1}`;
   }
 
   /**
@@ -497,7 +550,8 @@ export class SingleTrackEditor {
     timeSignature: { numerator: number; denominator: number },
     voiceInfo: PartVoiceInfo | null,
     isActive: boolean = true,
-    ccEvents: PlaybackCCEvent[] = []
+    ccEvents: PlaybackCCEvent[] = [],
+    chordMatchEnabled: boolean = false
   ) {
     this.channel = channel;
     this.partLabel = partLabel;
@@ -509,6 +563,7 @@ export class SingleTrackEditor {
     this.timeSignature = timeSignature || { numerator: 4, denominator: 4 };
     this.voiceInfo = voiceInfo;
     this.isChannelActive = isActive;
+    this.chordMatchEnabled = chordMatchEnabled;
     const isDrum = styPlaybackEngine.isChannelDrum(this.channel);
     if (!isDrum && this.viewMode === 'drum-grid') {
       this.viewMode = 'piano-roll';
@@ -564,6 +619,7 @@ export class SingleTrackEditor {
       // 樂器音軌（Bass, Chord, Pad, Phrase）
       let minMidi = 36;
       let maxMidi = 60;
+      const sweetProfile = this.getActiveSweetSpotProfile();
 
       if (this.events.length > 0) {
         const notes = this.events.map(e => e.noteNumber);
@@ -573,11 +629,19 @@ export class SingleTrackEditor {
         const pad = Math.max(3, Math.floor((24 - (actualMax - actualMin)) / 2));
         minMidi = Math.max(12, actualMin - pad);
         maxMidi = Math.min(108, actualMax + pad);
+        // 若音符已接近或超過黃金甜區上限，確保畫面可看見甜區上限與超標分界線
+        if (sweetProfile && actualMax >= sweetProfile.sweetMax - 3) {
+          maxMidi = Math.min(108, Math.max(maxMidi, sweetProfile.sweetMax + 3));
+        }
       } else {
         if (this.channel === 10) {
           // Bass 預設音域 E1 (28) ~ G3 (55)
           minMidi = 28;
           maxMidi = 55;
+        } else if (this.voiceInfo && sweetProfile) {
+          // 自建空白軌道且已指定樂器音色時：直接展開該樂器的黃金甜區 + 上方 3 半音超標警示邊界，讓點譜源頭即落入最佳八度
+          minMidi = Math.max(36, Math.min(48, sweetProfile.sweetMin));
+          maxMidi = Math.min(96, Math.max(72, sweetProfile.sweetMax + 3));
         } else {
           // 和弦 / 樂句預設音域 C3 (48) ~ C5 (72)
           minMidi = 48;
@@ -634,6 +698,22 @@ export class SingleTrackEditor {
     this.container.style.setProperty('--part-accent', this.partAccentColor);
 
     // 1. 建立頂部工具列 (含樂器、拍號、力度拉桿與數字輸入框、相對/絕對模式切換、快速微調按鈕、量化、刪除、縮放)
+    const sweetProfile = this.getActiveSweetSpotProfile();
+    let sweetSpotPillHtml = '';
+    if (!isDrum && sweetProfile) {
+      const minLbl = this.formatMidiPitchLabel(sweetProfile.sweetMin);
+      const maxLbl = this.formatMidiPitchLabel(sweetProfile.sweetMax);
+      const cmSafeMax = sweetProfile.sweetMax - 6;
+      const cmSafeLbl = this.formatMidiPitchLabel(cmSafeMax);
+      const hasOverflowNote = this.events.some(e => e.noteNumber > sweetProfile.sweetMax);
+      const pillBorder = hasOverflowNote ? '#ef4444' : (this.chordMatchEnabled ? '#f59e0b' : '#10b981');
+      const pillColor = hasOverflowNote ? '#fca5a5' : (this.chordMatchEnabled ? '#fcd34d' : '#6ee7b7');
+      const pillBg = hasOverflowNote ? 'rgba(239, 68, 68, 0.14)' : (this.chordMatchEnabled ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)');
+      const cmHintText = this.chordMatchEnabled ? ` ｜ 🟡 CM=1 建議 ≤ ${cmSafeLbl}(${cmSafeMax})` : '';
+      const overflowText = hasOverflowNote ? ' ⚠️含超標音' : '';
+      sweetSpotPillHtml = `<span id="ed-sweetspot-pill" class="editor-meta-pill" style="border-color: ${pillBorder}; color: ${pillColor}; background: ${pillBg};" title="${sweetProfile.labelZh} 黃金音域：${minLbl}(${sweetProfile.sweetMin}) ~ ${maxLbl}(${sweetProfile.sweetMax})，重心 ${this.formatMidiPitchLabel(sweetProfile.idealCenter)}(${sweetProfile.idealCenter})${this.chordMatchEnabled ? '；CM=1 短插音建議預留上方 6 半音轉調空間' : ''}">🟢 甜區: ${minLbl}(${sweetProfile.sweetMin})~${maxLbl}(${sweetProfile.sweetMax})${cmHintText}${overflowText}</span>`;
+    }
+
     const toolbar = document.createElement('div');
     toolbar.className = 'editor-toolbar';
     toolbar.innerHTML = `
@@ -646,6 +726,7 @@ export class SingleTrackEditor {
         </button>
         <span class="editor-meta-pill">拍號: ${this.timeSignature.numerator}/${this.timeSignature.denominator} | 總計: ${this.totalBars} 小節 | PPQ: ${this.division}</span>
         <span id="ed-note-count-pill" class="editor-meta-pill">音符總數: ${this.events.length}</span>
+        ${sweetSpotPillHtml}
         ${styPlaybackEngine.isChannelMegaVoice(this.channel) ? '<span id="ed-megavoice-pill" class="editor-meta-pill" style="border-color: #f59e0b; color: #fbbf24; background: rgba(245, 158, 11, 0.1);" title="Yamaha 兆級音色 (C6 ≥ 96 特效雜音直通保護已啟動)">⚡ MegaVoice (C6+ 原音直通)</span>' : ''}
 
         ${isDrum ? `
@@ -868,14 +949,36 @@ export class SingleTrackEditor {
     corner.textContent = '音高 / 樂器';
     keyCol.appendChild(corner);
 
-    // 渲染各行琴鍵 / 樂器名稱
+    // 渲染各行琴鍵 / 樂器名稱 (含任務 4-1C 模組四：樂器黃金甜區與超出上限警示視覺底色)
+    const sweetProfile = this.getActiveSweetSpotProfile();
     this.rows.forEach(r => {
       const isC = !isDrum && (r.note % 12 === 0);
       const isMega = !isDrum && styPlaybackEngine.isChannelMegaVoice(this.channel);
       const isMegaNoise = isMega && r.note >= 96;
+      const sweetZone = !isDrum ? this.getNoteSweetSpotZone(r.note) : 'neutral';
       const rowLabel = document.createElement('div');
-      rowLabel.className = `editor-key-row ${r.isBlack ? 'is-black-key' : 'is-white-key'}${isC ? ' is-c-key' : ''}`;
+      rowLabel.className = `editor-key-row ${r.isBlack ? 'is-black-key' : 'is-white-key'}${isC ? ' is-c-key' : ''} sweet-zone-${sweetZone}`;
+      rowLabel.setAttribute('data-note', String(r.note));
+      rowLabel.setAttribute('data-sweet-zone', sweetZone);
       rowLabel.style.height = `${this.rowHeight}px`;
+
+      if (!isDrum && sweetProfile) {
+        if (sweetZone === 'overflow-high') {
+          rowLabel.style.borderLeft = '3px solid #ef4444';
+          rowLabel.style.background = 'rgba(239, 68, 68, 0.18)';
+          rowLabel.title = `🟠 超出 ${sweetProfile.labelZh} 甜區上限 (${this.formatMidiPitchLabel(sweetProfile.sweetMax)}=${sweetProfile.sweetMax})，高音易尖銳刺耳`;
+        } else if (sweetZone === 'cm-headroom') {
+          rowLabel.style.borderLeft = '3px solid #f59e0b';
+          rowLabel.style.background = 'rgba(245, 158, 11, 0.15)';
+          rowLabel.title = `🟡 CM=1 轉調預留區：建議短插音最高音 ≤ ${this.formatMidiPitchLabel(sweetProfile.sweetMax - 6)}(${sweetProfile.sweetMax - 6})，預留左手彈 F/G/A 和弦空間`;
+        } else if (sweetZone === 'good') {
+          rowLabel.style.borderLeft = '3px solid #10b981';
+          rowLabel.title = `🟢 ${sweetProfile.labelZh} 黃金甜區 (${this.formatMidiPitchLabel(sweetProfile.sweetMin)}~${this.formatMidiPitchLabel(sweetProfile.sweetMax)})`;
+        } else if (sweetZone === 'overflow-low') {
+          rowLabel.style.borderLeft = '3px solid #64748b';
+          rowLabel.title = `🔵 低於 ${sweetProfile.labelZh} 甜區下限 (${this.formatMidiPitchLabel(sweetProfile.sweetMin)}=${sweetProfile.sweetMin})，低音易混濁`;
+        }
+      }
 
       if (r.icon) {
         rowLabel.innerHTML = `
@@ -884,9 +987,21 @@ export class SingleTrackEditor {
           <span class="key-sub">${r.subLabel || ''}</span>
         `;
       } else {
+        let extraBadgeHtml = '';
+        if (isMegaNoise) {
+          extraBadgeHtml = '<span class="key-badge" style="background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5);" title="Yamaha 兆級音色 C6+ 特效雜音直通區">FX</span>';
+        } else if (!isDrum && sweetProfile && r.note === sweetProfile.sweetMax + 1) {
+          extraBadgeHtml = '<span class="key-badge" style="background: rgba(239, 68, 68, 0.3); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.55);">⚠️超標</span>';
+        } else if (!isDrum && sweetProfile && r.note === sweetProfile.sweetMax) {
+          extraBadgeHtml = '<span class="key-badge" style="background: rgba(16, 185, 129, 0.22); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.45);">甜區上限</span>';
+        } else if (!isDrum && sweetProfile && this.chordMatchEnabled && r.note === sweetProfile.sweetMax - 6) {
+          extraBadgeHtml = '<span class="key-badge" style="background: rgba(245, 158, 11, 0.25); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.5);">CM上限</span>';
+        } else if (r.subLabel) {
+          extraBadgeHtml = '<span class="key-badge">根音</span>';
+        }
         rowLabel.innerHTML = `
           <span class="key-name ${r.subLabel ? 'is-root' : ''}">${r.label}</span>
-          ${r.subLabel ? '<span class="key-badge">根音</span>' : (isMegaNoise ? '<span class="key-badge" style="background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5);" title="Yamaha 兆級音色 C6+ 特效雜音直通區">FX</span>' : '')}
+          ${extraBadgeHtml}
         `;
       }
 
@@ -967,14 +1082,34 @@ export class SingleTrackEditor {
       }
     }
 
-    // 2. 繪製背景水平行線 (含中央 C 與八度專屬導引光條)
+    // 2. 繪製背景水平行線 (含中央 C、八度專屬導引光條與黃金甜區/超標區視覺底色)
     this.rows.forEach((r, idx) => {
       const isC = !isDrum && (r.note % 12 === 0);
+      const sweetZone = !isDrum ? this.getNoteSweetSpotZone(r.note) : 'neutral';
       const line = document.createElement('div');
-      line.className = `grid-row-bg ${r.isBlack ? 'row-black' : 'row-white'}${isC ? ' row-root-c' : ''}`;
+      line.className = `grid-row-bg ${r.isBlack ? 'row-black' : 'row-white'}${isC ? ' row-root-c' : ''} row-sweet-${sweetZone}`;
+      line.setAttribute('data-note', String(r.note));
+      line.setAttribute('data-sweet-zone', sweetZone);
       line.style.top = `${idx * this.rowHeight}px`;
       line.style.height = `${this.rowHeight}px`;
       line.style.width = `${totalWidthPx}px`;
+
+      if (!isDrum && sweetProfile) {
+        if (sweetZone === 'overflow-high') {
+          line.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+          if (r.note === sweetProfile.sweetMax + 1) {
+            line.style.borderBottom = '1.5px dashed rgba(239, 68, 68, 0.7)';
+          }
+        } else if (sweetZone === 'cm-headroom') {
+          line.style.backgroundColor = 'rgba(245, 158, 11, 0.08)';
+          if (r.note === sweetProfile.sweetMax - 5) {
+            line.style.borderBottom = '1px dashed rgba(245, 158, 11, 0.55)';
+          }
+        } else if (sweetZone === 'good') {
+          line.style.backgroundColor = r.isBlack ? 'rgba(16, 185, 129, 0.035)' : 'rgba(16, 185, 129, 0.065)';
+        }
+      }
+
       gridContent.appendChild(line);
     });
 
@@ -1072,12 +1207,17 @@ export class SingleTrackEditor {
       const row = this.rows[rowIndex];
       const isMegaTrack = !isDrum && styPlaybackEngine.isChannelMegaVoice(this.channel);
       const isMegaNoiseNote = isMegaTrack && ev.noteNumber >= 96;
+      const isSweetOverflowNote = !isDrum && !isMegaNoiseNote && sweetProfile !== null && ev.noteNumber > sweetProfile.sweetMax;
       if (isMegaNoiseNote) {
         noteEl.title = '⚡ MegaVoice C6+ 特效雜音 (播放時原音直通)';
         noteEl.style.outline = '1px dashed #fbbf24';
+      } else if (isSweetOverflowNote) {
+        noteEl.classList.add('is-sweet-overflow-note');
+        noteEl.title = `⚠️ 此音符 (${row.label}) 超出 ${sweetProfile!.labelZh} 黃金甜區上限 (${sweetProfile!.sweetMax})，高音易尖銳刺耳`;
+        noteEl.style.outline = '1.5px solid #ef4444';
       }
       noteEl.innerHTML = `
-        <span class="note-block-text">${isMegaNoiseNote ? '⚡ ' : ''}${row.label} (${ev.velocity})</span>
+        <span class="note-block-text">${isMegaNoiseNote ? '⚡ ' : (isSweetOverflowNote ? '⚠️ ' : '')}${row.label} (${ev.velocity})</span>
         <div class="note-resize-handle" title="拖曳調整音符長度"></div>
       `;
 

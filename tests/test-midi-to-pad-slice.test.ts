@@ -3,6 +3,7 @@ import { YamahaPadSynthesizer } from '../src/core/writer/pad-synthesizer';
 import { YamahaPadModifier } from '../src/core/writer/pad-modifier';
 import { YamahaWriter } from '../src/core/writer/yamaha-writer';
 import { YamahaParser } from '../src/core/parser/yamaha-parser';
+import { SingleTrackEditor } from '../src/player/single-track-editor';
 import type { YamahaFileParsed, MidiTrack } from '../src/core/models/types';
 
 /**
@@ -208,5 +209,197 @@ describe('【任務 4-1B】MIDI 選段單軌快速塞入 Multi Pad (Pad 1~4) 引
     expect(diagAfter.tracks[1].noteCount).toBe(8);
     expect(diagAfter.tracks[1].musicalType).toBe('DRUM_SFX');
     expect(reparsed.padConfig?.chordMatchFlags).toEqual([false, false, false, false]);
+  });
+
+  it('3. 【任務 4-1C 模組四】MIDI 選段抽入智慧適配：低音量背景軌自動飽滿化 (CC7<85 ➔ 100~104, CC11=127) 與超甜區自動降八度', () => {
+    const division = 480;
+    const track0: MidiTrack = {
+      rawChunk: new Uint8Array(0),
+      events: [
+        { delta: 0, type: 'meta', metaType: 0x58, metaData: new Uint8Array([4, 2, 24, 8]) },
+        { delta: 0, type: 'meta', metaType: 0x2f, metaData: new Uint8Array(0) },
+      ],
+    };
+    // Channel 2: Nylon Guitar (0-0-24 => Guitar, sweetMax = 81 A5)，故意配置低背景音量 CC7=62、低表情 CC11=70，以及超高音 A5(81), C6(84), E6(88)
+    const trackGuitar: MidiTrack = {
+      rawChunk: new Uint8Array(0),
+      events: [
+        { delta: 0, type: 'controlChange', channel: 2, controller: 0, value: 0 },
+        { delta: 0, type: 'controlChange', channel: 2, controller: 32, value: 0 },
+        { delta: 0, type: 'programChange', channel: 2, program: 24 },
+        { delta: 0, type: 'controlChange', channel: 2, controller: 7, value: 62 },
+        { delta: 0, type: 'controlChange', channel: 2, controller: 11, value: 70 },
+        { delta: 0, type: 'noteOn', channel: 2, noteNumber: 81, velocity: 90 },
+        { delta: 480, type: 'noteOff', channel: 2, noteNumber: 81, velocity: 0 },
+        { delta: 0, type: 'noteOn', channel: 2, noteNumber: 84, velocity: 95 },
+        { delta: 480, type: 'noteOff', channel: 2, noteNumber: 84, velocity: 0 },
+        { delta: 0, type: 'noteOn', channel: 2, noteNumber: 88, velocity: 100 },
+        { delta: 960, type: 'noteOff', channel: 2, noteNumber: 88, velocity: 0 },
+        { delta: 0, type: 'meta', metaType: 0x2f, metaData: new Uint8Array(0) },
+      ],
+    };
+
+    const midiSong: YamahaFileParsed = {
+      format: 'SMF1',
+      division,
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      sections: [],
+      casm: null,
+      ots: [],
+      tracks: [track0, trackGuitar],
+    };
+
+    const padProject = YamahaPadSynthesizer.createBlankProject({
+      projectName: 'SweetBoostPad',
+      bpm: 120,
+      bars: 1,
+      division: 480,
+    });
+
+    const res = YamahaPadModifier.importMidiChannelRangeToPad({
+      sourceParsed: midiSong,
+      targetPadParsed: padProject,
+      sourceChannel: 2,
+      targetPadNum: 1,
+      startBar: 1,
+      endBar: 1,
+      autoFitSweetSpot: true,
+      autoBoostVolume: true,
+    });
+
+    expect(res.success).toBe(true);
+    // 吉他最高音 88 超出 sweetMax (81)，應自動降八度 (-12 半音) 至 69, 72, 76
+    expect(res.appliedSemitoneShift).toBe(-12);
+    const notesAfter = YamahaPadModifier.extractTrackNotes(padProject.tracks[1]);
+    expect(notesAfter.map((n) => n.note)).toEqual([69, 72, 76]);
+
+    // 音量應由 62 自動飽滿化並加上降八度穿透力補償至 104
+    expect(res.originalVolume).toBe(62);
+    expect(res.finalVolume).toBe(104);
+    expect(res.volumeBoosted).toBe(true);
+
+    const diag = YamahaPadModifier.analyzePadProject(padProject);
+    expect(diag.tracks[0].mixing.volume).toBe(104);
+    expect(diag.tracks[0].mixing.expression).toBe(127);
+  });
+
+  it('4. 【任務 4-1C 模組四】CM=1 短插音自動歸一化回 C 大調 (CM7) 中音母體 (C4~E5)：自動由 G 和弦反向平移並預留上方轉調空間', () => {
+    const division = 480;
+    const track0: MidiTrack = {
+      rawChunk: new Uint8Array(0),
+      events: [
+        { delta: 0, type: 'meta', metaType: 0x58, metaData: new Uint8Array([4, 2, 24, 8]) },
+        { delta: 0, type: 'meta', metaType: 0x2f, metaData: new Uint8Array(0) },
+      ],
+    };
+    // Track 1 (Ch 1): Bass 彈奏 G2 (43)，宣告該小節為 G 大調和弦
+    const trackBass: MidiTrack = {
+      rawChunk: new Uint8Array(0),
+      events: [
+        { delta: 0, type: 'noteOn', channel: 1, noteNumber: 43, velocity: 100 },
+        { delta: 1920, type: 'noteOff', channel: 1, noteNumber: 43, velocity: 0 },
+        { delta: 0, type: 'meta', metaType: 0x2f, metaData: new Uint8Array(0) },
+      ],
+    };
+    // Track 2 (Ch 3): 銅管 1 小節短插音 G5(79) - B5(83) - D6(86)
+    const trackBrass: MidiTrack = {
+      rawChunk: new Uint8Array(0),
+      events: [
+        { delta: 0, type: 'controlChange', channel: 3, controller: 0, value: 0 },
+        { delta: 0, type: 'controlChange', channel: 3, controller: 32, value: 0 },
+        { delta: 0, type: 'programChange', channel: 3, program: 61 }, // Brass Section
+        { delta: 0, type: 'noteOn', channel: 3, noteNumber: 79, velocity: 105 },
+        { delta: 480, type: 'noteOff', channel: 3, noteNumber: 79, velocity: 0 },
+        { delta: 0, type: 'noteOn', channel: 3, noteNumber: 83, velocity: 105 },
+        { delta: 480, type: 'noteOff', channel: 3, noteNumber: 83, velocity: 0 },
+        { delta: 0, type: 'noteOn', channel: 3, noteNumber: 86, velocity: 110 },
+        { delta: 960, type: 'noteOff', channel: 3, noteNumber: 86, velocity: 0 },
+        { delta: 0, type: 'meta', metaType: 0x2f, metaData: new Uint8Array(0) },
+      ],
+    };
+
+    const midiSong: YamahaFileParsed = {
+      format: 'SMF1',
+      division,
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      sections: [],
+      casm: null,
+      ots: [],
+      tracks: [track0, trackBass, trackBrass],
+    };
+
+    const padProject = YamahaPadSynthesizer.createBlankProject({
+      projectName: 'CmNormPad',
+      bpm: 120,
+      bars: 1,
+      division: 480,
+    });
+
+    const res = YamahaPadModifier.importMidiChannelRangeToPad({
+      sourceParsed: midiSong,
+      targetPadParsed: padProject,
+      sourceChannel: 3,
+      targetPadNum: 1,
+      startBar: 1,
+      endBar: 1,
+      normalizeToCM7: true,
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.detectedSourceChordRoot).toBe('G');
+    expect(res.chordMatch).toBe(true);
+    // G5(79), B5(83), D6(86) 先減 7 半音回 C5(72), E5(76), G5(79)，因 79 > 76 (E5 上限)，再自動降八度 (-12) 至 C4(60), E4(64), G4(67)
+    expect(res.appliedSemitoneShift).toBe(-19);
+    const notesAfter = YamahaPadModifier.extractTrackNotes(padProject.tracks[1]);
+    expect(notesAfter.map((n) => n.note)).toEqual([60, 64, 67]);
+  });
+
+  it('5. 【任務 4-1C 模組四】SingleTrackEditor 鋼琴捲軸「🟢 黃金甜區」與「🟠 超出上限警示區」及「🟡 CM=1 轉調預留區」分區判定', () => {
+    if (typeof (globalThis as any).window === 'undefined') {
+      (globalThis as any).window = {
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+    }
+    const fakeContainer = {
+      innerHTML: '',
+      style: { setProperty: () => {} },
+      appendChild: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    } as unknown as HTMLElement;
+
+    const editor = new SingleTrackEditor(fakeContainer);
+    // 模擬設定 Saxophone 音色 (SweetMin = 46 Bb2, SweetMax = 86 D6)
+    (editor as any).channel = 0;
+    (editor as any).voiceInfo = {
+      channel: 0,
+      msb: 8,
+      lsb: 36,
+      pc: 82,
+      voiceName: 'SmoothSaxes2',
+      category: 'Saxophone',
+    };
+
+    const profile = editor.getActiveSweetSpotProfile();
+    expect(profile).not.toBeNull();
+    expect(profile!.sweetMin).toBe(46);
+    expect(profile!.sweetMax).toBe(86);
+
+    // 未開啟 CM=1 時：46~86 全部為 'good'，>86 為 'overflow-high'，<46 為 'overflow-low'
+    (editor as any).chordMatchEnabled = false;
+    expect(editor.getNoteSweetSpotZone(74)).toBe('good');
+    expect(editor.getNoteSweetSpotZone(86)).toBe('good');
+    expect(editor.getNoteSweetSpotZone(87)).toBe('overflow-high');
+    expect(editor.getNoteSweetSpotZone(44)).toBe('overflow-low');
+
+    // 開啟 CM=1 時：81~86 (上限下方 6 半音) 應標示為 'cm-headroom' 轉調預留警戒區
+    (editor as any).chordMatchEnabled = true;
+    expect(editor.getNoteSweetSpotZone(80)).toBe('good');
+    expect(editor.getNoteSweetSpotZone(81)).toBe('cm-headroom');
+    expect(editor.getNoteSweetSpotZone(86)).toBe('cm-headroom');
+    expect(editor.getNoteSweetSpotZone(87)).toBe('overflow-high');
   });
 });

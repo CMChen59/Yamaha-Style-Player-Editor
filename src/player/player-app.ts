@@ -1473,6 +1473,22 @@ export class PlayerApp {
           <span style="font-size: 0.7rem; color: #64748b;">節</span>
         </div>
       </div>
+      ${!effVoice.isDrum ? `
+      <div style="display: flex; flex-direction: column; gap: 4px; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(56, 189, 248, 0.22); padding: 6px 8px; border-radius: 6px; font-size: 0.72rem; color: #cbd5e1;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="若原 MIDI 音高超過該樂器黃金甜區上限，自動降八度避免刺耳失真">
+          <input type="checkbox" id="pop-pad-chk-sweet" checked style="accent-color: #10b981;" />
+          <span>🟢 超出樂器甜區自動降八度</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="強制起始 CC11=127，若背景軌 CC7<85 自動正規化提升至 100~104 獨奏標準">
+          <input type="checkbox" id="pop-pad-chk-boost" checked style="accent-color: #38bdf8;" />
+          <span>🔊 低音量自動飽滿化 (CC7≥100, CC11=127)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="僅適用 1~2 小節短插音或分解和弦：開啟 CM=1 並依該小節原曲和弦反向平移回 C 大調母體 (C4~E5)">
+          <input type="checkbox" id="pop-pad-chk-cm-norm" style="accent-color: #f59e0b;" />
+          <span>🎵 短插音開啟 CM=1 並歸一化回 C 大調母體</span>
+        </label>
+      </div>
+      ` : ''}
       <div id="pop-pad-slots-body" style="display: flex; flex-direction: column; gap: 5px;">
         ${slotsHtml}
       </div>
@@ -1546,7 +1562,11 @@ export class PlayerApp {
       this.savedPadFileName = `${baseName}_MultiPad.PAD`;
     }
 
-    // 2. 執行底層擷取與寫入
+    // 2. 讀取 Popover 智慧適配選項並執行底層擷取與寫入
+    const chkSweet = popoverEl?.querySelector('#pop-pad-chk-sweet') as HTMLInputElement | null;
+    const chkBoost = popoverEl?.querySelector('#pop-pad-chk-boost') as HTMLInputElement | null;
+    const chkCmNorm = popoverEl?.querySelector('#pop-pad-chk-cm-norm') as HTMLInputElement | null;
+
     const res = YamahaPadModifier.importMidiChannelRangeToPad({
       sourceParsed: srcParsed,
       targetPadParsed: this.savedPadParsed,
@@ -1554,6 +1574,9 @@ export class PlayerApp {
       targetPadNum: padNum,
       startBar,
       endBar,
+      autoFitSweetSpot: chkSweet ? chkSweet.checked : false,
+      autoBoostVolume: chkBoost ? chkBoost.checked : true,
+      normalizeToCM7: chkCmNorm ? chkCmNorm.checked : false,
     });
 
     // 3. 同步更新原始音高快照 (originalPadTrackNotes) 與診斷狀態，確保切過去即可無損移調與還原
@@ -1581,7 +1604,8 @@ export class PlayerApp {
             ✅ <strong>成功存入 Pad ${padNum} [${res.padName}]</strong><br/>
             • 擷取區間：第 ${startBar} ~ ${endBar} 小節 (${res.barLength} 小節)<br/>
             • 擷取內容：<strong>${res.extractedNoteCount}</strong> 顆音符 · 音色 <strong>${res.voiceInfo.voiceName}</strong><br/>
-            • 智慧型態：${res.musicalTypeLabelZh} (${res.chordMatch ? 'CM=ON' : 'CM=OFF'})
+            • 智慧型態：${res.musicalTypeLabelZh} (${res.chordMatch ? 'CM=ON' : 'CM=OFF'})<br/>
+            • 適配處理：<span style="color: #fde68a;">${res.adaptationSummaryZh || '原音高直通'}</span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
             <button type="button" id="btn-pop-stay-midi"
@@ -2360,11 +2384,13 @@ export class PlayerApp {
     const isActive = this.isChannelActive(this.focusedChannel);
     const ccEvents = styPlaybackEngine.getChannelCCEvents(this.focusedChannel);
 
+    let chordMatchEnabled = false;
     if (this.currentParsed?.format === 'PAD') {
       const padNum = this.focusedChannel + 1;
       const diag = YamahaPadModifier.analyzePadProject(this.currentParsed);
       const padTrack = diag.tracks.find(t => t.padNum === padNum);
       if (padTrack) {
+        chordMatchEnabled = padTrack.chordMatch;
         totalBars = padTrack.barLength;
         const ticksPerBar = (timeSig.numerator || 4) * division;
         totalTicks = totalBars * ticksPerBar;
@@ -2390,7 +2416,8 @@ export class PlayerApp {
       timeSig,
       voiceInfo,
       isActive,
-      ccEvents
+      ccEvents,
+      chordMatchEnabled
     );
   }
 
@@ -5002,6 +5029,10 @@ export class PlayerApp {
         const el = e.target as HTMLInputElement;
         const padNum = parseInt(el.getAttribute('data-pad-num') || '1', 10);
         YamahaPadModifier.setPadChordMatch(this.currentParsed, padNum, el.checked);
+        if (this.focusedChannel === padNum - 1) {
+          this.trackEditor?.setChordMatchContext(el.checked);
+          this.updateFocusedBanner();
+        }
         this.renderPadStudioDashboard();
       });
     });

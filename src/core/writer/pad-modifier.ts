@@ -6,6 +6,7 @@ import { MidiSongAnalyzer } from '../parser/midi-song-analyzer';
 import {
   decideOctaveRoute,
   detectPadTrackRelations,
+  getSweetSpotProfile,
   type MultiPadMelodyRelation,
   type SweetSpotRouteDecision,
   type SweetSpotTrackInput
@@ -206,10 +207,18 @@ export interface MidiChannelToPadImportOptions {
   endBeat?: number;
   /** 自訂 Pad 名稱 (未提供則自動以音色簡稱 + 小節命名，如 'Sax B1-4') */
   customPadName?: string;
+  /** 【任務 4-1C 模組四】是否自動飽滿化背景副旋律音量：強制起始 CC11=127，若原軌 CC7 < 85 自動提升至 100~105 (預設 true) */
+  autoBoostVolume?: boolean;
+  /** 【任務 4-1C 模組四】當抽入音符超出該樂器黃金甜區上限 (SweetMax) 時，是否自動降八度適配 (預設 false；UI 抽入預設開啟) */
+  autoFitSweetSpot?: boolean;
+  /** 【任務 4-1C 模組四】是否將短插音開啟 CM=1 並依原曲該小節和弦自動反向歸一化回 C 大調 (CM7) 中音母體 (C4~E5) */
+  normalizeToCM7?: boolean;
+  /** 【任務 4-1C 模組四】指定原曲該小節和弦根音 PitchClass (0=C, 2=D, 5=F, 7=G 等)；未提供時自動由 MIDI 區間和聲偵測 */
+  sourceChordRootPc?: number;
 }
 
 /**
- * 【任務 4-1B】MIDI 單軌區間擷取至 Multi Pad 執行結果
+ * 【任務 4-1B / 4-1C 模組四】MIDI 單軌區間擷取至 Multi Pad 執行結果
  */
 export interface MidiChannelToPadImportResult {
   success: boolean;
@@ -231,6 +240,18 @@ export interface MidiChannelToPadImportResult {
   musicalTypeLabelZh: string;
   chordMatch: boolean;
   repeat: boolean;
+  /** 原 MIDI 通道在該小節的原始 CC7 音量 */
+  originalVolume?: number;
+  /** 飽滿化或降八度補償後寫入 Pad 的最終 CC7 音量 */
+  finalVolume?: number;
+  /** 是否執行了低音量自動飽滿化提升 */
+  volumeBoosted?: boolean;
+  /** 抽入時自動套用的半音位移量 (如甜區降八度 -12 或 CM=1 歸一化回 C 大調位移) */
+  appliedSemitoneShift?: number;
+  /** 若開啟 CM=1 歸一化，自動偵測或指定的原曲和弦根音名稱 (如 'G', 'F', 'D') */
+  detectedSourceChordRoot?: string;
+  /** 智慧適配摘要訊息 (供 UI 顯示) */
+  adaptationSummaryZh?: string;
 }
 
 /**
@@ -2975,12 +2996,95 @@ export class YamahaPadModifier {
 
     extractedNotes.sort((a, b) => a.startTick - b.startTick || a.note - b.note);
 
+    // 2.5 【任務 4-1C 模組四】MIDI 選段抽入智慧適配：
+    //   A. CM=1 短插音自動歸一化回 C 大調 (CM7) 中音母體 (C4~E5, 預留上方 6 半音轉調空間)
+    //   B. 樂器黃金甜區 (Sweet Spot) 自動降八度適配 (防止 GM 高音花栗鼠失真)
+    //   C. 低音量背景副旋律自動飽滿化 (CC7 < 85 提升至 100，若降八度補償至 104，起始 CC11 鎖定 127)
+    const NOTE_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+    const autoBoostVolume = options.autoBoostVolume ?? true;
+    const autoFitSweetSpot = options.autoFitSweetSpot ?? false;
+    const normalizeToCM7 = options.normalizeToCM7 ?? false;
+    const sweetProfile = !effVoice.isDrum ? getSweetSpotProfile(effVoice.category) : null;
+
+    let appliedSemitoneShift = 0;
+    let detectedSourceChordRoot: string | undefined = undefined;
+    const adaptationParts: string[] = [];
+
+    if (!effVoice.isDrum && extractedNotes.length > 0) {
+      if (normalizeToCM7) {
+        const rootPc = options.sourceChordRootPc !== undefined
+          ? ((Math.round(options.sourceChordRootPc) % 12) + 12) % 12
+          : this.detectRangeChordRootPc(sourceParsed, startTickSrc, endTickSrc, extractedNotes);
+        detectedSourceChordRoot = NOTE_NAMES[rootPc];
+
+        // 1. 先反向平移回 C 根音母體 (Root = 0)
+        let shiftToC = -rootPc;
+        let curMin = Math.min(...extractedNotes.map((n) => n.note + shiftToC));
+        let curMax = Math.max(...extractedNotes.map((n) => n.note + shiftToC));
+
+        // 2. 置中於 C4 (60) ~ E5 (76) 黃金中音區，並確保距甜區上限預留 ≥ 6 半音供左手彈 F/G/A 和弦
+        const cmSafeUpper = sweetProfile ? Math.min(76, sweetProfile.sweetMax - 6) : 76;
+        while (curMax > cmSafeUpper && curMin - 12 >= 48) {
+          shiftToC -= 12;
+          curMin -= 12;
+          curMax -= 12;
+        }
+        while (curMin < 55 && curMax + 12 <= cmSafeUpper) {
+          shiftToC += 12;
+          curMin += 12;
+          curMax += 12;
+        }
+
+        if (shiftToC !== 0) {
+          for (const n of extractedNotes) {
+            n.note = Math.max(0, Math.min(127, n.note + shiftToC));
+          }
+          appliedSemitoneShift = shiftToC;
+        }
+        const sign = shiftToC > 0 ? `+${shiftToC}` : `${shiftToC}`;
+        adaptationParts.push(`CM=1 歸一化 (${detectedSourceChordRoot} ➔ C 大調母體，位移 ${sign}st，音區 ${ curMin }~${ curMax })`);
+      } else if (autoFitSweetSpot && sweetProfile) {
+        let curMin = Math.min(...extractedNotes.map((n) => n.note));
+        let curMax = Math.max(...extractedNotes.map((n) => n.note));
+        let octShift = 0;
+        while (curMax > sweetProfile.sweetMax && curMin - 12 >= Math.max(36, sweetProfile.sweetMin - 4)) {
+          octShift -= 12;
+          curMin -= 12;
+          curMax -= 12;
+        }
+        if (octShift !== 0) {
+          for (const n of extractedNotes) {
+            n.note = Math.max(0, Math.min(127, n.note + octShift));
+          }
+          appliedSemitoneShift = octShift;
+          adaptationParts.push(`甜區自動降八度 (${octShift}st ➔ 最高音 ${curMax} ≤ 上限 ${sweetProfile.sweetMax})`);
+        }
+      }
+    }
+
+    const originalVolume = effVoice.volume;
+    let finalVolume = originalVolume;
+    let volumeBoosted = false;
+    if (!effVoice.isDrum && autoBoostVolume) {
+      if (finalVolume < 85) {
+        finalVolume = 100;
+        volumeBoosted = true;
+      }
+      if (appliedSemitoneShift <= -12 && finalVolume < 104) {
+        finalVolume = 104;
+        volumeBoosted = true;
+      }
+      if (volumeBoosted) {
+        adaptationParts.push(`音量飽滿化 (CC7: ${originalVolume} ➔ ${finalVolume})`);
+      }
+    }
+
     // 3. 寫入音色與混音參數至目標 Pad 軌道
     this.setPadMixing(targetPadParsed, targetPadNum, {
       bankMsb: effVoice.msb,
       bankLsb: effVoice.lsb,
       programChange: effVoice.pc,
-      volume: effVoice.volume,
+      volume: finalVolume,
       pan: effVoice.pan,
       reverb: effReverb,
       chorus: effChorus,
@@ -2990,8 +3094,23 @@ export class YamahaPadModifier {
     this.replacePadNotes(targetPadParsed, targetPadNum, extractedNotes, targetBars);
 
     // 5. 清除舊動態 CC 並寫入提取的真實動態 CC (確保開頭 CC11=127 飽滿進場，結尾 CC64=0 放開延音)
-    if (!cc11List.some((c) => c.relTick === 0)) {
+    const tick0Cc11 = cc11List.find((c) => c.relTick === 0);
+    if (tick0Cc11) {
+      if (autoBoostVolume && tick0Cc11.value < 127) {
+        tick0Cc11.value = 127;
+      }
+    } else {
       cc11List.unshift({ relTick: 0, value: 127 });
+    }
+    if (autoBoostVolume && !effVoice.isDrum && cc11List.length > 1) {
+      // 若原背景軌所有 CC11 表情均偏低 (< 95)，等比拉升至飽滿區間以防聲音悶暗
+      const maxExpr = Math.max(...cc11List.slice(1).map((c) => c.value));
+      if (maxExpr > 0 && maxExpr < 95) {
+        const boostDelta = 115 - maxExpr;
+        for (let i = 1; i < cc11List.length; i++) {
+          cc11List[i].value = Math.min(127, cc11List[i].value + boostDelta);
+        }
+      }
     }
     this.replacePadCCEvents(targetPadParsed, targetPadNum, 11, cc11List);
     this.replacePadCCEvents(targetPadParsed, targetPadNum, 1, cc1List);
@@ -3011,7 +3130,10 @@ export class YamahaPadModifier {
 
     let autoCm = false;
     let autoRp = false;
-    if (trkDiag.musicalType === 'CHORD_TEXTURE') {
+    if (normalizeToCM7 && !effVoice.isDrum) {
+      autoCm = true;
+      autoRp = trkDiag.musicalType === 'CHORD_TEXTURE';
+    } else if (trkDiag.musicalType === 'CHORD_TEXTURE') {
       autoCm = true;
       autoRp = true;
     } else if (trkDiag.musicalType === 'DRUM_SFX') {
@@ -3067,7 +3189,85 @@ export class YamahaPadModifier {
       musicalTypeLabelZh: trkDiag.musicalTypeLabelZh,
       chordMatch: autoCm,
       repeat: autoRp,
+      originalVolume,
+      finalVolume,
+      volumeBoosted,
+      appliedSemitoneShift,
+      detectedSourceChordRoot,
+      adaptationSummaryZh: adaptationParts.length > 0 ? adaptationParts.join(' ｜ ') : '原音高直通匯入 (CC11=127)',
     };
+  }
+
+  /**
+   * 【任務 4-1C 模組四】自動嗅探原 MIDI 在 [startTickSrc, endTickSrc) 區間的當下和弦根音 PitchClass (0~11)
+   * 1. 優先檢索全曲非鼓組軌道在該區間的低音區音符 (pitch <= 55，通常為 Bass 或左手根音)
+   * 2. 若無低音軌，則以區間內音符的五度/大三度/小三度和聲契合度與首拍強拍重音決定根音
+   */
+  public static detectRangeChordRootPc(
+    sourceParsed: YamahaFileParsed,
+    startTickSrc: number,
+    endTickSrc: number,
+    extractedNotes: Array<{ note: number; startTick: number; durationTick: number; velocity: number }>
+  ): number {
+    let earliestBassTick = Infinity;
+    let bassRootPc: number | null = null;
+    const globalPcWeights = new Array<number>(12).fill(0);
+
+    for (const track of sourceParsed.tracks) {
+      if (!track || !track.events) continue;
+      let curTick = 0;
+      for (const ev of track.events) {
+        curTick += ev.delta;
+        if (curTick >= endTickSrc) break;
+        if (
+          curTick >= startTickSrc &&
+          ev.type === 'noteOn' &&
+          (ev.velocity ?? 0) > 0 &&
+          ev.noteNumber !== undefined &&
+          ev.channel !== 9
+        ) {
+          const pc = ev.noteNumber % 12;
+          const isDownbeat = curTick - startTickSrc <= (sourceParsed.division || 480) / 2;
+          globalPcWeights[pc] += isDownbeat ? 3 : 1;
+
+          if (ev.noteNumber <= 55 && curTick < earliestBassTick) {
+            earliestBassTick = curTick;
+            bassRootPc = pc;
+          }
+        }
+      }
+    }
+
+    if (bassRootPc !== null) {
+      return bassRootPc;
+    }
+
+    // 若無低音軌 (<=55)，利用擷取音符自身進行三和弦/五度根音匹配
+    const localWeights = new Array<number>(12).fill(0);
+    for (let i = 0; i < extractedNotes.length; i++) {
+      const n = extractedNotes[i];
+      const pc = n.note % 12;
+      const posBonus = i === 0 ? 2.5 : 1.0;
+      localWeights[pc] += Math.max(1, n.durationTick / 120) * posBonus;
+    }
+
+    let bestRoot = extractedNotes.length > 0 ? extractedNotes[0].note % 12 : 0;
+    let bestScore = -1;
+    for (let candidate = 0; candidate < 12; candidate++) {
+      const rootW = localWeights[candidate] + globalPcWeights[candidate] * 0.5;
+      if (rootW <= 0) continue;
+      const fifthW = localWeights[(candidate + 7) % 12];
+      const maj3W = localWeights[(candidate + 4) % 12];
+      const min3W = localWeights[(candidate + 3) % 12];
+      // 三和弦或 1+5 音骨架加權
+      const score = rootW * 1.8 + fifthW * 1.2 + Math.max(maj3W, min3W) * 1.1;
+      if (score > bestScore) {
+        bestScore = score;
+        bestRoot = candidate;
+      }
+    }
+
+    return bestRoot;
   }
 
   /**
