@@ -2926,6 +2926,37 @@ export class YamahaPadModifier {
       throw new Error(`無效的目標 Pad 編號: ${targetPadNum} (必須為 1 ~ 4)`);
     }
 
+    // 0. 自動同步來源 MIDI 的速度 (BPM 與 Track 0 Meta 0x51)，確保匯出之 PAD 與原曲速度一致
+    if (sourceParsed.bpm && sourceParsed.bpm >= 20 && sourceParsed.bpm <= 300) {
+      const cleanBpm = Math.round(sourceParsed.bpm);
+      targetPadParsed.bpm = cleanBpm;
+      const track0 = targetPadParsed.tracks?.[0];
+      if (track0 && track0.events) {
+        const microsecondsPerQuarter = Math.max(1, Math.round(60000000 / cleanBpm));
+        const tempoBytes = new Uint8Array([
+          (microsecondsPerQuarter >> 16) & 0xff,
+          (microsecondsPerQuarter >> 8) & 0xff,
+          microsecondsPerQuarter & 0xff,
+        ]);
+        let updatedTempo = false;
+        for (const ev of track0.events) {
+          if (ev.type === 'meta' && ev.metaType === 0x51) {
+            ev.metaData = new Uint8Array(tempoBytes);
+            updatedTempo = true;
+          }
+        }
+        if (!updatedTempo) {
+          track0.events.unshift({
+            delta: 0,
+            type: 'meta',
+            metaType: 0x51,
+            metaData: new Uint8Array(tempoBytes),
+          });
+        }
+        this.rebuildTrackRawChunk(track0);
+      }
+    }
+
     const srcDivision = sourceParsed.division || 480;
     const dstDivision = targetPadParsed.division || 480;
     const scale = dstDivision / srcDivision;

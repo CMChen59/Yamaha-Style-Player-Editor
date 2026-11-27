@@ -454,4 +454,113 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
     expect(ch8.isExcluded).toBe(false);
     expect(ch8.targetPart).toBeNull();
   });
+
+  it('6. 切片組裝至 STY 時必須將來源 MIDI 的速度 (如《月亮代表我的心》78 BPM) 同步寫入 Track 0 Meta 0x51 與 styleParsed.bpm', async () => {
+    const fs = await import('fs');
+    if (!fs.existsSync('MIDI/月亮代表我的心.mid')) return;
+    const { YamahaParser } = await import('../src/core/parser/yamaha-parser');
+    const { YamahaWriter } = await import('../src/core/writer/yamaha-writer');
+    const { MidiSongAnalyzer } = await import('../src/core/parser/midi-song-analyzer');
+    const { MidiSliceAssembler } = await import('../src/core/writer/midi-slice-assembler');
+
+    const raw = new Uint8Array(fs.readFileSync('MIDI/月亮代表我的心.mid'));
+    const parsed = YamahaParser.parse(raw);
+    const analysis = MidiSongAnalyzer.analyze(parsed, '月亮代表我的心.mid');
+    expect(analysis.initialBpm).toBe(78);
+
+    let baseSty = undefined;
+    if (fs.existsSync('samples/CHINA Ballad.T547.sty')) {
+      baseSty = YamahaParser.parse(new Uint8Array(fs.readFileSync('samples/CHINA Ballad.T547.sty')), 'STY');
+    }
+
+    const plan = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
+      sourceParsed: parsed,
+      startBar: 1,
+      endBar: 4,
+      targetSection: 'Intro A',
+    });
+
+    const res = MidiSliceAssembler.assembleSliceToSection({
+      sourceParsed: parsed,
+      analysis,
+      startBar: 1,
+      endBar: 4,
+      startBeat: 3,
+      endBeat: 3,
+      targetSection: 'Intro A',
+      mappingPlan: plan,
+      baseStyleParsed: baseSty,
+    });
+
+    expect(res.styleParsed.bpm).toBe(78);
+    const outBytes = YamahaWriter.write(res.styleParsed);
+    const reparsed = YamahaParser.parse(outBytes, 'STY');
+    expect(reparsed.bpm).toBe(78);
+
+    // 同步重新產出完整 9 段落《月亮代表我的心_自動切片驗收.sty》與《月亮代表我的心_過門插音.PAD》
+    const { YamahaPadModifier } = await import('../src/core/writer/pad-modifier');
+    const slices = [
+      { targetSection: 'Intro A', startBar: 1, endBar: 4, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Main A', startBar: 5, endBar: 12, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Fill In AA', startBar: 12, endBar: 12, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Main B', startBar: 13, endBar: 20, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Fill In BB', startBar: 20, endBar: 20, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Main C', startBar: 21, endBar: 28, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Intro B', startBar: 29, endBar: 36, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Main D', startBar: 45, endBar: 52, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Ending A', startBar: 61, endBar: 68, startBeat: 3, endBeat: 3 },
+    ];
+    let workingSty = baseSty;
+    for (const s of slices) {
+      const p = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
+        sourceParsed: parsed,
+        startBar: s.startBar,
+        endBar: s.endBar,
+        targetSection: s.targetSection,
+      });
+      const r = MidiSliceAssembler.assembleSliceToSection({
+        sourceParsed: parsed,
+        analysis,
+        startBar: s.startBar,
+        endBar: s.endBar,
+        startBeat: s.startBeat,
+        endBeat: s.endBeat,
+        targetSection: s.targetSection,
+        mappingPlan: p,
+        baseStyleParsed: workingSty,
+      });
+      workingSty = r.styleParsed;
+    }
+    const finalStyBytes = YamahaWriter.write(workingSty!);
+    fs.writeFileSync('MIDI/月亮代表我的心_自動切片驗收.sty', finalStyBytes);
+    const verifySty = YamahaParser.parse(new Uint8Array(fs.readFileSync('MIDI/月亮代表我的心_自動切片驗收.sty')), 'STY');
+    expect(verifySty.bpm).toBe(78);
+
+    if (fs.existsSync('samples/Balloon.S910.pad')) {
+      const padParsed = YamahaParser.parse(new Uint8Array(fs.readFileSync('samples/Balloon.S910.pad')), 'PAD');
+      YamahaPadModifier.importMidiChannelRangeToPad({
+        sourceParsed: parsed, targetPadParsed: padParsed, sourceChannel: 4, targetPadNum: 1,
+        startBar: 1, endBar: 4, startBeat: 3, endBeat: 3, customPadName: 'Celesta Intro',
+        autoBoostVolume: true, autoFitSweetSpot: true, normalizeToCM7: false,
+      });
+      YamahaPadModifier.importMidiChannelRangeToPad({
+        sourceParsed: parsed, targetPadParsed: padParsed, sourceChannel: 7, targetPadNum: 2,
+        startBar: 9, endBar: 12, startBeat: 3, endBeat: 3, customPadName: 'NylonGtr Fill1',
+        autoBoostVolume: true, autoFitSweetSpot: true, normalizeToCM7: true,
+      });
+      YamahaPadModifier.importMidiChannelRangeToPad({
+        sourceParsed: parsed, targetPadParsed: padParsed, sourceChannel: 7, targetPadNum: 3,
+        startBar: 21, endBar: 24, startBeat: 3, endBeat: 3, customPadName: 'NylonGtr Chorus',
+        autoBoostVolume: true, autoFitSweetSpot: true, normalizeToCM7: true,
+      });
+      YamahaPadModifier.importMidiChannelRangeToPad({
+        sourceParsed: parsed, targetPadParsed: padParsed, sourceChannel: 6, targetPadNum: 4,
+        startBar: 29, endBar: 36, startBeat: 3, endBeat: 3, customPadName: 'Strings Interlude',
+        autoBoostVolume: true, autoFitSweetSpot: true, normalizeToCM7: false,
+      });
+      fs.writeFileSync('MIDI/月亮代表我的心_過門插音.PAD', YamahaWriter.write(padParsed));
+      const verifyPad = YamahaParser.parse(new Uint8Array(fs.readFileSync('MIDI/月亮代表我的心_過門插音.PAD')), 'PAD');
+      expect(verifyPad.bpm).toBe(78);
+    }
+  });
 });

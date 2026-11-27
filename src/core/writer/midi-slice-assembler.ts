@@ -106,7 +106,8 @@ export class MidiSliceAssembler {
 
     const totalBars = Math.max(1, endBar - startBar + 1);
 
-    // 1. 初始化目標伴奏風格 Parsed 物件
+    // 1. 初始化目標伴奏風格 Parsed 物件，並強制同步來源 MIDI 的速度 (BPM 與 Track 0 Meta 0x51)
+    const targetBpm = Math.max(20, Math.min(300, Math.round(analysis.initialBpm || sourceParsed.bpm || 120)));
     let styleParsed: YamahaFileParsed;
     if (baseStyleParsed) {
       styleParsed = this.cloneParsed(baseStyleParsed);
@@ -114,8 +115,8 @@ export class MidiSliceAssembler {
       const templateBytes = getGoldenStyleTemplateBytes();
       styleParsed = YamahaParser.parse(templateBytes, 'STY');
       (styleParsed as any).styleName = styleName || `${analysis.fileName.replace(/\.[^/.]+$/, '')}_Arranger`;
-      styleParsed.bpm = analysis.initialBpm || 120;
     }
+    YamahaStyleModifier.setStyleBpm(styleParsed, targetBpm);
 
     // 2. 計算來源與目標時鐘 (PPQ) 與小節 Tick 邊界
     const srcPpq = sourceParsed.division || 480;

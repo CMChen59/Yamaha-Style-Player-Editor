@@ -110,6 +110,47 @@ export class YamahaStyleModifier {
   }
 
   /**
+   * 更新伴奏專案的全域速度 (BPM)，並同步寫入 Track 0 的 Meta 0x51 (Set Tempo) 二進位事件與 rawChunk。
+   * 解決切片裝配或載入舊範本 (如 CHINA Ballad.T547.sty 為 68 BPM) 時，匯出之 STY 速度未跟隨來源 MIDI 的問題。
+   */
+  public static setStyleBpm(parsed: YamahaFileParsed, targetBpm: number): void {
+    if (!parsed) return;
+    const cleanBpm = Math.max(20, Math.min(300, Math.round(targetBpm || 120)));
+    parsed.bpm = cleanBpm;
+
+    if (!parsed.tracks || parsed.tracks.length === 0) return;
+    const track0 = parsed.tracks[0];
+    if (!track0 || !track0.events) return;
+
+    const microsecondsPerQuarter = Math.max(1, Math.round(60000000 / cleanBpm));
+    const tempoBytes = new Uint8Array([
+      (microsecondsPerQuarter >> 16) & 0xff,
+      (microsecondsPerQuarter >> 8) & 0xff,
+      microsecondsPerQuarter & 0xff,
+    ]);
+
+    let updated = false;
+    for (const ev of track0.events) {
+      if (ev.type === 'meta' && ev.metaType === 0x51) {
+        ev.metaData = new Uint8Array(tempoBytes);
+        updated = true;
+      }
+    }
+
+    if (!updated) {
+      // 若 Track 0 尚無 Meta 0x51 事件，於開頭插入
+      track0.events.unshift({
+        delta: 0,
+        type: 'meta',
+        metaType: 0x51,
+        metaData: new Uint8Array(tempoBytes),
+      });
+    }
+
+    YamahaPadModifier.rebuildTrackRawChunk(track0);
+  }
+
+  /**
    * 全域伴奏段落深層淨化與標準時序重整 (Canonical Event Ordering & Deep Controller Sanitization)
    * 1. 徹底清除各段落內部舊範本殘留的幽靈表演控制器 (如 CC11 漸弱淡出曲線、CC1 顫音、CC64 延音)
    * 2. 嚴格強制同 Tick 下【Bank Select/PC/Volume/Expression 永遠排在 NoteOn 之前發送】，徹底根除起音走味、雜音、爆音與切音
