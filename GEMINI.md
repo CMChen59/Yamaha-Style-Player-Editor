@@ -194,6 +194,12 @@
   - 詳細規則完整文檔已整理於 [`docs/yamaha-ntr-ntt-guide.md`](docs/yamaha-ntr-ntt-guide.md)。
 - **實機驗證先於系統整合原則**：
   - 所有 Multi Pad 和弦轉調與 CASM 修復演算法，一律在家中搭配 PSR-SX920 實體琴聆聽驗證確認無誤後，再行封裝上線至系統 UI，嚴禁未經實機驗證盲目修改系統主程式。
+- **STY 切片六大實戰鐵律（2026-11-27《月亮代表我的心》盲測與聽感驗收定案）**：
+  1. **來源 MIDI 速度（`Meta 0x51`）與 `SInt` 初始音量同步鐵律**：切片組裝 `.STY` 或抽入 `.PAD` 時，無論是否基於既有範本，必須強制將來源 MIDI 的 `initialBpm` 寫入 `Track 0` 的 `Meta 0x51 (Set Tempo)` 事件（[`YamahaStyleModifier.setStyleBpm`](src/core/writer/style-modifier.ts)），並在 [`YamahaStyleModifier.setPartMixing`](src/core/writer/style-modifier.ts) 更新單一段落時同步更新 `Track 0` 開頭 `SInt` 初始化區的 `CC7 (Volume)` 與音色，徹底杜絕舊範本速度（如 68 BPM）或超低初始音量（如 `Phrase 1 Vol=46`）殘留。
+  2. **新伴奏初始化範本冗餘段落與殘留音符全清鐵律**：首次由黃金範本初始化新伴奏專案時，必須自動移除未使用的冗餘段落（`Intro C`、`Ending B`、`Ending C`、`Fill In BA`）並清空所有剩餘段落的舊範本音符（[`YamahaStyleModifier.removeSection`](src/core/writer/style-modifier.ts)），防止未切到的段落播到範本原本的別首歌。
+  3. **前奏 / 間奏 / 尾奏雙樂器分段接力 Solo 自動入座鐵律**：在 [`MidiPartAssignMatrix.createAutoMappingPlan`](src/core/writer/midi-part-assign-matrix.ts) 中，當目標為 `Intro / Ending` 時，僅排除全曲唯一核心人聲主唱（`isPrimaryVocal`），並自動偵測「前半段主奏」與「前半段 0 音符、後半段進場接力主奏（≥10 音符）」之分段接力 Solo 軌（`isIntroEndingSolo`，需支援 `startBeat` 弱起偏移精確切分前後半段），依出場時間與實體旋律樂器優先權（吉他/管樂/弦樂優先於高八度鋼片琴鈴音疊音）自動排入 `Phrase 1` 與 `Phrase 2`（如《月亮代表我的心》間奏 Bar 37.3~45.3 前 4 節 `CH 7 高音弦樂` 接後 4 節 `CH 8 尼龍木吉他`）。
+  4. **低音域借用樂器識別為 Bass 與 Rhythm 1 嚴禁塞入旋律樂器鐵律**：部分 MIDI 以 `JazzGuitar` 等音色彈奏低音貝斯線（音域 `C1~E2, pitchMax <= 50`），必須自動識別為 `Bass`；而 `Rhythm 1 (Ch 9)` 副打擊通道嚴禁在填空階段塞入非打擊樂之弦樂、吉他或管樂。
+  5. **未上座第 9、10 軌透明遺珠清單與一鍵轉存 Pad（【任務 2-4F】）**：切片彈窗底部 `#ms-unassigned-box` 自動列出因 8 軌上限而未上座的發聲通道，提供一鍵 `[⇄ 替換入伴奏座位...]` 與 `[📥 轉存 Pad 1~4 ▾]`。
 
 ---
 
