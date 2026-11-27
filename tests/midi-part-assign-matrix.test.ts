@@ -468,10 +468,24 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
     const analysis = MidiSongAnalyzer.analyze(parsed, '月亮代表我的心.mid');
     expect(analysis.initialBpm).toBe(78);
 
+    const introBPlan = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
+      sourceParsed: parsed,
+      startBar: 37,
+      endBar: 44,
+      startBeat: 3,
+      targetSection: 'Intro B',
+    });
+    // 驗證 Intro B (間奏第 37~44 節) 的雙樂器接力主旋律：
+    // 前半段 (Bar 37~40) 主奏 CH 7 (idx 6: Strings2 43 音) ➔ Phrase 1
+    // 後半段 (Bar 41~44) 接力主奏 CH 8 (idx 7: NylonGuitar1 17 音) ➔ Phrase 2
+    expect(introBPlan.partToSourceChannelMap.get('Phrase1')).toBe(6);
+    expect(introBPlan.partToSourceChannelMap.get('Phrase2')).toBe(7);
+
     const plan = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
       sourceParsed: parsed,
       startBar: 1,
       endBar: 4,
+      startBeat: 3,
       targetSection: 'Intro A',
     });
 
@@ -525,6 +539,7 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
         sourceParsed: parsed,
         startBar: s.startBar,
         endBar: s.endBar,
+        startBeat: s.startBeat,
         targetSection: s.targetSection,
       });
       const r = MidiSliceAssembler.assembleSliceToSection({

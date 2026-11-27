@@ -279,9 +279,24 @@ export class YamahaStyleModifier {
       part.programChange = Math.max(0, Math.min(127, Math.round(params.programChange)));
     }
 
-    // 2. 若指定了 targetSection，則只更新 (或插入) 該段落範圍內的專屬事件
+    // 2. 若指定了 targetSection，則更新 (或插入) 該段落範圍內的專屬事件，並同步更新 SInt 初始化區間的預設音色與音量
     if (options?.targetSection) {
       this.updateSectionEvents(parsed, track0, channel, options.targetSection, params, part);
+      if (params.bankMsb !== undefined && part.bankMsb !== undefined) {
+        this.updateOrInsertCC(track0, channel, 0, part.bankMsb);
+      }
+      if (params.bankLsb !== undefined && part.bankLsb !== undefined) {
+        this.updateOrInsertCC(track0, channel, 32, part.bankLsb);
+      }
+      if (params.programChange !== undefined && part.programChange !== undefined) {
+        this.updateOrInsertPC(track0, channel, part.programChange);
+      }
+      if (params.volume !== undefined && part.volume !== undefined) {
+        this.updateOrInsertCC(track0, channel, 7, part.volume);
+      }
+      if (params.pan !== undefined && part.pan !== undefined) {
+        this.updateOrInsertCC(track0, channel, 10, part.pan);
+      }
     } else {
       // 3. 預設全域聲部換音色/混音 (Global Revoicing)
       // 3a. 同步更新 Track 0 開頭事件中的初始化 CC 與 PC (第一個 NoteOn 之前)

@@ -184,6 +184,7 @@ export class MidiPartAssignMatrix {
       sourceParsed: YamahaFileParsed;
       startBar: number;
       endBar: number;
+      startBeat?: number;
       targetSection?: string;
     }
   ): SongPartMappingPlan {
@@ -198,15 +199,21 @@ export class MidiPartAssignMatrix {
     const sliceNoteCountMap = new Map<number, number>();
     const sliceFirstTickMap = new Map<number, number>();
     const sliceHasNoteBeforeLastBarMap = new Map<number, boolean>();
+    const sliceFirstHalfCountMap = new Map<number, number>();
+    const sliceSecondHalfCountMap = new Map<number, number>();
     if (sliceContext) {
       const division = sliceContext.sourceParsed.division || 480;
       const timeSig = sliceContext.sourceParsed.timeSignature || { numerator: 4, denominator: 4 };
       const num = timeSig.numerator || 4;
       const den = timeSig.denominator || 4;
-      const ticksPerBar = Math.max(1, Math.round(division * num * (4 / den)));
-      const startTick = Math.max(0, (sliceContext.startBar - 1) * ticksPerBar);
-      const endTick = sliceContext.endBar * ticksPerBar;
-      const lastBarStartTick = Math.max(startTick, (sliceContext.endBar - 1) * ticksPerBar);
+      const ticksPerBeat = Math.max(1, Math.round(division * (4 / den)));
+      const ticksPerBar = Math.max(1, Math.round(ticksPerBeat * num));
+      const sBeat = sliceContext.startBeat && sliceContext.startBeat >= 1 ? sliceContext.startBeat : 1;
+      const totalBarsInSlice = Math.max(1, sliceContext.endBar - sliceContext.startBar + 1);
+      const startTick = Math.max(0, (sliceContext.startBar - 1) * ticksPerBar + (sBeat - 1) * ticksPerBeat);
+      const endTick = startTick + totalBarsInSlice * ticksPerBar;
+      const midTick = Math.round((startTick + endTick) / 2);
+      const lastBarStartTick = Math.max(startTick, endTick - ticksPerBar);
 
       for (const track of sliceContext.sourceParsed.tracks) {
         let curTick = 0;
@@ -215,6 +222,11 @@ export class MidiPartAssignMatrix {
           if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0 && ev.channel !== undefined) {
             if (curTick >= startTick && curTick < endTick) {
               sliceNoteCountMap.set(ev.channel, (sliceNoteCountMap.get(ev.channel) || 0) + 1);
+              if (curTick < midTick) {
+                sliceFirstHalfCountMap.set(ev.channel, (sliceFirstHalfCountMap.get(ev.channel) || 0) + 1);
+              } else {
+                sliceSecondHalfCountMap.set(ev.channel, (sliceSecondHalfCountMap.get(ev.channel) || 0) + 1);
+              }
               const prevFirst = sliceFirstTickMap.get(ev.channel);
               if (prevFirst === undefined || curTick < prevFirst) {
                 sliceFirstTickMap.set(ev.channel, curTick);
@@ -302,6 +314,19 @@ export class MidiPartAssignMatrix {
           isIntroEndingSolo = true;
         } else {
           isPrimaryVocal = true;
+        }
+      } else if (isIntroOrEnding && sliceContext && ch.channel !== 9 && ch.category !== 'Drums' && ch.category !== 'Bass' && (ch.pitchMax ?? 60) > 50) {
+        // 【前奏/間奏分段接力或高音旋律 Solo 識別】：
+        // 1. 若某非鼓非貝斯軌道在前奏/間奏的「前半段完全未開口 (0 音符)、僅在後半段進場演奏完整旋律 (>= 10 音符)」
+        //    或「僅在前半段演奏完整旋律 (>= 10 音符)、後半段休息 (0 音符)」(例如《月亮代表我的心》間奏後半段進場的 CH 8 NylonGuitar1 17 音與 CH 5 Celesta 17 音)
+        // 2. 或該軌在此前奏/間奏中為高音域弦樂/管樂主線 (pitchMax >= 74 且音符數 >= 16，例如間奏前半段主奏的 CH 7 Strings2 43 音，遠多於鋪底長音 CH 6 的 7 音)
+        const firstHalf = sliceFirstHalfCountMap.get(ch.channel) || 0;
+        const secondHalf = sliceSecondHalfCountMap.get(ch.channel) || 0;
+        const sliceSpan = sliceContext.endBar - sliceContext.startBar + 1;
+        const isHalfSectionRelay = sliceSpan >= 4 && ((firstHalf === 0 && secondHalf >= 10) || (secondHalf === 0 && firstHalf >= 10));
+        const isHighLeadStringsInIntro = ch.category.includes('Strings') && (ch.pitchMax ?? 0) >= 74 && noteCount >= sliceSpan * 2;
+        if (isHalfSectionRelay || isHighLeadStringsInIntro) {
+          isIntroEndingSolo = true;
         }
       }
 
@@ -405,11 +430,21 @@ export class MidiPartAssignMatrix {
     }
 
     // 4. 階段三：指派裝飾樂句與前奏/尾奏 Solo (Phrase 1, Phrase 2)
-    // 【任務 2-4B】若為 Intro / Ending 段落且有前奏/間奏/尾奏樂器 Solo (含雙樂器接力 Solo)，依出場時間優先排入 Phrase 1 與 Phrase 2
+    // 【任務 2-4B】若為 Intro / Ending 段落且有前奏/間奏/尾奏樂器 Solo (含雙樂器接力 Solo)，
+    // 優先將不同出場時間點 (前半段 vs 後半段) 或主要旋律樂器 (Guitar/Strings/Woodwind/Sax/Brass 優先於疊音鈴聲 Celesta/Percussion) 排入 Phrase 1 與 Phrase 2
     if (isIntroOrEnding) {
       const introSolos = candidates
         .filter(a => a.targetPart === null && a.isIntroEndingSolo && a.noteCount > 0)
-        .sort((a, b) => (a.firstNoteTickInSlice ?? Infinity) - (b.firstNoteTickInSlice ?? Infinity));
+        .sort((a, b) => {
+          const tickDiff = (a.firstNoteTickInSlice ?? Infinity) - (b.firstNoteTickInSlice ?? Infinity);
+          // 允許同一拍內的微小起音誤差 (例如相差 < 1 拍視為同時出場，優先挑選實體旋律樂器而非 Percussion 鋼片琴疊音)
+          const beatTol = Math.round((sliceContext?.sourceParsed.division || 480) * 0.5);
+          if (Math.abs(tickDiff) > beatTol) return tickDiff;
+          const aIsBell = a.category === 'Percussion' ? 1 : 0;
+          const bIsBell = b.category === 'Percussion' ? 1 : 0;
+          if (aIsBell !== bIsBell) return aIsBell - bIsBell;
+          return b.noteCount - a.noteCount;
+        });
 
       if (introSolos.length >= 1 && !partToSourceChannelMap.has('Phrase1')) {
         this.bindPart(introSolos[0], 'Phrase1', partToSourceChannelMap);

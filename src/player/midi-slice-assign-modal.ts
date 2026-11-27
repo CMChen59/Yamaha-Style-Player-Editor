@@ -227,6 +227,7 @@ export class MidiSliceAssignModal {
       this.currentStartBeat = parseInt(this.selectStartBeatEl.value, 10) || 1;
       this.updateRangeBadge();
       this.updateNormalizeModeBySection(false);
+      this.refreshPlanForTargetSection();
     });
 
     this.btnConfirm.addEventListener('click', () => {
@@ -377,16 +378,6 @@ export class MidiSliceAssignModal {
     this.hasExternalLockedPlan = !!plan;
     this.savedToPadStatusMap.clear();
     this.populateSectionOptions();
-    const initialSection = this.selectSectionEl.value || 'Main A';
-    this.currentPlan = plan ? plan : MidiPartAssignMatrix.createAutoMappingPlan(
-      analysis,
-      sourceParsed ? { sourceParsed, startBar, endBar, targetSection: initialSection } : undefined
-    );
-    this.onConfirmCallback = onConfirm;
-    this.onAuditionCallback = onAudition || null;
-    this.isAuditioningAccomp = false;
-    this.updateAuditionButtonUI();
-
     // 智慧起音自動吸附 (First Note Offset Snapping)
     const beatsPerBar = analysis.timeSignature?.numerator || 4;
     const offsetBeats = analysis.leadInOffsetBeats || 0;
@@ -402,6 +393,16 @@ export class MidiSliceAssignModal {
       this.selectStartBeatEl.value = '1';
       this.beatOffsetHintEl.style.display = 'none';
     }
+
+    const initialSection = this.selectSectionEl.value || 'Main A';
+    this.currentPlan = plan ? plan : MidiPartAssignMatrix.createAutoMappingPlan(
+      analysis,
+      sourceParsed ? { sourceParsed, startBar, endBar, startBeat: this.currentStartBeat, targetSection: initialSection } : undefined
+    );
+    this.onConfirmCallback = onConfirm;
+    this.onAuditionCallback = onAudition || null;
+    this.isAuditioningAccomp = false;
+    this.updateAuditionButtonUI();
 
     this.updateRangeBadge();
 
@@ -427,6 +428,7 @@ export class MidiSliceAssignModal {
             sourceParsed: this.currentSourceParsed,
             startBar: this.currentStartBar,
             endBar: this.currentEndBar,
+            startBeat: this.currentStartBeat,
             targetSection: targetSec,
           }
         : undefined
