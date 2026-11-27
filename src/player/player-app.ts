@@ -225,6 +225,9 @@ export class PlayerApp {
     this.addSectionModal = new AddSectionModal();
     this.newStyleModal = new NewStyleModal();
     this.midiSliceAssignModal = new MidiSliceAssignModal();
+    this.midiSliceAssignModal.setOnSaveToPad((sourceChannel, targetPadNum, startBar, endBar) => {
+      return this.executeImportMidiChannelToPad(sourceChannel, targetPadNum, startBar, endBar);
+    });
 
     this.setFocusedChannel(8); // 預設聚焦 CH 9 Rhythm 1
     this.initMidi();
@@ -1396,7 +1399,7 @@ export class PlayerApp {
 
     const srcParsed = this.sourceSongParsed || this.currentParsed;
     const analysis = this.sourceSongAnalysis || this.currentSongAnalysis;
-    if (!srcParsed || !analysis) return;
+    if (!srcParsed || !analysis) return null;
 
     const totalBars = analysis.totalBars || 1;
     const curStart = Math.max(1, parseInt(this.inputMidiStartBar?.value || '1', 10) || 1);
@@ -1546,7 +1549,7 @@ export class PlayerApp {
   ) {
     const srcParsed = this.sourceSongParsed || this.currentParsed;
     const analysis = this.sourceSongAnalysis || this.currentSongAnalysis;
-    if (!srcParsed || !analysis) return;
+    if (!srcParsed || !analysis) return null;
 
     // 1. 若尚未建立 Multi Pad 專案，自動以原曲 BPM 與拍號初始化一份 4 軌空白專案
     if (!this.savedPadParsed) {
@@ -1628,6 +1631,7 @@ export class PlayerApp {
         });
       }
     }
+    return { padName: res.padName };
   }
 
   /**

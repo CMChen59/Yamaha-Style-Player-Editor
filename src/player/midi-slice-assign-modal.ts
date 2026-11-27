@@ -36,6 +36,7 @@ export class MidiSliceAssignModal {
   private selectStartBeatEl!: HTMLSelectElement;
   private beatOffsetHintEl!: HTMLElement;
   private gridContainerEl!: HTMLElement;
+  private unassignedBoxEl!: HTMLElement;
   private melodyBoxEl!: HTMLElement;
   private btnConfirm!: HTMLButtonElement;
   private btnCancel!: HTMLButtonElement;
@@ -54,7 +55,10 @@ export class MidiSliceAssignModal {
   private currentStartBeat: number = 1;
   private currentSourceParsed?: YamahaFileParsed;
   private fixedBypassChannels: Set<number> = new Set();
+  private savedToPadStatusMap: Map<number, string> = new Map();
+  private hasExternalLockedPlan: boolean = false;
   private onConfirmCallback: ((config: MidiSliceAssignConfig) => void) | null = null;
+  private onSaveToPadCallback: ((sourceChannel: number, targetPadNum: number, startBar: number, endBar: number) => { padName: string } | null) | null = null;
 
   public getCurrentSourceParsed(): YamahaFileParsed | undefined {
     return this.currentSourceParsed;
@@ -159,6 +163,9 @@ export class MidiSliceAssignModal {
             <div id="ms-parts-grid" class="part-matrix-grid" style="margin-top: 0;"></div>
           </div>
 
+          <!-- 任務 2-4F：因 8 軌上限未納入伴奏之額外發聲通道清單 (遺珠清單) -->
+          <div id="ms-unassigned-box" class="melody-excluded-box" style="margin-top: 4px; display: none; border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.07);"></div>
+
           <!-- 排除主旋律區域 -->
           <div id="ms-melody-box" class="melody-excluded-box" style="margin-top: 4px;"></div>
         </div>
@@ -182,6 +189,7 @@ export class MidiSliceAssignModal {
     this.selectStartBeatEl = wrap.querySelector('#ms-select-start-beat') as HTMLSelectElement;
     this.beatOffsetHintEl = wrap.querySelector('#ms-beat-offset-hint') as HTMLElement;
     this.gridContainerEl = wrap.querySelector('#ms-parts-grid') as HTMLElement;
+    this.unassignedBoxEl = wrap.querySelector('#ms-unassigned-box') as HTMLElement;
     this.melodyBoxEl = wrap.querySelector('#ms-melody-box') as HTMLElement;
     this.btnConfirm = wrap.querySelector('#btn-confirm-ms-modal') as HTMLButtonElement;
     this.btnCancel = wrap.querySelector('#btn-cancel-ms-modal') as HTMLButtonElement;
@@ -207,6 +215,7 @@ export class MidiSliceAssignModal {
 
     this.selectSectionEl.addEventListener('change', () => {
       this.updateNormalizeModeBySection(true);
+      this.refreshPlanForTargetSection();
     });
 
     const onRadioChange = () => this.updateNormDescription();
@@ -365,9 +374,13 @@ export class MidiSliceAssignModal {
     this.currentStartBar = startBar;
     this.currentEndBar = endBar;
     this.currentSourceParsed = sourceParsed;
+    this.hasExternalLockedPlan = !!plan;
+    this.savedToPadStatusMap.clear();
+    this.populateSectionOptions();
+    const initialSection = this.selectSectionEl.value || 'Main A';
     this.currentPlan = plan ? plan : MidiPartAssignMatrix.createAutoMappingPlan(
       analysis,
-      sourceParsed ? { sourceParsed, startBar, endBar } : undefined
+      sourceParsed ? { sourceParsed, startBar, endBar, targetSection: initialSection } : undefined
     );
     this.onConfirmCallback = onConfirm;
     this.onAuditionCallback = onAudition || null;
@@ -392,12 +405,35 @@ export class MidiSliceAssignModal {
 
     this.updateRangeBadge();
 
-    this.populateSectionOptions();
     this.updateNormalizeModeBySection();
     this.renderPartsGrid();
+    this.renderUnassignedBox();
     this.renderMelodyBox();
 
     this.backdropEl.style.display = 'flex';
+  }
+
+  /**
+   * 【任務 2-4B】當切換目標伴奏段落 (如 Main A ⇄ Intro A / Ending A) 時，
+   * 自動重新分流「Intro/Ending 副奏與多軌接力 Solo 自動納入 Phrase 1/2」vs「Main/Fill 純律動伴奏」
+   */
+  public refreshPlanForTargetSection() {
+    if (this.hasExternalLockedPlan || !this.currentAnalysis) return;
+    const targetSec = this.selectSectionEl.value || 'Main A';
+    this.currentPlan = MidiPartAssignMatrix.createAutoMappingPlan(
+      this.currentAnalysis,
+      this.currentSourceParsed
+        ? {
+            sourceParsed: this.currentSourceParsed,
+            startBar: this.currentStartBar,
+            endBar: this.currentEndBar,
+            targetSection: targetSec,
+          }
+        : undefined
+    );
+    this.renderPartsGrid();
+    this.renderUnassignedBox();
+    this.renderMelodyBox();
   }
 
   public close() {
@@ -431,6 +467,10 @@ export class MidiSliceAssignModal {
 
   public setOnAudition(cb: (isSoloAccomp: boolean, excludedChannels: number[]) => void) {
     this.onAuditionCallback = cb;
+  }
+
+  public setOnSaveToPad(cb: (sourceChannel: number, targetPadNum: number, startBar: number, endBar: number) => { padName: string } | null) {
+    this.onSaveToPadCallback = cb;
   }
 
   private populateSectionOptions() {
@@ -543,6 +583,13 @@ export class MidiSliceAssignModal {
             old.targetChannel = null;
           }
         } else {
+          // 先釋放此座位原本的通道 (使其回到未納入清單)
+          const oldInSeat = plan.assignments.find(a => a.targetPart === targetPart);
+          if (oldInSeat) {
+            oldInSeat.targetPart = null;
+            oldInSeat.targetChannel = null;
+          }
+          // 若新通道原本坐在別的座位，一併從舊座位移除
           for (const [p, ch] of plan.partToSourceChannelMap.entries()) {
             if (ch === newSrcCh) {
               plan.partToSourceChannelMap.delete(p);
@@ -555,8 +602,126 @@ export class MidiSliceAssignModal {
           }
         }
         plan.assignedCount = plan.partToSourceChannelMap.size;
+        plan.excludedCount = plan.assignments.filter(a => a.isExcluded).length;
         this.renderPartsGrid();
+        this.renderUnassignedBox();
         this.renderMelodyBox();
+      });
+    });
+  }
+
+  /**
+   * 【任務 2-4F】渲染「因伴奏 8 軌上限未納入之額外發聲通道清單 (遺珠清單)」
+   * 提供一鍵 [⇄ 替換入伴奏 ▾] 與 [📥 轉存 Multi Pad ▾]
+   */
+  private renderUnassignedBox() {
+    if (!this.currentPlan || !this.unassignedBoxEl) return;
+    const plan = this.currentPlan;
+    const unassignedList = plan.assignments.filter(
+      a => !a.isExcluded && a.targetPart === null && a.noteCount > 0
+    );
+
+    if (unassignedList.length === 0) {
+      this.unassignedBoxEl.style.display = 'none';
+      this.unassignedBoxEl.innerHTML = '';
+      return;
+    }
+
+    this.unassignedBoxEl.style.display = 'flex';
+    this.unassignedBoxEl.style.flexDirection = 'column';
+    this.unassignedBoxEl.style.gap = '6px';
+
+    const rowsHtml = unassignedList.map((a) => {
+      const savedPadMsg = this.savedToPadStatusMap.get(a.sourceChannel);
+      const swapOptionsHtml = [
+        `<option value="">⇄ 替換入伴奏座位...</option>`,
+        ...YAMAHA_ARRANGER_PARTS.map((pDef) => {
+          const curCh = plan.partToSourceChannelMap.get(pDef.part);
+          const curAssign = curCh !== undefined ? plan.assignments.find(x => x.sourceChannel === curCh) : null;
+          const occText = curAssign ? `目前: ${curAssign.voiceName}` : '空位';
+          return `<option value="${pDef.part}">替換【${pDef.nameZh}】(${occText})</option>`;
+        })
+      ].join('');
+
+      return `
+        <div class="melody-item-row" style="border-color: rgba(245, 158, 11, 0.35);">
+          <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <span style="font-weight: 700; color: #fcd34d;">🎹 ${a.voiceName}</span>
+            <span style="color: #94a3b8;">· 軌道: ${a.trackNames.join(' / ') || '原曲音軌'}</span>
+            <span style="color: #7dd3fc; font-weight: 600;">(原曲 CH ${a.displaySourceChannel} · 此段 ${a.noteCount} 音符)</span>
+            ${savedPadMsg ? `<span style="font-size: 0.7rem; color: #6ee7b7; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.45); padding: 1px 6px; border-radius: 4px;">✅ ${savedPadMsg}</span>` : ''}
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <select class="sel-unassigned-swap-part" data-channel="${a.sourceChannel}"
+                    style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(56, 189, 248, 0.45); color: #7dd3fc; font-size: 0.72rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; cursor: pointer;"
+                    title="將此通道替換進上方 8 大伴奏聲部之一">
+              ${swapOptionsHtml}
+            </select>
+            <select class="sel-slice-save-pad" data-channel="${a.sourceChannel}"
+                    style="background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; font-size: 0.72rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: pointer;"
+                    title="將此通道在第 ${this.currentStartBar}~${this.currentEndBar} 小節的樂句直接存入 Multi Pad (Pad 1~4)">
+              <option value="">📥 轉存 Pad ▾</option>
+              <option value="1">存入 Pad 1</option>
+              <option value="2">存入 Pad 2</option>
+              <option value="3">存入 Pad 3</option>
+              <option value="4">存入 Pad 4</option>
+            </select>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    this.unassignedBoxEl.innerHTML = `
+      <div class="melody-excluded-title" style="color: #fcd34d;">
+        <span>💤 因伴奏 8 軌座位已滿而未納入之額外發聲通道（共 ${unassignedList.length} 軌遺珠 · 可替換上座或一鍵轉存 Multi Pad）</span>
+      </div>
+      ${rowsHtml}
+    `;
+
+    // 綁定 [⇄ 替換入伴奏]
+    this.unassignedBoxEl.querySelectorAll('.sel-unassigned-swap-part').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const selectEl = e.target as HTMLSelectElement;
+        const targetPart = selectEl.value as YamahaPartType;
+        const srcCh = parseInt(selectEl.getAttribute('data-channel') || '-1', 10);
+        if (!targetPart || srcCh < 0) return;
+
+        const oldInSeat = plan.assignments.find(a => a.targetPart === targetPart);
+        if (oldInSeat) {
+          oldInSeat.targetPart = null;
+          oldInSeat.targetChannel = null;
+        }
+        const assign = plan.assignments.find(a => a.sourceChannel === srcCh);
+        if (assign) {
+          assign.isExcluded = false;
+          MidiPartAssignMatrix['bindPart'](assign, targetPart, plan.partToSourceChannelMap);
+        }
+        plan.assignedCount = plan.partToSourceChannelMap.size;
+        this.renderPartsGrid();
+        this.renderUnassignedBox();
+        this.renderMelodyBox();
+      });
+    });
+
+    // 綁定 [📥 轉存 Pad]
+    this.bindSaveToPadSelects(this.unassignedBoxEl);
+  }
+
+  private bindSaveToPadSelects(container: HTMLElement) {
+    container.querySelectorAll('.sel-slice-save-pad').forEach((sel) => {
+      sel.addEventListener('change', (e) => {
+        const selectEl = e.target as HTMLSelectElement;
+        const padNum = parseInt(selectEl.value || '0', 10);
+        const srcCh = parseInt(selectEl.getAttribute('data-channel') || '-1', 10);
+        selectEl.value = '';
+        if (padNum < 1 || padNum > 4 || srcCh < 0 || !this.onSaveToPadCallback) return;
+
+        const res = this.onSaveToPadCallback(srcCh, padNum, this.currentStartBar, this.currentEndBar);
+        if (res) {
+          this.savedToPadStatusMap.set(srcCh, `已存入 Pad ${padNum} [${res.padName}]`);
+          this.renderUnassignedBox();
+          this.renderMelodyBox();
+        }
       });
     });
   }
@@ -565,20 +730,40 @@ export class MidiSliceAssignModal {
     if (!this.currentPlan) return;
     const plan = this.currentPlan;
     const excludedList = plan.assignments.filter(a => a.isExcluded);
+    const autoIncludedSolos = plan.assignments.filter(a => !a.isExcluded && a.isIntroEndingSolo && a.targetPart !== null);
+
+    const autoSoloBannerHtml = autoIncludedSolos.length > 0
+      ? `<div style="font-size: 0.73rem; color: #6ee7b7; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 5px; padding: 4px 8px; margin-bottom: 4px;">
+           ✨ <strong>前奏/尾奏智慧納入</strong>：已自動將 ${autoIncludedSolos.map(a => `【${a.voiceName} (CH ${a.displaySourceChannel} ➔ ${a.targetPart})】`).join('、')} 納入伴奏齊奏！
+         </div>`
+      : '';
 
     const excludedRowsHtml = excludedList.length > 0
       ? excludedList.map((a) => {
+          const savedPadMsg = this.savedToPadStatusMap.get(a.sourceChannel);
           return `
             <div class="melody-item-row">
               <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 <span style="font-weight: 700; color: #fca5a5;">${a.voiceName}</span>
                 <span style="color: #94a3b8;">· 軌道: ${a.trackNames.join(' / ') || '無'}</span>
-                <span style="color: #64748b;">(原曲 CH ${a.displaySourceChannel} · ${a.noteCount} 音符)</span>
+                <span style="color: #64748b;">(原曲 CH ${a.displaySourceChannel} · 此段 ${a.noteCount} 音符)</span>
+                ${savedPadMsg ? `<span style="font-size: 0.7rem; color: #6ee7b7; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.45); padding: 1px 6px; border-radius: 4px;">✅ ${savedPadMsg}</span>` : ''}
               </div>
-              <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
                 <span style="font-size: 0.7rem; color: #f87171; background: rgba(239, 68, 68, 0.15); padding: 1px 6px; border-radius: 4px;">
                   ${a.melodyInfo.reasons[0] || '偵測為主旋律'} (${a.melodyInfo.confidence}%)
                 </span>
+                ${a.noteCount > 0 ? `
+                <select class="sel-slice-save-pad" data-channel="${a.sourceChannel}"
+                        style="background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; font-size: 0.71rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; cursor: pointer;"
+                        title="將此旋律在第 ${this.currentStartBar}~${this.currentEndBar} 小節直接存入 Multi Pad (Pad 1~4)">
+                  <option value="">📥 轉存 Pad ▾</option>
+                  <option value="1">存入 Pad 1</option>
+                  <option value="2">存入 Pad 2</option>
+                  <option value="3">存入 Pad 3</option>
+                  <option value="4">存入 Pad 4</option>
+                </select>
+                ` : ''}
                 <label style="display: flex; align-items: center; gap: 4px; font-size: 0.72rem; cursor: pointer; color: #38bdf8;">
                   <input type="checkbox" class="chk-modal-include-melody" data-channel="${a.sourceChannel}" title="打勾取消排除，強制納入伴奏聲部供指派">
                   <span>納入伴奏</span>
@@ -587,14 +772,17 @@ export class MidiSliceAssignModal {
             </div>
           `;
         }).join('')
-      : `<div style="font-size: 0.74rem; color: #94a3b8; padding: 4px 0;">全曲各軌皆判定為常規伴奏樂器，無自動排除項目。</div>`;
+      : `<div style="font-size: 0.74rem; color: #94a3b8; padding: 4px 0;">此區段無額外排除之主唱項目。</div>`;
 
     this.melodyBoxEl.innerHTML = `
       <div class="melody-excluded-title">
         <span>🎤 智慧偵測主旋律（已預設排除於伴奏之外，避免伴奏複唱主唱旋律）</span>
       </div>
+      ${autoSoloBannerHtml}
       ${excludedRowsHtml}
     `;
+
+    this.bindSaveToPadSelects(this.melodyBoxEl);
 
     this.melodyBoxEl.querySelectorAll('.chk-modal-include-melody').forEach((chk) => {
       chk.addEventListener('change', (e) => {
@@ -603,8 +791,18 @@ export class MidiSliceAssignModal {
         const assign = plan.assignments.find(a => a.sourceChannel === ch);
         if (assign) {
           assign.isExcluded = !inputEl.checked;
+          if (!assign.isExcluded && assign.targetPart === null) {
+            // 若有空位 (優先 Phrase2 -> Phrase1 -> Pad -> Chord2) 自動入座
+            const preferredSeats: YamahaPartType[] = ['Phrase2', 'Phrase1', 'Pad', 'Chord2', 'Chord1', 'Rhythm1'];
+            const freeSeat = preferredSeats.find(p => !plan.partToSourceChannelMap.has(p));
+            if (freeSeat) {
+              MidiPartAssignMatrix['bindPart'](assign, freeSeat, plan.partToSourceChannelMap);
+            }
+          }
+          plan.assignedCount = plan.partToSourceChannelMap.size;
           plan.excludedCount = plan.assignments.filter(a => a.isExcluded).length;
           this.renderPartsGrid();
+          this.renderUnassignedBox();
           this.renderMelodyBox();
         }
       });

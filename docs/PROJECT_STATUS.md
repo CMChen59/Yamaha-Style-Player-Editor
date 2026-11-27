@@ -156,13 +156,19 @@
         2. Yamaha 琴端韌體在第 4 拍後半拍（> 4.5 拍）按下時會觸發超時靜音截斷保護（Time Window Expired）。
       - 鐵律定案：所有 Fill In 段落必須與 Main 聲部完全鏡像對齊；使用者在 PSR-SX920 實測將 `Fill In AA / BB / CC / DD / BA` 補齊原曲過門後，回報「**確實補齊 Fill In 後幾乎和原廠的一模一樣了**」，圓滿完成實機演奏大驗收！
 
-12. **[當前第一優先 🚧 任務 2-4B 收尾] 段落分流智慧聲部自動納入（Intro/Ending 副奏 Solo 自動勾選 vs Main/Fill 純律動伴奏）**
-   - **已完成部分**：在 [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) 中，切換 `Intro / Ending` 已自動推薦 `ORIGINAL_PASS_THROUGH (原曲和弦直通，NTT = Bypass)`；切換 `Main / Fill` 已自動依切片起點和弦分流 `CM7_MAJOR` 或 `CM_MINOR`。
-   - **剩餘待收尾目標**：
-     - 當目標段落選為 `Intro A~D` 或 `Ending A~D` 時，除了全曲人聲主唱（Global Vocal Melody）維持排除外，若該切片區間內有高活躍度的前奏/間奏 Solo 副奏樂軌（如《容易受傷的女人》第 26~33 節的間奏電吉他 Solo），自動將其納入 `Phrase 1 / Phrase 2` 形成大樂隊齊奏。
-     - 當目標段落切回 `Main A~D` 或 `Fill In` 時，維持「純伴奏律動模式」（排除單次 Solo）。
+12. **[✅ 已完成 任務 2-4B 收尾] 段落分流智慧聲部自動納入（Intro/Ending 多軌接力副奏 Solo 自動入座 Phrase 1/2 vs Main/Fill 純律動伴奏）**
+   - **完成成果**：
+     - 在 [`midi-part-assign-matrix.ts`](../src/core/writer/midi-part-assign-matrix.ts) 實裝「全曲唯一核心人聲主唱（`isPrimaryVocal`）」與「局部前奏/間奏/尾奏樂器 Solo（`isIntroEndingSolo`）」智慧分流（含末尾弱起進歌音檢測 `sliceHasNoteBeforeLastBarMap` 與首音時間排序 `firstNoteTickInSlice`）。
+     - 當目標段落選為 `Intro A~D` 或 `Ending A~D` 時：僅排除真正貫穿全曲的人聲主唱，自動將前奏/間奏局部樂器 Solo（支援「前 3 節排笛 + 後 2 節薩克斯風」之雙樂器接力前奏！）解除排除並依出場先後自動排入 `Phrase 1` 與 `Phrase 2` 形成大樂隊齊奏。
+     - 當目標段落切回 `Main A~D` 或 `Fill In` 時：自動切回「純伴奏律動模式」（排除局部 Solo 軌）。
+     - 單元測試 `tests/midi-part-assign-matrix.test.ts` (4/4) 全數通過驗證。
 
-13. **[後續待處理 📋 任務 2-4D] 藉由小節樂器出入場與密度變化自動推薦段落（Auto Section Detection）**
+13. **[✅ 已完成 任務 2-4F] 切片彈窗「未納入伴奏之額外發聲通道清單（遺珠清單）」與一鍵替換 / 轉存 Multi Pad**
+   - **完成成果**：
+     - 在 [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) 新增 `#ms-unassigned-box` 透明遺珠區塊：當切片區間發聲通道超過 Yamaha STY 8 軌座位上限時，自動列出所有未上座的發聲通道（標示音色、軌道與該區段音符數），徹底消除第 9、10 軌在介面憑空消失的盲點。
+     - 每軌遺珠與排除旋律均提供 **`[⇄ 替換入伴奏座位...]`** 下拉快選與 **`[📥 轉存 Pad 1~4 ▾]`** 一鍵轉存 Multi Pad 功能（直接串聯 `PlayerApp.executeImportMidiChannelToPad` 並即時顯示 `✅ 已存入 Pad X` 綠標）。
+
+14. **[當前第一優先 🚧 任務 2-4D] 藉由小節樂器出入場與密度變化自動推薦段落（Auto Section Detection）**
    - **目標**：自動掃描 MIDI 各小節的樂器進退場、Program Change 與音符密度，在切片介面提供一鍵選取建議區間。
 
 14. **[✅ 已完成 任務 2-4E] STY 單軌固定音高直通鎖定開關（`Root Fixed + Bypass`）**
@@ -311,9 +317,9 @@
 
 | 建議排序編號 | 任務代號 | 任務名稱 | 核心目標簡述 |
 | :--- | :--- | :--- | :--- |
-| **候選 A** | **【任務 2-4B 收尾】** | **STY 切片段落分流智慧聲部自動納入** | 切片目標選 `Intro / Ending` 時自動將間奏/前奏高活躍度 Solo 副奏納入 `Phrase 1/2` 齊奏；選 `Main / Fill` 時維持純律動伴奏排除 Solo。 |
-| **候選 B** | **【任務 2-4F】** | **切片彈窗未納入通道視覺化清單與一鍵轉存 Pad** | 在切片彈窗底部新增「💤 額外未納入伴奏之通道清單」，清楚顯示因 8 軌上限而落選的通道，並提供一鍵「[📥 轉存 Pad]」或「[⇄ 替換入伴奏]」。 |
-| **候選 C** | **【任務 4-1C】** | **Multi Pad 樂器黃金音域智慧守護、多軌接力全域同進退八度連動與 MIDI 選段適配** | 建立 16 大樂器黃金音域表取代單一 `C7(96)` 上限、鎖定多軌接力（Pad 1+2 交替）全域同進退不斷層、提供全軌/單軌一鍵 `±1 八度` 快捷鈕與過高預警、鋼琴捲軸甜區高光及 MIDI 抽入音量飽滿化與 `CM=1` 自動歸一化。 |
+| **✅ 已完成** | **【任務 2-4B 收尾】** | **STY 切片段落分流智慧聲部自動納入** | 切片目標選 `Intro / Ending` 時自動將間奏/前奏高活躍度 Solo 副奏（含雙樂器接力 Solo）納入 `Phrase 1/2` 齊奏；選 `Main / Fill` 時維持純律動伴奏排除 Solo。 |
+| **✅ 已完成** | **【任務 2-4F】** | **切片彈窗未納入通道視覺化清單與一鍵轉存 Pad** | 在切片彈窗底部新增「💤 額外未納入伴奏之通道清單」，清楚顯示因 8 軌上限而落選的通道，並提供一鍵「[📥 轉存 Pad]」或「[⇄ 替換入伴奏]」。 |
+| **✅ 已完成** | **【任務 4-1C】** | **Multi Pad 樂器黃金音域智慧守護、多軌接力全域同進退八度連動與 MIDI 選段適配** | 建立 16 大樂器黃金音域表取代單一 `C7(96)` 上限、鎖定多軌接力（Pad 1+2 交替）全域同進退不斷層、提供全軌/單軌一鍵 `±1 八度` 快捷鈕與過高預警、鋼琴捲軸甜區高光及 MIDI 抽入音量飽滿化與 `CM=1` 自動歸一化。 |
 | **候選 D** | **【任務 2-4D】** | **MIDI 樂器出入場與密度自動推薦段落** | 自動掃描 MIDI 各小節樂器進退場與密度變化，在切片定位器提供一鍵選取建議段落區間（如自動標出前奏、主歌、副歌、間奏小節）。 |
 | **候選 E** | **【任務 3-1 ~ 3-3】** | **STY 單軌編輯器進階剪貼簿與批次工具** | 將已在 Pad 實裝的單軌小節複製、批次音符修改（Batch Inspector）與 SFF-GE 吉他微調完整延伸至 STY 單軌編輯器。 |
 | **候選 F** | **【任務 0-1 & 0-2】** | **USB-MIDI SysEx 一鍵直傳 SX920 實體琴** | 破譯 Yamaha 檔案傳輸 SysEx 協議，免隨身碟直接從瀏覽器把 `.STY` / `.PAD` 寫入琴端 User 磁區。 |

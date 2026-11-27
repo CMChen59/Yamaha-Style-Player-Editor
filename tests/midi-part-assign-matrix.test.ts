@@ -326,4 +326,103 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
     expect(fluteAssign.targetPart).toBe('Phrase2');
     expect(fluteAssign.targetChannel).toBe(15);
   });
+
+  it('4. 【任務 2-4B 收尾】5 小節雙樂器接力前奏 (前 3 節排笛 + 後 2 節薩克斯風) vs 主歌分流：切 Intro A 時只踢真主唱、雙軌接力 Solo 自動入座 Phrase 1 & 2；切 Main A 時自動排除 Solo', () => {
+    const analysis = createPopSongMockAnalysis();
+    // 新增 CH 1 (channel 0) 為全曲真正人聲主唱 (全曲 420 顆音，第 5 小節最後一拍只有 2 顆弱起進歌音)
+    analysis.activeChannels.unshift({
+      channel: 0,
+      displayChannel: 1,
+      hasNotes: true,
+      noteCount: 420,
+      notePercentage: 15.0,
+      trackNames: ['Vocal : Main Singer'],
+      msb: 0, lsb: 0, pc: 64,
+      rawMsb: 0, rawLsb: 0, rawPc: 64,
+      panelCode: '0-0-65',
+      voiceName: 'SopranoSax (主唱人聲)',
+      category: 'Saxophone',
+      isDrum: false,
+      pitchMin: 60,
+      pitchMax: 79,
+      pitchRangeLabel: 'C4 ~ G5',
+      firstBar: 5,
+      lastBar: 80,
+      volume: 110, pan: 64, reverb: 40, chorus: 0,
+      programChangesCount: 1,
+    });
+    // CH 2 (channel 1: 排笛) 為前奏前半句 (第 1~3 小節)
+    const chFlute = analysis.activeChannels.find(c => c.channel === 1)!;
+    chFlute.firstBar = 1;
+    chFlute.lastBar = 3;
+    chFlute.noteCount = 18;
+    // CH 3 (channel 2: 薩克斯風) 為前奏後半句 (第 4~5 小節)
+    const chSax = analysis.activeChannels.find(c => c.channel === 2)!;
+    chSax.firstBar = 4;
+    chSax.lastBar = 5;
+    chSax.noteCount = 14;
+
+    // 建構第 1~5 小節的真實 MIDI 事件 (480 PPQ，1 小節 = 1920 ticks)
+    const events: any[] = [];
+    // CH 2 (channel 1 排笛): 第 1~3 小節 (tick 0 ~ 3840) 共 8 顆音
+    for (let i = 0; i < 8; i++) {
+      events.push({ delta: i === 0 ? 0 : 240, type: 'noteOn', channel: 1, noteNumber: 74 + (i % 4), velocity: 100 });
+      events.push({ delta: 240, type: 'noteOff', channel: 1, noteNumber: 74 + (i % 4), velocity: 0 });
+    }
+    // CH 3 (channel 2 薩克斯風): 第 4~5 小節 (tick 5760 起) 共 6 顆音
+    events.push({ delta: 5760 - (8 * 480 - 240), type: 'noteOn', channel: 2, noteNumber: 69, velocity: 100 });
+    events.push({ delta: 240, type: 'noteOff', channel: 2, noteNumber: 69, velocity: 0 });
+    for (let i = 1; i < 6; i++) {
+      events.push({ delta: 240, type: 'noteOn', channel: 2, noteNumber: 69 + (i % 3), velocity: 100 });
+      events.push({ delta: 240, type: 'noteOff', channel: 2, noteNumber: 69 + (i % 3), velocity: 0 });
+    }
+    // CH 1 (channel 0 真主唱): 第 5 小節末尾 (tick 9000) 只有 2 顆弱起偷跑進歌音
+    events.push({ delta: 800, type: 'noteOn', channel: 0, noteNumber: 67, velocity: 100 });
+    events.push({ delta: 120, type: 'noteOff', channel: 0, noteNumber: 67, velocity: 0 });
+    events.push({ delta: 0, type: 'noteOn', channel: 0, noteNumber: 69, velocity: 100 });
+    events.push({ delta: 120, type: 'noteOff', channel: 0, noteNumber: 69, velocity: 0 });
+
+    const mockParsed: any = {
+      format: 'SMF1',
+      division: 480,
+      bpm: 75,
+      timeSignature: { numerator: 4, denominator: 4 },
+      tracks: [{ rawChunk: new Uint8Array(0), events }],
+    };
+
+    // A. 當目標段落為 Intro A (前奏 1~5 小節) 時：
+    const introPlan = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
+      sourceParsed: mockParsed,
+      startBar: 1,
+      endBar: 5,
+      targetSection: 'Intro A',
+    });
+
+    const vocalInIntro = introPlan.assignments.find(a => a.sourceChannel === 0)!;
+    const fluteInIntro = introPlan.assignments.find(a => a.sourceChannel === 1)!;
+    const saxInIntro = introPlan.assignments.find(a => a.sourceChannel === 2)!;
+
+    // 1. 真正人聲主唱 (channel 0，僅末尾 2 顆弱起音) 必須被嚴格排除！
+    expect(vocalInIntro.isPrimaryVocal).toBe(true);
+    expect(vocalInIntro.isExcluded).toBe(true);
+
+    // 2. 前 3 節排笛 (channel 1) 與後 2 節薩克斯風 (channel 2) 必須雙雙解除排除，並依出場順序自動坐進 Phrase 1 與 Phrase 2！
+    expect(fluteInIntro.isIntroEndingSolo).toBe(true);
+    expect(fluteInIntro.isExcluded).toBe(false);
+    expect(fluteInIntro.targetPart).toBe('Phrase1');
+
+    expect(saxInIntro.isIntroEndingSolo).toBe(true);
+    expect(saxInIntro.isExcluded).toBe(false);
+    expect(saxInIntro.targetPart).toBe('Phrase2');
+
+    // B. 當目標段落切換回 Main A (循環伴奏) 時：排笛與薩克斯風 Solo 應自動恢復排除，維持純律動伴奏
+    const mainPlan = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
+      sourceParsed: mockParsed,
+      startBar: 1,
+      endBar: 5,
+      targetSection: 'Main A',
+    });
+    expect(mainPlan.assignments.find(a => a.sourceChannel === 1)!.isExcluded).toBe(true);
+    expect(mainPlan.assignments.find(a => a.sourceChannel === 2)!.isExcluded).toBe(true);
+  });
 });

@@ -58,6 +58,12 @@ export interface ChannelMappingAssignment {
   targetPart: YamahaPartType | null; // 映射到的 Yamaha 伴奏聲部，若排除則為 null
   targetChannel: number | null;// 8 ~ 15
   autoAssignedPart: YamahaPartType | null; // 演算法建議的伴奏聲部
+  /** 【任務 2-4B】是否為全曲人聲主唱核心軌 (任何段落皆預設排除) */
+  isPrimaryVocal?: boolean;
+  /** 【任務 2-4B】是否為前奏/間奏/尾奏專屬樂器 Solo (Intro/Ending 自動納入 Phrase 1/2，Main/Fill 自動排除) */
+  isIntroEndingSolo?: boolean;
+  /** 該通道在切片區間內首顆音符之絕對 Tick (供多軌接力 Solo 依出場先後排入 Phrase 1 與 Phrase 2) */
+  firstNoteTickInSlice?: number;
 }
 
 /**
@@ -176,14 +182,20 @@ export class MidiPartAssignMatrix {
       sourceParsed: YamahaFileParsed;
       startBar: number;
       endBar: number;
+      targetSection?: string;
     }
   ): SongPartMappingPlan {
     const activeChannels = analysis.activeChannels.filter(c => c.hasNotes && c.noteCount > 0);
     const assignments: ChannelMappingAssignment[] = [];
     const partToSourceChannelMap = new Map<YamahaPartType, number>();
+    const isIntroOrEnding = sliceContext?.targetSection
+      ? /^(intro|ending)/i.test(sliceContext.targetSection.trim())
+      : false;
 
-    // 若有切片上下文，預先統計該區間 [startTick, endTick) 內各通道的音符數
+    // 若有切片上下文，預先統計該區間 [startTick, endTick) 內各通道的音符數、首音時間與是否僅在最後一小節發聲 (弱起進歌音檢測)
     const sliceNoteCountMap = new Map<number, number>();
+    const sliceFirstTickMap = new Map<number, number>();
+    const sliceHasNoteBeforeLastBarMap = new Map<number, boolean>();
     if (sliceContext) {
       const division = sliceContext.sourceParsed.division || 480;
       const timeSig = sliceContext.sourceParsed.timeSignature || { numerator: 4, denominator: 4 };
@@ -192,6 +204,7 @@ export class MidiPartAssignMatrix {
       const ticksPerBar = Math.max(1, Math.round(division * num * (4 / den)));
       const startTick = Math.max(0, (sliceContext.startBar - 1) * ticksPerBar);
       const endTick = sliceContext.endBar * ticksPerBar;
+      const lastBarStartTick = Math.max(startTick, (sliceContext.endBar - 1) * ticksPerBar);
 
       for (const track of sliceContext.sourceParsed.tracks) {
         let curTick = 0;
@@ -200,13 +213,42 @@ export class MidiPartAssignMatrix {
           if (ev.type === 'noteOn' && (ev.velocity ?? 0) > 0 && ev.channel !== undefined) {
             if (curTick >= startTick && curTick < endTick) {
               sliceNoteCountMap.set(ev.channel, (sliceNoteCountMap.get(ev.channel) || 0) + 1);
+              const prevFirst = sliceFirstTickMap.get(ev.channel);
+              if (prevFirst === undefined || curTick < prevFirst) {
+                sliceFirstTickMap.set(ev.channel, curTick);
+              }
+              if (sliceContext.endBar > sliceContext.startBar && curTick < lastBarStartTick) {
+                sliceHasNoteBeforeLastBarMap.set(ev.channel, true);
+              } else if (sliceContext.endBar === sliceContext.startBar) {
+                sliceHasNoteBeforeLastBarMap.set(ev.channel, true);
+              }
             }
           }
         }
       }
     }
 
+    // 【任務 2-4B】先找出全曲唯一核心人聲主唱通道 (Primary Vocal Channel)：
+    // 真正的人聲主唱貫穿全曲多數小節、全曲音符數最多，或軌道名稱明確標示 Vocal/人聲/主唱/Melody
+    const VOCAL_EXPLICIT_KWS = ['vocal', 'voice', 'singer', 'main', 'melody', '人聲', '主唱', '歌聲', '主旋律'];
+    let primaryVocalChannel: number | null = null;
+    let bestVocalRank = -1;
+    let primaryVocalGlobalNotes = 0;
+    for (const ch of activeChannels) {
+      const gMel = this.detectMelody(ch);
+      if (!gMel.isMelody) continue;
+      const namesLower = ch.trackNames.map(n => n.toLowerCase()).join(' ');
+      const hasExplicitVocalKw = VOCAL_EXPLICIT_KWS.some(kw => namesLower.includes(kw));
+      const rankScore = (hasExplicitVocalKw ? 1_000_000 : 0) + ch.noteCount * 100 + gMel.confidence;
+      if (rankScore > bestVocalRank) {
+        bestVocalRank = rankScore;
+        primaryVocalChannel = ch.channel;
+        primaryVocalGlobalNotes = ch.noteCount;
+      }
+    }
+
     // 1. 初步分析各通道的主旋律特徵 (若有切片區間，採用該小節起始當下生效之最新音色與該區段音符數)
+    const songTotalBars = Math.max(1, analysis.totalBars || 1);
     for (const ch of activeChannels) {
       let vName = ch.voiceName;
       let cat = ch.category;
@@ -234,8 +276,39 @@ export class MidiPartAssignMatrix {
       // 絕對不可因局部切片區間 (例如前奏 1~5 節主唱尚未進場) 暫無音符就誤判為伴奏樂器而混入伴奏聲部！
       const isMelody = globalMelodyInfo.isMelody || localMelodyInfo.isMelody;
       const confidence = Math.max(globalMelodyInfo.confidence, localMelodyInfo.confidence);
-      const reasons = globalMelodyInfo.isMelody ? globalMelodyInfo.reasons : localMelodyInfo.reasons;
-      const melodyInfo: MelodyDetectionResult = { isMelody, confidence, reasons };
+      const baseReasons = globalMelodyInfo.isMelody ? [...globalMelodyInfo.reasons] : [...localMelodyInfo.reasons];
+
+      // 【任務 2-4B】區分「全曲人聲主唱 (isPrimaryVocal)」與「前奏/間奏/尾奏局部樂器 Solo (isIntroEndingSolo)」
+      const namesLower = ch.trackNames.map(n => n.toLowerCase()).join(' ');
+      const hasExplicitVocalKw = VOCAL_EXPLICIT_KWS.some(kw => namesLower.includes(kw));
+      const chSpanBars = (ch.firstBar !== null && ch.lastBar !== null)
+        ? Math.max(1, ch.lastBar - ch.firstBar + 1)
+        : songTotalBars;
+      const isLocalizedTrack =
+        (songTotalBars > 8 && chSpanBars / songTotalBars <= 0.6) ||
+        (primaryVocalGlobalNotes > 0 && ch.channel !== primaryVocalChannel && ch.noteCount <= primaryVocalGlobalNotes * 0.75);
+      const isPickupOnlyInSlice = sliceContext
+        ? (noteCount === 0 || (noteCount <= 3 && !sliceHasNoteBeforeLastBarMap.get(ch.channel)))
+        : false;
+
+      let isPrimaryVocal = false;
+      let isIntroEndingSolo = false;
+
+      if (isMelody) {
+        if (sliceContext && !isPickupOnlyInSlice && noteCount >= 3 && !hasExplicitVocalKw && (ch.channel !== primaryVocalChannel || isLocalizedTrack)) {
+          // 在切片區間內有完整樂句 (>=3 音且非末尾偷跑進歌音)，且非全曲唯一人聲主唱 ➔ 識別為前奏/間奏/尾奏樂器 Solo (支援多軌接力 Solo！)
+          isIntroEndingSolo = true;
+        } else {
+          isPrimaryVocal = true;
+        }
+      }
+
+      // 在 Intro / Ending 段落中：自動將 isIntroEndingSolo 解除排除納入 Phrase 1/2 齊奏；在 Main / Fill 段落中維持排除
+      const shouldExclude = isMelody && !(isIntroOrEnding && isIntroEndingSolo);
+      if (isIntroOrEnding && isIntroEndingSolo) {
+        baseReasons.unshift('🎯 前奏/尾奏特色樂器 Solo (已自動納入 Phrase 聲部齊奏)');
+      }
+      const melodyInfo: MelodyDetectionResult = { isMelody, confidence, reasons: baseReasons };
 
       assignments.push({
         sourceChannel: ch.channel,
@@ -245,10 +318,13 @@ export class MidiPartAssignMatrix {
         trackNames: ch.trackNames,
         noteCount,
         melodyInfo,
-        isExcluded: melodyInfo.isMelody, // 預設排除主旋律
+        isExcluded: shouldExclude,
         targetPart: null,
         targetChannel: null,
         autoAssignedPart: null,
+        isPrimaryVocal,
+        isIntroEndingSolo,
+        firstNoteTickInSlice: sliceFirstTickMap.get(ch.channel),
       });
     }
 
@@ -283,16 +359,16 @@ export class MidiPartAssignMatrix {
       this.bindPart(subDrum, 'Rhythm1', partToSourceChannelMap);
     }
 
-    // 3. 階段二：指派和弦與長音鋪底 (Chord 1, Chord 2, Pad)
+    // 3. 階段二：指派和弦與長音鋪底 (Chord 1, Chord 2, Pad) - 保留 isIntroEndingSolo 給階段三 Phrase 1/2
     // 3.1 核心和弦 Chord 1 (鋼琴 / 鍵盤優先，若無則吉他)
     const chord1Cand = candidates.find(a =>
-      a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano') && a.noteCount > 0
+      a.targetPart === null && !a.isIntroEndingSolo && (a.category === 'Piano' || a.category === 'E.Piano') && a.noteCount > 0
     ) || candidates.find(a =>
-      a.targetPart === null && a.category.includes('Guitar') && a.noteCount > 0
+      a.targetPart === null && !a.isIntroEndingSolo && a.category.includes('Guitar') && a.noteCount > 0
     ) || candidates.find(a =>
-      a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano')
+      a.targetPart === null && !a.isIntroEndingSolo && (a.category === 'Piano' || a.category === 'E.Piano')
     ) || candidates.find(a =>
-      a.targetPart === null && a.category.includes('Guitar')
+      a.targetPart === null && !a.isIntroEndingSolo && a.category.includes('Guitar')
     );
     if (chord1Cand && !partToSourceChannelMap.has('Chord1')) {
       this.bindPart(chord1Cand, 'Chord1', partToSourceChannelMap);
@@ -300,27 +376,48 @@ export class MidiPartAssignMatrix {
 
     // 3.2 次要和弦 Chord 2 (優先挑選音符數最多的伴奏吉他 / 鍵盤)
     const guitarCandidates = candidates
-      .filter(a => a.targetPart === null && a.category.includes('Guitar'))
+      .filter(a => a.targetPart === null && !a.isIntroEndingSolo && a.category.includes('Guitar'))
       .sort((a, b) => b.noteCount - a.noteCount);
 
     const chord2Cand = guitarCandidates[0] || candidates.find(a =>
-      a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano' || a.category === 'Organ') && a.noteCount > 0
+      a.targetPart === null && !a.isIntroEndingSolo && (a.category === 'Piano' || a.category === 'E.Piano' || a.category === 'Organ') && a.noteCount > 0
     ) || candidates.find(a =>
-      a.targetPart === null && (a.category === 'Piano' || a.category === 'E.Piano' || a.category === 'Organ')
+      a.targetPart === null && !a.isIntroEndingSolo && (a.category === 'Piano' || a.category === 'E.Piano' || a.category === 'Organ')
     );
     if (chord2Cand && !partToSourceChannelMap.has('Chord2')) {
       this.bindPart(chord2Cand, 'Chord2', partToSourceChannelMap);
     }
 
     // 3.3 鋪底長音 Pad (弦樂 / 合成音色 Pad)
-    const padCand = candidates.find(a => a.targetPart === null && (a.category.includes('Strings') || a.category.includes('Pad') || a.category.includes('Choir')));
+    const padCand = candidates.find(a =>
+      a.targetPart === null && !a.isIntroEndingSolo && a.noteCount > 0 && (a.category.includes('Strings') || a.category.includes('Pad') || a.category.includes('Choir'))
+    ) || candidates.find(a =>
+      a.targetPart === null && !a.isIntroEndingSolo && (a.category.includes('Strings') || a.category.includes('Pad') || a.category.includes('Choir'))
+    );
     if (padCand && !partToSourceChannelMap.has('Pad')) {
       this.bindPart(padCand, 'Pad', partToSourceChannelMap);
     }
 
-    // 4. 階段三：指派裝飾樂句 (Phrase 1, Phrase 2)
-    // 銅管、木管、旋律敲擊 (如顫音琴 Vibraphone/Bell) 或加花樂器
+    // 4. 階段三：指派裝飾樂句與前奏/尾奏 Solo (Phrase 1, Phrase 2)
+    // 【任務 2-4B】若為 Intro / Ending 段落且有前奏/間奏/尾奏樂器 Solo (含雙樂器接力 Solo)，依出場時間優先排入 Phrase 1 與 Phrase 2
+    if (isIntroOrEnding) {
+      const introSolos = candidates
+        .filter(a => a.targetPart === null && a.isIntroEndingSolo && a.noteCount > 0)
+        .sort((a, b) => (a.firstNoteTickInSlice ?? Infinity) - (b.firstNoteTickInSlice ?? Infinity));
+
+      if (introSolos.length >= 1 && !partToSourceChannelMap.has('Phrase1')) {
+        this.bindPart(introSolos[0], 'Phrase1', partToSourceChannelMap);
+      }
+      if (introSolos.length >= 2 && !partToSourceChannelMap.has('Phrase2')) {
+        this.bindPart(introSolos[1], 'Phrase2', partToSourceChannelMap);
+      }
+    }
+
+    // 銅管、木管、旋律敲擊 (如顫音琴 Vibraphone/Bell) 或加花樂器 (優先挑選該區段有發聲音符者)
     const phrase1Cand = candidates.find(a =>
+      a.targetPart === null && a.noteCount > 0 &&
+      (a.category.includes('Brass') || a.category.includes('Sax') || a.category.includes('Woodwind') || a.category === 'Percussion')
+    ) || candidates.find(a =>
       a.targetPart === null &&
       (a.category.includes('Brass') || a.category.includes('Sax') || a.category.includes('Woodwind') || a.category === 'Percussion')
     );
@@ -328,19 +425,21 @@ export class MidiPartAssignMatrix {
       this.bindPart(phrase1Cand, 'Phrase1', partToSourceChannelMap);
     }
 
-    const phrase2Cand = candidates.find(a => a.targetPart === null);
+    const phrase2Cand = candidates.find(a => a.targetPart === null && a.noteCount > 0)
+      || candidates.find(a => a.targetPart === null);
     if (phrase2Cand && !partToSourceChannelMap.has('Phrase2')) {
       this.bindPart(phrase2Cand, 'Phrase2', partToSourceChannelMap);
     }
 
-    // 5. 填補尚未指派的伴奏聲部空缺 (若還有剩餘候選伴奏軌)
+    // 5. 填補尚未指派的伴奏聲部空缺 (優先以該區段有音符之剩餘候選軌填補)
     const remainingParts: YamahaPartType[] = [
       'Chord1', 'Chord2', 'Pad', 'Phrase1', 'Phrase2', 'Rhythm1'
     ];
 
     for (const part of remainingParts) {
       if (!partToSourceChannelMap.has(part)) {
-        const nextUnassigned = candidates.find(a => a.targetPart === null);
+        const nextUnassigned = candidates.find(a => a.targetPart === null && a.noteCount > 0)
+          || candidates.find(a => a.targetPart === null);
         if (nextUnassigned) {
           this.bindPart(nextUnassigned, part, partToSourceChannelMap);
         }
