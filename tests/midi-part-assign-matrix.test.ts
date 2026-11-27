@@ -425,4 +425,33 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
     expect(mainPlan.assignments.find(a => a.sourceChannel === 1)!.isExcluded).toBe(true);
     expect(mainPlan.assignments.find(a => a.sourceChannel === 2)!.isExcluded).toBe(true);
   });
+
+  it('5. 實戰驗證《月亮代表我的心.mid》：自動識別低音域吉他 (CH 2 C1~E2) 為 Bass、不將弦樂誤塞入 Rhythm 1 鼓組，且未上座之 CH 8 尼龍吉他進入 2-4F 遺珠清單', async () => {
+    const fs = await import('fs');
+    if (!fs.existsSync('MIDI/月亮代表我的心.mid')) return;
+    const { YamahaParser } = await import('../src/core/parser/yamaha-parser');
+    const { MidiSongAnalyzer } = await import('../src/core/parser/midi-song-analyzer');
+
+    const raw = new Uint8Array(fs.readFileSync('MIDI/月亮代表我的心.mid'));
+    const parsed = YamahaParser.parse(raw);
+    const analysis = MidiSongAnalyzer.analyze(parsed, '月亮代表我的心.mid');
+    const plan = MidiPartAssignMatrix.createAutoMappingPlan(analysis);
+
+    // 1. CH 1 (idx 0: Whistle 口哨) 為唯一全曲主唱並排除
+    const ch1 = plan.assignments.find(a => a.sourceChannel === 0)!;
+    expect(ch1.isExcluded).toBe(true);
+    expect(ch1.isPrimaryVocal).toBe(true);
+
+    // 2. CH 2 (idx 1: JazzGuitar 但音域 C1~E2) 必須被精準識別為 Bass！
+    expect(plan.partToSourceChannelMap.get('Bass')).toBe(1);
+
+    // 3. Rhythm 1 (副打擊鼓組) 絕不可被塞入非打擊樂之弦樂或吉他
+    expect(plan.partToSourceChannelMap.has('Rhythm1')).toBe(false);
+
+    // 4. CH 7 (idx 6: 高音弦樂) 坐進 Phrase 2，而第 7 軌旋律樂器 CH 8 (idx 7: 尼龍吉他) 進入未上座遺珠清單
+    expect(plan.partToSourceChannelMap.get('Phrase2')).toBe(6);
+    const ch8 = plan.assignments.find(a => a.sourceChannel === 7)!;
+    expect(ch8.isExcluded).toBe(false);
+    expect(ch8.targetPart).toBeNull();
+  });
 });

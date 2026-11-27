@@ -64,6 +64,8 @@ export interface ChannelMappingAssignment {
   isIntroEndingSolo?: boolean;
   /** 該通道在切片區間內首顆音符之絕對 Tick (供多軌接力 Solo 依出場先後排入 Phrase 1 與 Phrase 2) */
   firstNoteTickInSlice?: number;
+  pitchMin?: number | null;
+  pitchMax?: number | null;
 }
 
 /**
@@ -325,6 +327,8 @@ export class MidiPartAssignMatrix {
         isPrimaryVocal,
         isIntroEndingSolo,
         firstNoteTickInSlice: sliceFirstTickMap.get(ch.channel),
+        pitchMin: ch.pitchMin,
+        pitchMax: ch.pitchMax,
       });
     }
 
@@ -339,9 +343,11 @@ export class MidiPartAssignMatrix {
       this.bindPart(mainDrum, 'Rhythm2', partToSourceChannelMap);
     }
 
-    // 2.2 貝斯 (Bass: Ch 11)
-    const mainBass = candidates.find(a => a.targetPart === null && (a.category === 'Bass' || a.sourceChannel === 10) && a.noteCount > 0)
-      || candidates.find(a => a.targetPart === null && (a.category === 'Bass' || a.sourceChannel === 10));
+    // 2.2 貝斯 (Bass: Ch 11) - 支援標準 Bass 音色，以及借用 Guitar/Synth 音色但音域完全處於低音貝斯區 (pitchMax <= 50, 如 C1~E2) 之低音軌
+    const isLowRegisterBass = (a: ChannelMappingAssignment) =>
+      a.sourceChannel !== 9 && a.category !== 'Drums' && a.pitchMax !== null && a.pitchMax !== undefined && a.pitchMax <= 50;
+    const mainBass = candidates.find(a => a.targetPart === null && (a.category === 'Bass' || isLowRegisterBass(a)) && a.noteCount > 0)
+      || candidates.find(a => a.targetPart === null && (a.category === 'Bass' || isLowRegisterBass(a)));
     if (mainBass) {
       this.bindPart(mainBass, 'Bass', partToSourceChannelMap);
     }
@@ -431,9 +437,9 @@ export class MidiPartAssignMatrix {
       this.bindPart(phrase2Cand, 'Phrase2', partToSourceChannelMap);
     }
 
-    // 5. 填補尚未指派的伴奏聲部空缺 (優先以該區段有音符之剩餘候選軌填補)
+    // 5. 填補尚未指派的旋律/和弦伴奏聲部空缺 (嚴禁將非打擊樂之弦樂/吉他/管樂塞入 Rhythm 1 鼓組通道！)
     const remainingParts: YamahaPartType[] = [
-      'Chord1', 'Chord2', 'Pad', 'Phrase1', 'Phrase2', 'Rhythm1'
+      'Chord1', 'Chord2', 'Pad', 'Phrase1', 'Phrase2'
     ];
 
     for (const part of remainingParts) {
