@@ -468,11 +468,6 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
     const analysis = MidiSongAnalyzer.analyze(parsed, '月亮代表我的心.mid');
     expect(analysis.initialBpm).toBe(78);
 
-    let baseSty = undefined;
-    if (fs.existsSync('samples/CHINA Ballad.T547.sty')) {
-      baseSty = YamahaParser.parse(new Uint8Array(fs.readFileSync('samples/CHINA Ballad.T547.sty')), 'STY');
-    }
-
     const plan = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
       sourceParsed: parsed,
       startBar: 1,
@@ -489,15 +484,27 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
       endBeat: 3,
       targetSection: 'Intro A',
       mappingPlan: plan,
-      baseStyleParsed: baseSty,
     });
 
     expect(res.styleParsed.bpm).toBe(78);
+    // 驗證首次初始化時已移除 Intro C / Ending B / Ending C 等冗餘範本段落，防止殘留別首歌
+    expect(res.styleParsed.sections.some(s => s.name === 'Intro C')).toBe(false);
+    expect(res.styleParsed.sections.some(s => s.name === 'Ending B')).toBe(false);
+    expect(res.styleParsed.sections.some(s => s.name === 'Ending C')).toBe(false);
+
     const outBytes = YamahaWriter.write(res.styleParsed);
     const reparsed = YamahaParser.parse(outBytes, 'STY');
     expect(reparsed.bpm).toBe(78);
 
-    // 同步重新產出完整 9 段落《月亮代表我的心_自動切片驗收.sty》與《月亮代表我的心_過門插音.PAD》
+    // 同步重新產出完整《月亮代表我的心_自動切片驗收.sty》與《月亮代表我的心_過門插音.PAD》
+    // 依據《月亮代表我的心.mid》真實曲式結構 (68 小節，Bar 1 Beat 3 起音)：
+    // - Intro A (前奏 4 節): Bar 1.3 ~ 5.3
+    // - Main A (A1 主歌 8 節): Bar 5.3 ~ 13.3 (Fill In AA: Bar 12.3)
+    // - Main B (A2 主歌 8 節): Bar 13.3 ~ 21.3 (Fill In BB: Bar 20.3)
+    // - Main C (B 副歌 8 節 "輕輕的一個吻"): Bar 21.3 ~ 29.3 (Fill In CC: Bar 28.3)
+    // - Main D (A3 主歌 8 節 "你去想一想"): Bar 29.3 ~ 37.3 (Fill In DD: Bar 36.3)
+    // - Intro B (真正的間奏 8 節！主唱口哨 CH 1 休息 0 音符，由 CH 7 高音弦樂 43 顆音符擔任間奏主旋律): Bar 37.3 ~ 45.3
+    // - Ending A (尾奏 4 節，主唱於第 65 節唱完最後一字後，第 65.3 ~ 68 節收尾): Bar 65.3 ~ 68.3
     const { YamahaPadModifier } = await import('../src/core/writer/pad-modifier');
     const slices = [
       { targetSection: 'Intro A', startBar: 1, endBar: 4, startBeat: 3, endBeat: 3 },
@@ -506,11 +513,13 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
       { targetSection: 'Main B', startBar: 13, endBar: 20, startBeat: 3, endBeat: 3 },
       { targetSection: 'Fill In BB', startBar: 20, endBar: 20, startBeat: 3, endBeat: 3 },
       { targetSection: 'Main C', startBar: 21, endBar: 28, startBeat: 3, endBeat: 3 },
-      { targetSection: 'Intro B', startBar: 29, endBar: 36, startBeat: 3, endBeat: 3 },
-      { targetSection: 'Main D', startBar: 45, endBar: 52, startBeat: 3, endBeat: 3 },
-      { targetSection: 'Ending A', startBar: 61, endBar: 68, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Fill In CC', startBar: 28, endBar: 28, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Main D', startBar: 29, endBar: 36, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Fill In DD', startBar: 36, endBar: 36, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Intro B', startBar: 37, endBar: 44, startBeat: 3, endBeat: 3 },
+      { targetSection: 'Ending A', startBar: 65, endBar: 68, startBeat: 3, endBeat: 3 },
     ];
-    let workingSty = baseSty;
+    let workingSty = undefined;
     for (const s of slices) {
       const p = MidiPartAssignMatrix.createAutoMappingPlan(analysis, {
         sourceParsed: parsed,
@@ -555,7 +564,7 @@ describe('MidiPartAssignMatrix - 聲部智慧映射與主旋律排除演算法�
       });
       YamahaPadModifier.importMidiChannelRangeToPad({
         sourceParsed: parsed, targetPadParsed: padParsed, sourceChannel: 6, targetPadNum: 4,
-        startBar: 29, endBar: 36, startBeat: 3, endBeat: 3, customPadName: 'Strings Interlude',
+        startBar: 37, endBar: 44, startBeat: 3, endBeat: 3, customPadName: 'Strings Interlude',
         autoBoostVolume: true, autoFitSweetSpot: true, normalizeToCM7: false,
       });
       fs.writeFileSync('MIDI/月亮代表我的心_過門插音.PAD', YamahaWriter.write(padParsed));

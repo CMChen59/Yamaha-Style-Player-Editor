@@ -115,6 +115,21 @@ export class MidiSliceAssembler {
       const templateBytes = getGoldenStyleTemplateBytes();
       styleParsed = YamahaParser.parse(templateBytes, 'STY');
       (styleParsed as any).styleName = styleName || `${analysis.fileName.replace(/\.[^/.]+$/, '')}_Arranger`;
+      // 首次由黃金範本初始化全新伴奏專案時：
+      // 1. 徹底清空所有既有段落的範本音符 (避免未切片覆蓋的段落殘留 CHINA Ballad 等別首歌的音樂！)
+      // 2. 移除一般流行歌極少使用的冗餘段落 (Intro C, Ending B, Ending C, Fill In BA)，除非當前目標就是該段落
+      const redundantTemplateSections = ['Intro C', 'Ending B', 'Ending C', 'Fill In BA'];
+      for (const rSec of redundantTemplateSections) {
+        if (rSec.toLowerCase() !== targetSection.trim().toLowerCase()) {
+          YamahaStyleModifier.removeSection(styleParsed, rSec);
+        }
+      }
+      for (const sec of [...styleParsed.sections]) {
+        const sLower = sec.name.trim().toLowerCase();
+        if (sLower !== 'sff1' && sLower !== 'sff2' && sLower !== 'sint') {
+          YamahaStyleModifier.clearSectionNotes(styleParsed, sec.name);
+        }
+      }
     }
     YamahaStyleModifier.setStyleBpm(styleParsed, targetBpm);
 

@@ -2009,6 +2009,82 @@ export class YamahaStyleModifier {
   }
 
   /**
+   * 從伴奏檔中徹底移除指定的音樂段落（含段落內所有事件、Track 0 Marker 與 `fn:` 全名標籤，並將後方段落時間軸往前無縫合攏）。
+   * 用於清除範本檔案中未使用的多餘段落（例如 `Intro C`、`Ending B`、`Ending C`），防止琴端或播放器播到範本原本殘留的別首歌。
+   */
+  public static removeSection(parsed: YamahaFileParsed, sectionName: string): boolean {
+    if (!parsed || !parsed.tracks || parsed.tracks.length === 0) return false;
+    const range = StyleRemixer.getSectionTickRange(parsed, sectionName);
+    if (!range) return false;
+
+    const track0 = parsed.tracks[0];
+    if (!track0 || !track0.events) return false;
+
+    const targetLower = sectionName.trim().toLowerCase();
+    const targetFnLower = `fn:${targetLower}`;
+    const startTick = range.startTick;
+    const endTick = range.endTick;
+    const duration = Math.max(0, endTick - startTick);
+
+    let curTick = 0;
+    const keptAnnotated: Array<{ ev: MidiEvent; absTick: number }> = [];
+
+    for (const ev of track0.events) {
+      curTick += ev.delta;
+
+      // 永遠保留 End of Track (0x2F)
+      if (ev.type === 'meta' && ev.metaType === 0x2f) {
+        const newTick = curTick >= endTick ? Math.max(startTick, curTick - duration) : curTick;
+        keptAnnotated.push({ ev: { ...ev }, absTick: newTick });
+        continue;
+      }
+
+      // 在 startTick ~ endTick 範圍內的事件：
+      // - 移除目標段落自身的 Marker (0x06/0x07) 與 fn: 標籤 (0x01)
+      // - 移除落在 [startTick, endTick) 區間內的所有音符與控制器事件
+      if (curTick >= startTick && curTick < endTick) {
+        if (ev.type === 'meta' && (ev.metaType === 6 || ev.metaType === 7 || ev.metaType === 1)) {
+          const txt = (ev.text || '').trim().toLowerCase();
+          if (txt === targetLower || txt === targetFnLower) {
+            continue;
+          }
+          // 若在 startTick 有其他段落的標記 (理論上不會)，予以保留
+          if (curTick === startTick && txt !== targetLower && txt !== targetFnLower) {
+            keptAnnotated.push({ ev: { ...ev }, absTick: curTick });
+          }
+        }
+        continue;
+      }
+
+      const shiftedTick = curTick >= endTick ? curTick - duration : curTick;
+      keptAnnotated.push({ ev: { ...ev }, absTick: shiftedTick });
+    }
+
+    let prev = 0;
+    track0.events = keptAnnotated.map((item) => {
+      item.ev.delta = Math.max(0, item.absTick - prev);
+      prev = item.absTick;
+      return item.ev;
+    });
+
+    parsed.sections = parsed.sections
+      .filter((s) => s.name.trim().toLowerCase() !== targetLower)
+      .map((s) => {
+        if (s.startTick >= endTick) {
+          return {
+            ...s,
+            startTick: s.startTick - duration,
+            endTick: s.endTick !== undefined ? s.endTick - duration : undefined,
+          };
+        }
+        return s;
+      });
+
+    YamahaPadModifier.rebuildTrackRawChunk(track0);
+    return true;
+  }
+
+  /**
    * 批次替換指定段落、指定聲部之所有演奏音符 (SingleTrackEditor 匯出與即時回寫核心)
    * 自動保留 Track 0 標記、控制項、CASM 與 OTS，並重建 MTrk rawChunk
    */
