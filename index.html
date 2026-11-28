@@ -5922,8 +5922,11 @@
           <span id="label-midi-total-bars-hint" style="font-size: 0.8rem; color: #94a3b8;">小節 (全曲共 1 小節)</span>
           <button id="btn-apply-midi-bar-range" class="midi-locator-btn active" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981; color: #ffffff;" title="立即套用指定小節區間並開始循環播放">▶ 套用並播放區間</button>
           <button id="btn-stop-midi-bar-range" class="midi-locator-btn" style="background: rgba(244, 63, 94, 0.16); border-color: rgba(244, 63, 94, 0.45); color: #fda4af;" title="停止播放">⏹ 停止</button>
-          <button id="btn-open-slice-modal" class="midi-locator-btn" style="background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; color: #ffffff; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;" title="開啟小節切片指派彈窗，設定 8 伴奏聲部映射並組裝至 Yamaha 段落">
-            <span>✂️ 切片指派至段落...</span>
+          <button id="btn-auto-detect-sections" class="midi-locator-btn" style="background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b; color: #ffffff; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;" title="智慧分析樂曲結構，優先自動辨識前奏 (Intro A)、間奏 (Intro B)、尾奏 (Ending A) 並支援一鍵直通切片">
+            <span>⚡ 智慧偵測段落 (前奏/間奏/尾奏)...</span>
+          </button>
+          <button id="btn-open-slice-modal" class="midi-locator-btn" style="background: linear-gradient(135deg, #6366f1, #4f46e5); border-color: #6366f1; color: #ffffff; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;" title="開啟小節切片指派彈窗，自訂 8 伴奏聲部映射並組裝至 Yamaha 段落">
+            <span>✂️ 手動切片指派...</span>
           </button>
         </div>
         <div id="midi-quick-range-btns" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
@@ -5931,6 +5934,10 @@
           <button type="button" class="midi-locator-btn" data-range="1-4">▶ 第 1~4 小節</button>
           <button type="button" class="midi-locator-btn" data-range="1-8">▶ 第 1~8 小節</button>
           <button type="button" class="midi-locator-btn" data-range="1-16">▶ 第 1~16 小節</button>
+        </div>
+        <div id="midi-detected-pills-row" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(100, 116, 139, 0.3);">
+          <span style="font-size: 0.76rem; font-weight: 700; color: #f59e0b;">⚡ 直通段落速選：</span>
+          <div id="midi-detected-pills-list" style="display: inline-flex; gap: 6px; flex-wrap: wrap;"></div>
         </div>
       </div>
 

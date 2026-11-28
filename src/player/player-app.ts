@@ -18,6 +18,8 @@ import { SectionImportModal } from './section-import-modal';
 import { AddSectionModal, type AddSectionConfig } from './add-section-modal';
 import { NewStyleModal, type NewStyleModalConfig } from './new-style-modal';
 import { MidiSliceAssignModal, type MidiSliceAssignConfig } from './midi-slice-assign-modal';
+import { MidiAutoSectionModal } from './midi-auto-section-modal';
+import { MidiStructureDetector } from '../core/parser/midi-structure-detector';
 import { MidiSliceAssembler, type MidiSliceAssembleResult } from '../core/writer/midi-slice-assembler';
 import { YamahaStyleSynthesizer } from '../core/writer/style-synthesizer';
 import { ChordTransposer, POPULAR_AUDITION_CHORDS, CHORD_TYPE_INTERVALS, type ChordDefinition, type ChordType } from '../core/writer/chord-transposer';
@@ -136,6 +138,10 @@ export class PlayerApp {
   private btnOpenAddSection!: HTMLButtonElement;
   private midiSliceAssignModal!: MidiSliceAssignModal;
   private btnOpenSliceModal: HTMLButtonElement | null = null;
+  private midiAutoSectionModal!: MidiAutoSectionModal;
+  private btnAutoDetectSections: HTMLButtonElement | null = null;
+  private midiDetectedPillsRow: HTMLElement | null = null;
+  private midiDetectedPillsList: HTMLElement | null = null;
   private currentlyAuditionMutedChannels: number[] = [];
   private currentWorkspace: 'MIDI' | 'STY' | 'PAD' = 'STY';
   private workingStyleParsed: YamahaFileParsed | null = null;
@@ -229,6 +235,42 @@ export class PlayerApp {
       return this.executeImportMidiChannelToPad(sourceChannel, targetPadNum, startBar, endBar);
     });
 
+    this.midiAutoSectionModal = new MidiAutoSectionModal();
+    this.midiAutoSectionModal.setCallbacks({
+      onApplyAuditionRange: (sBar, eBar) => {
+        if (this.inputMidiStartBar) this.inputMidiStartBar.value = sBar.toString();
+        if (this.inputMidiEndBar) this.inputMidiEndBar.value = eBar.toString();
+        this.applyMidiSongBarRange(sBar, eBar, true);
+      },
+      onSliceSingleSection: (section) => {
+        if (!this.currentSongAnalysis) return;
+        this.midiSliceAssignModal.open(
+          this.currentSongAnalysis,
+          section.startBar,
+          section.endBar,
+          null,
+          (sliceConfig) => {
+            this.handleMidiSliceAssignConfirm(sliceConfig);
+          },
+          (isSoloAccomp, excludedChannels) => {
+            this.handleAccompAudition(isSoloAccomp, excludedChannels);
+          },
+          this.currentParsed || undefined,
+          section.targetSection
+        );
+      },
+      onBatchAssembleCompleted: (styleParsed, sections) => {
+        this.workingStyleParsed = styleParsed;
+        this.savedStyleParsed = styleParsed;
+        this.savedStyleFileName = `${(this.sourceSongFileName || 'Song').replace(/\.[^/.]+$/, '')}_Arranger.sty`;
+        this.syncWorkspaceSwitcherUI();
+
+        const secNames = sections.map(s => s.nameZh).join('、');
+        alert(`🎉 恭喜！已一鍵全自動切片裝配完成：\n【${secNames}】\n共 ${sections.length} 個直通段落已整合進伴奏專案，現為您自動切換至 STY 伴奏工作台！`);
+        this.setWorkspace('STY');
+      },
+    });
+
     this.setFocusedChannel(8); // 預設聚焦 CH 9 Rhythm 1
     this.initMidi();
 
@@ -317,6 +359,9 @@ export class PlayerApp {
     this.btnTogglePartMatrix = document.getElementById('btn-toggle-part-matrix') as HTMLButtonElement | null;
     this.partAssignMatrixPanel = document.getElementById('part-assign-matrix-panel');
     this.btnOpenSliceModal = document.getElementById('btn-open-slice-modal') as HTMLButtonElement | null;
+    this.btnAutoDetectSections = document.getElementById('btn-auto-detect-sections') as HTMLButtonElement | null;
+    this.midiDetectedPillsRow = document.getElementById('midi-detected-pills-row');
+    this.midiDetectedPillsList = document.getElementById('midi-detected-pills-list');
     this.chordAuditionBar = document.getElementById('chord-audition-bar');
     this.sectionMatrixPanel = document.getElementById('section-matrix-panel');
     this.mixerPanel = document.getElementById('mixer-panel');
@@ -683,6 +728,15 @@ export class PlayerApp {
       }
     });
 
+    // ⚡ 智慧偵測全曲段落 (前奏/間奏/尾奏直通優先)
+    this.btnAutoDetectSections?.addEventListener('click', () => {
+      if (!this.currentParsed || !this.currentSongAnalysis || !styPlaybackEngine.getIsSongMode()) {
+        alert('請先拖入或開啟一般 MIDI 音樂檔以進行智慧段落辨識！');
+        return;
+      }
+      this.midiAutoSectionModal.open(this.currentParsed, this.currentSongAnalysis, this.workingStyleParsed);
+    });
+
     // ✂️ 開啟小節切片指派至伴奏段落彈窗
     this.btnOpenSliceModal?.addEventListener('click', () => {
       if (!this.currentSongAnalysis || !styPlaybackEngine.getIsSongMode()) {
@@ -1015,6 +1069,7 @@ export class PlayerApp {
         this.focusedChannel = firstActiveCh;
 
         this.renderMidiSongInspector(analysis);
+        this.renderMidiDetectedSectionPills();
         this.setFocusedChannel(firstActiveCh);
         this.labelPosition.textContent = `小節 01 / ${analysis.totalBars.toString().padStart(2, '0')} | 拍 1.0 | Tick 000000`;
         this.updatePlayStateUI();
@@ -1383,6 +1438,64 @@ export class PlayerApp {
     // 5. 若伴奏映射總表處於開啟狀態，同步重新渲染總表
     if (this.isPartMatrixVisible) {
       this.renderPartAssignMatrix(analysis);
+    }
+  }
+
+  /**
+   * 渲染小節定位器下方的「⚡ 智慧直通段落速選標籤 (前奏 / 間奏 / 尾奏)」
+   */
+  private renderMidiDetectedSectionPills() {
+    if (!this.midiDetectedPillsRow || !this.midiDetectedPillsList || !this.currentParsed || !this.currentSongAnalysis) {
+      if (this.midiDetectedPillsRow) this.midiDetectedPillsRow.style.display = 'none';
+      return;
+    }
+
+    try {
+      const struct = MidiStructureDetector.detectStructure(this.currentParsed, this.currentSongAnalysis);
+      if (struct.simpleSections.length === 0) {
+        this.midiDetectedPillsRow.style.display = 'none';
+        return;
+      }
+
+      const badgeColors: Record<string, { bg: string; border: string; text: string; icon: string }> = {
+        'Intro A': { bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.4)', text: '#38bdf8', icon: '🎺' },
+        'Intro B': { bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)', text: '#fbbf24', icon: '🎸' },
+        'Ending A': { bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)', text: '#c084fc', icon: '🏁' },
+      };
+
+      this.midiDetectedPillsList.innerHTML = struct.simpleSections.map((sec, idx) => {
+        const style = badgeColors[sec.targetSection] || {
+          bg: 'rgba(245, 158, 11, 0.15)',
+          border: 'rgba(245, 158, 11, 0.4)',
+          text: '#fbbf24',
+          icon: '⚡',
+        };
+        const beatStr = sec.startBeat > 1 ? ` (第${sec.startBeat}拍起)` : '';
+        return `
+          <button type="button" class="midi-locator-btn btn-quick-detected-sec" data-index="${idx}" style="background: ${style.bg}; border-color: ${style.border}; color: ${style.text}; font-size: 0.74rem; font-weight: 700; padding: 2px 9px;" title="點擊立即播放第 ${sec.startBar}~${sec.endBar} 節 (${sec.nameZh}，長度 ${sec.barLength} 節)">
+            <span>${style.icon} ${sec.nameZh}: 第 ${sec.startBar}~${sec.endBar} 節${beatStr}</span>
+          </button>
+        `;
+      }).join('');
+
+      // 綁定速選按鈕事件
+      const btns = this.midiDetectedPillsList.querySelectorAll('.btn-quick-detected-sec');
+      btns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt((btn as HTMLElement).getAttribute('data-index') || '0', 10);
+          const sec = struct.simpleSections[idx];
+          if (sec) {
+            if (this.inputMidiStartBar) this.inputMidiStartBar.value = sec.startBar.toString();
+            if (this.inputMidiEndBar) this.inputMidiEndBar.value = sec.endBar.toString();
+            this.applyMidiSongBarRange(sec.startBar, sec.endBar, true);
+          }
+        });
+      });
+
+      this.midiDetectedPillsRow.style.display = 'flex';
+    } catch (e) {
+      console.warn('自動偵測段落速選標籤失敗:', e);
+      if (this.midiDetectedPillsRow) this.midiDetectedPillsRow.style.display = 'none';
     }
   }
 

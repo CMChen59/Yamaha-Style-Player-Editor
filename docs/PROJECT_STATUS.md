@@ -1,6 +1,6 @@
 # 📊 Yamaha Style Player & Editor — 專案進度與待辦總表 (Single Source of Truth)
 
-> **最後更新**：2026-11-27 (全面完成並封存【任務 2-4B 收尾】前奏/間奏雙樂器分段接力 Solo 自動入座 Phrase 1/2、【任務 2-4F】切片彈窗未上座通道遺珠清單與一鍵替換/轉存 Pad、以及《月亮代表我的心》實戰驗收四大底層修復：Track 0 Meta 0x51 速度同步、SInt 初始音量同步、範本冗餘段落 Intro C/Ending B/C 自動清除、低音域吉他自動識別為 Bass 與 Rhythm 1 防誤塞弦樂；全套自動化測試通過並同步雲端)  
+> **最後更新**：2026-11-28 (全面完成【任務 2-4D 第一階段】MIDI 樂曲結構智慧辨識與前奏 Intro A、間奏 Intro B、尾奏 Ending A 三大直通段落一鍵自動切片組裝 STY；實裝全域主唱鎖定、小節活動矩陣、三大段落自動嗅探、批次切片組裝、UI 速選標籤與智慧偵測彈窗；通過《容易受傷的女人》與《月亮代表我的心》實戰驗證並通過自動化測試)  
 > **使用說明**：本檔案為跨電腦（公司 ↔ 家裡）的**唯一進度基準**。凡已列入「✅ 已完成並封存」之項目，均已通過測試與實機驗證，請勿重複確認或重做；新對話開始時請直接聚焦於「🚧 當前待處理項目」。
 
 ---
@@ -169,14 +169,32 @@
      - 在 [`midi-slice-assign-modal.ts`](../src/player/midi-slice-assign-modal.ts) 新增 `#ms-unassigned-box` 透明遺珠區塊：當切片區間發聲通道超過 Yamaha STY 8 軌座位上限時，自動列出所有未上座的發聲通道（標示音色、軌道與該區段音符數），徹底消除第 9、10 軌在介面憑空消失的盲點。
      - 每軌遺珠與排除旋律均提供 **`[⇄ 替換入伴奏座位...]`** 下拉快選與 **`[📥 轉存 Pad 1~4 ▾]`** 一鍵轉存 Multi Pad 功能（直接串聯 `PlayerApp.executeImportMidiChannelToPad` 並即時顯示 `✅ 已存入 Pad X` 綠標）。
 
-14. **[當前第一優先 🚧 任務 2-4D] 藉由小節樂器出入場與密度變化自動推薦段落（Auto Section Detection）**
-   - **目標**：自動掃描 MIDI 各小節的樂器進退場、Program Change 與音符密度，在切片介面提供一鍵選取建議區間。
+14. **[✅ 已完成 任務 2-4D 第一階段] MIDI 樂曲結構智慧辨識與前奏 (Intro A)、間奏 (Intro B)、尾奏 (Ending A) 三大直通段落一鍵自動切片組裝 STY**
+    - **完成成果**：
+      - **核心結構辨識引擎 (`MidiStructureDetector`)**：
+        - 實裝全域主唱/人聲旋律精確鎖定（`findGlobalMelodyChannel`）與全曲各小節主唱/全體音符活躍度密度矩陣。
+        - **前奏 (`Intro A`) 智慧嗅探**：自動偵測曲首弱起拍（`firstNoteBeat`）與首度人聲進歌小節（`firstVocalBar`），鎖定純樂隊開場前奏區間（如《容易受傷的女人》第 1 節第 3 拍 ~ 第 5 節第 4 拍；《月亮代表我的心》第 1 ~ 4 節），預設配置為【原曲和弦直通（`ORIGINAL_PASS_THROUGH`，`NTT = Bypass`）】。
+        - **間奏 (`Intro B` Solo 齊奏) 智慧嗅探**：自動偵測主歌與副歌之間主唱休止 $\ge 4$ 小節之段落（如《容易受傷的女人》第 26 ~ 33 節吉他 Solo；《月亮代表我的心》第 37 ~ 44 節電鋼琴/吉他 Solo），自動規範化為 4 或 8 小節完整樂句，配置為【原曲和弦直通】。
+        - **尾奏 (`Ending A`) 智慧嗅探**：自動偵測人聲最終收句小節（`lastVocalBar`）至曲末樂隊收尾區間（如《容易受傷的女人》第 67 ~ 72 節；《月亮代表我的心》第 65 ~ 68 節），配置為【原曲和弦直通】。
+      - **批次切片組裝引擎 (`batchAssembleSections`)**：
+        - 自動依各段落特性配置聲部映射（`MidiPartAssignMatrix`）、音色回溯、控制器深層淨化與標準事件優先級，一鍵組裝生成完整合法 Yamaha STY（二進位驗證無損生成 29,452 bytes）。
+      - **直覺化 UI 介面整合**：
+        - 在 MIDI 小節定位器橫幅新增 **`[⚡ 智慧偵測段落 (前奏/間奏/尾奏)...]`** 按鈕。
+        - 在定位器下方新增 **`[⚡ 直通段落速選標籤]`** 快捷卡片（🎺 前奏、🎸 間奏、🏁 尾奏），一鍵點擊自動設定起訖小節並循環試聽。
+        - 實裝 `MidiAutoSectionModal` 彈窗：直觀展示三大段落卡片、領奏樂器、小節長度、單段試聽按鈕、單段切片指派、以及 **`[⚡ 一鍵自動切片組裝 (Intro A + Intro B + Ending A)]`**。
+      - 單元測試 `tests/test-midi-structure-detector.test.ts` (3/3) 與 `tests/test-section-detector.test.ts` (2/2) 全數通過驗證。
 
-14. **[✅ 已完成 任務 2-4E] STY 單軌固定音高直通鎖定開關（`Root Fixed + Bypass`）**
-   - **完成成果**：
-     - `CasmModifier` 新增 `getSectionChannelRule` 與 `setSectionChannelTranspositionMode`，支援單一聲部在特定伴奏段落一鍵切換 5 大轉調模式（`FIXED_BYPASS`、`TRANSPOSE_MELODY`、`TRANSPOSE_CHORD`、`TRANSPOSE_BASS`、`TRANSPOSE_BYPASS`），自動遵守 CSEG 段落獨立剝離鐵律並即時同步更新 `parsed.casmEntries`。
-     - 在 STY 編輯焦點橫幅新增 **`[🔒 已鎖定固定音高直通 / 🔓 點擊鎖定固定音高]`** 一鍵按鈕與模式下拉選單，並在 MIDI 切片裝配對話框的各聲部卡片頂部加入 **`[🔒固定音高直通]`** 核取方塊（勾選後音符保持原音高 0 移調不改成 CM7，且 CASM 寫入 `Root Fixed + Bypass`）。
-     - 單元測試 `tests/test-casm-fixed-bypass.test.ts` (1/1) 通過：驗證左手頻繁換和弦（C ➔ Am ➔ F ➔ G）時，右手固定旋律 `C-D-E-F-G-A-B-C` 100% 死死釘在原音高零走音，且不污染其他段落。
+15. **[後續待辦 🚧 任務 2-4D 第二階段] Main A~D 循環伴奏與過門 (Fill In) 智慧辨識**
+    - **目標**：在完成三大直通段落後，進一步根據主唱進歌後的小節密度、鼓組進場與和聲進行，自動推薦 Main A（主歌）、Main B/C（副歌）與 Fill In（過門）之最佳小節切片區間。
+
+16. **[後續待辦 🚧 任務 4-2] MIDI 智慧自動切 PAD (Auto Slice to Multi Pad)**
+    - **目標**：第一階段 STY 切片穩定成功後，進一步支援從 MIDI 軌道自動切片合適動機並組裝至 Multi Pad 1~4。
+
+17. **[✅ 已完成 任務 2-4E] STY 單軌固定音高直通鎖定開關（`Root Fixed + Bypass`）**
+    - **完成成果**：
+      - `CasmModifier` 新增 `getSectionChannelRule` 與 `setSectionChannelTranspositionMode`，支援單一聲部在特定伴奏段落一鍵切換 5 大轉調模式（`FIXED_BYPASS`、`TRANSPOSE_MELODY`、`TRANSPOSE_CHORD`、`TRANSPOSE_BASS`、`TRANSPOSE_BYPASS`），自動遵守 CSEG 段落獨立剝離鐵律並即時同步更新 `parsed.casmEntries`。
+      - 在 STY 編輯焦點橫幅新增 **`[🔒 已鎖定固定音高直通 / 🔓 點擊鎖定固定音高]`** 一鍵按鈕與模式下拉選單，並在 MIDI 切片裝配對話框的各聲部卡片頂部加入 **`[🔒固定音高直通]`** 核取方塊（勾選後音符保持原音高 0 移調不改成 CM7，且 CASM 寫入 `Root Fixed + Bypass`）。
+      - 單元測試 `tests/test-casm-fixed-bypass.test.ts` (1/1) 通過：驗證左手頻繁換和弦（C ➔ Am ➔ F ➔ G）時，右手固定旋律 `C-D-E-F-G-A-B-C` 100% 死死釘在原音高零走音，且不污染其他段落。
 
 ---
 

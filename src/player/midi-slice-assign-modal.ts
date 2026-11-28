@@ -369,7 +369,8 @@ export class MidiSliceAssignModal {
     plan: SongPartMappingPlan | null,
     onConfirm: (config: MidiSliceAssignConfig) => void,
     onAudition?: (isSoloAccomp: boolean, excludedChannels: number[]) => void,
-    sourceParsed?: YamahaFileParsed
+    sourceParsed?: YamahaFileParsed,
+    presetTargetSection?: string
   ) {
     this.currentAnalysis = analysis;
     this.currentStartBar = startBar;
@@ -378,6 +379,9 @@ export class MidiSliceAssignModal {
     this.hasExternalLockedPlan = !!plan;
     this.savedToPadStatusMap.clear();
     this.populateSectionOptions();
+    if (presetTargetSection) {
+      this.selectSectionEl.value = presetTargetSection;
+    }
     // 智慧起音自動吸附 (First Note Offset Snapping)
     const beatsPerBar = analysis.timeSignature?.numerator || 4;
     const offsetBeats = analysis.leadInOffsetBeats || 0;
